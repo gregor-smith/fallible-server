@@ -3,7 +3,7 @@ import type { Readable } from 'stream'
 
 import URLParse from 'url-parse'
 import Cookies, { SetOption } from 'cookies'
-import { Result, Awaitable, asyncFallible, ok } from 'fallible'
+import { Result, Awaitable, asyncFallible, ok, Ok } from 'fallible'
 
 
 export type Method =
@@ -194,12 +194,28 @@ export type ErrorHandler<Errors> = (
 ) => Awaitable<Response>
 
 
+export function defaultErrorHandler(): Response {
+    return {
+        status: 500,
+        body: 'Internal server error'
+    }
+}
+
+
+export function defaultResponseHandler(): Ok<Response> {
+    return ok({
+        status: 200,
+        body: ''
+    })
+}
+
+
 export type CreateRequestListenerArguments<State, Errors> = {
     secretKey: string
     behindProxy?: boolean
     requestHandler: RequestHandler<void, State, Errors>
-    responseHandler: ResponseHandler<State, Errors>
-    errorHandler: ErrorHandler<Errors>
+    responseHandler?: ResponseHandler<State, Errors>
+    errorHandler?: ErrorHandler<Errors>
 }
 
 
@@ -207,8 +223,8 @@ export function createRequestListener<State, Errors>({
     secretKey,
     behindProxy = false,
     requestHandler,
-    responseHandler,
-    errorHandler
+    responseHandler = defaultResponseHandler,
+    errorHandler = defaultErrorHandler
 }: CreateRequestListenerArguments<State, Errors>): RequestListener {
     return async (req, res) => {
         const cookies = Cookies(req, res, { keys: [ secretKey ] })
@@ -220,17 +236,24 @@ export function createRequestListener<State, Errors>({
             method: req.method?.toUpperCase() as Method | undefined ?? 'GET',
             url: req.url ?? '/'
         })
-        const result = await asyncFallible<Response, Errors>(async propagate => {
-            const { state, cleanup } = propagate(await requestHandler(request))
-            const response = propagate(await responseHandler(state))
-            await cleanup?.(response, state)
-            return ok(response)
-        })
-        const response = result.ok
-            ? result.value
-            : await errorHandler(result.value)
 
-        res.statusCode = response.status ?? (result.ok ? 200 : 500)
+        let response: Response
+        try {
+            const result = await asyncFallible<Response, Errors>(async propagate => {
+                const { state, cleanup } = propagate(await requestHandler(request))
+                const response = propagate(await responseHandler(state))
+                await cleanup?.(response, state)
+                return ok(response)
+            })
+            response = result.ok
+                ? result.value
+                : await errorHandler(result.value)
+        }
+        catch {
+            response = defaultErrorHandler()
+        }
+
+        res.statusCode = response.status ?? 200
 
         if (response.cookies !== undefined) {
             for (const [ key, { value, ...options } ] of Object.entries(response.cookies)) {
