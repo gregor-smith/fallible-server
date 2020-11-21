@@ -22,6 +22,7 @@
     "@types/url-parse": "^1.4.3",
     "cookies": "^0.8.0",
     "fallible": "ssh://git@github.com:gregor-smith/fallible.git",
+    "piper": "ssh://git@github.com:gregor-smith/piper.git",
     "tslib": "^2.0.3",
     "url-parse": "^1.4.7"
   },

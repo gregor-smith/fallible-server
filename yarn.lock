@@ -1432,7 +1432,7 @@ extsprintf@^1.2.0:
 
 "fallible@ssh://git@github.com:gregor-smith/fallible.git":
   version "0.1.0"
-  resolved "ssh://git@github.com:gregor-smith/fallible.git#6bc4cbe2b3d636a7d311eaf20d561352928e10da"
+  resolved "ssh://git@github.com:gregor-smith/fallible.git#3e63d1fa308fa3fb94690953165eab6a15db23bb"
   dependencies:
     tslib "^2.0.3"
 
@@ -2821,6 +2821,10 @@ picomatch@^2.0.4, picomatch@^2.0.5:
   version "2.2.2"
   resolved "https://registry.yarnpkg.com/picomatch/-/picomatch-2.2.2.tgz#21f333e9b6b8eaff02468f5146ea406d345f4dad"
   integrity sha512-q0M/9eZHzmr0AulXyPwNfZjtwZ/RBZlbN3K3CErVrk50T2ASYI7Bye0EvekFY3IP1Nt2DHu0re+V2ZHIpMkuWg==
+
+"piper@ssh://git@github.com:gregor-smith/piper.git":
+  version "1.0.0"
+  resolved "ssh://git@github.com:gregor-smith/piper.git#64df51e3ad00a4f73e53225197ff26b2217d79e6"
 
 pirates@^4.0.1:
   version "4.0.1"
