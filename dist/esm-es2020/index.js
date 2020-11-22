@@ -1,6 +1,6 @@
 import URLParse from 'url-parse';
 import Cookies from 'cookies';
-import { asyncFallible, ok } from 'fallible';
+import { asyncFallible, ok, error } from 'fallible';
 export class Request {
     constructor({ getCookie, behindProxy, ip, method, headers, url }) {
         this.cookie = getCookie;
@@ -91,7 +91,19 @@ export class Request {
             ?? this._ip;
     }
 }
-export function createRequestListener({ secretKey, behindProxy = false, requestHandler, responseHandler, errorHandler }) {
+export function defaultErrorHandler() {
+    return {
+        status: 500,
+        body: 'Internal server error'
+    };
+}
+export function defaultResponseHandler() {
+    return ok({
+        status: 200,
+        body: ''
+    });
+}
+export function createRequestListener({ secretKey, behindProxy = false, requestHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler }) {
     return async (req, res) => {
         const cookies = Cookies(req, res, { keys: [secretKey] });
         const request = new Request({
@@ -102,16 +114,24 @@ export function createRequestListener({ secretKey, behindProxy = false, requestH
             method: req.method?.toUpperCase() ?? 'GET',
             url: req.url ?? '/'
         });
-        const result = await asyncFallible(async (propagate) => {
-            const { state, cleanup } = propagate(await requestHandler(request));
-            const response = propagate(await responseHandler(state));
-            await cleanup?.(response, state);
-            return ok(response);
-        });
-        const response = result.ok
-            ? result.value
-            : await errorHandler(result.value);
-        res.statusCode = response.status ?? (result.ok ? 200 : 500);
+        let response;
+        try {
+            const result = await asyncFallible(async (propagate) => {
+                const { state, cleanup } = propagate(await requestHandler(request, {}));
+                const response = propagate(await responseHandler(state));
+                if (cleanup !== undefined) {
+                    propagate(await cleanup(response));
+                }
+                return ok(response);
+            });
+            response = result.ok
+                ? result.value
+                : await errorHandler(result.value);
+        }
+        catch {
+            response = defaultErrorHandler();
+        }
+        res.statusCode = response.status ?? 200;
         if (response.cookies !== undefined) {
             for (const [key, { value, ...options }] of Object.entries(response.cookies)) {
                 cookies.set(key, value, options);
@@ -149,6 +169,42 @@ export function createRequestListener({ secretKey, behindProxy = false, requestH
         else {
             res.end();
         }
+    };
+}
+async function composeCleanups(cleanups, response, composeErrors) {
+    const errors = [];
+    for (let index = cleanups.length; index >= 0; index--) {
+        const result = await cleanups[index](response);
+        if (!result.ok) {
+            errors.push(result.value);
+        }
+    }
+    if (errors.length !== 0) {
+        const composed = await composeErrors(errors);
+        return error(composed);
+    }
+    return ok(undefined);
+}
+export function composeRequestHandlers(handlers, composeCleanupErrors) {
+    return async (request, state) => {
+        let cleanups = [];
+        for (const handler of handlers) {
+            const result = await handler(request, state);
+            if (!result.ok) {
+                return asyncFallible(async (propagate) => {
+                    propagate(await composeCleanups(cleanups, undefined, composeCleanupErrors));
+                    return result;
+                });
+            }
+            state = result.value.state;
+            if (result.value.cleanup !== undefined) {
+                cleanups.push(result.value.cleanup);
+            }
+        }
+        return ok({
+            state,
+            cleanup: response => composeCleanups(cleanups, response, composeCleanupErrors)
+        });
     };
 }
 //# sourceMappingURL=index.js.map

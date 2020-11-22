@@ -3,7 +3,7 @@ import type { Readable } from 'stream'
 
 import URLParse from 'url-parse'
 import Cookies, { SetOption } from 'cookies'
-import { Result, Awaitable, asyncFallible, ok, Ok } from 'fallible'
+import { Result, Awaitable, asyncFallible, ok, Ok, error } from 'fallible'
 
 
 export type Method =
@@ -170,20 +170,19 @@ export type Response = {
     body?: string | Buffer | Readable
 }
 
-export type Cleanup<State, Errors> = (
-    response: Readonly<Response>,
-    state: Readonly<State>
+export type Cleanup<Errors> = (
+    response?: Readonly<Response>
 ) => Awaitable<Result<void, Errors>>
 
-export type RequestHandlerResult<ExistingState, NewState, Errors> = {
-    state: ExistingState & NewState
-    cleanup?: Cleanup<ExistingState & NewState, Errors>
+export type RequestHandlerResult<State, Errors> = {
+    state: State
+    cleanup?: Cleanup<Errors>
 }
 
 export type RequestHandler<ExistingState, NewState, Errors> = (
     request: Request,
     state: Readonly<ExistingState>
-) => Awaitable<Result<RequestHandlerResult<ExistingState, NewState, Errors>, Errors>>
+) => Awaitable<Result<RequestHandlerResult<ExistingState & NewState, Errors>, Errors>>
 
 export type ResponseHandler<State, Errors> = (
     state: Readonly<State>
@@ -213,7 +212,7 @@ export function defaultResponseHandler(): Ok<Response> {
 export type CreateRequestListenerArguments<State, Errors> = {
     secretKey: string
     behindProxy?: boolean
-    requestHandler: RequestHandler<void, State, Errors>
+    requestHandler: RequestHandler<{}, State, Errors>
     responseHandler?: ResponseHandler<State, Errors>
     errorHandler?: ErrorHandler<Errors>
 }
@@ -240,9 +239,11 @@ export function createRequestListener<State, Errors>({
         let response: Response
         try {
             const result = await asyncFallible<Response, Errors>(async propagate => {
-                const { state, cleanup } = propagate(await requestHandler(request))
+                const { state, cleanup } = propagate(await requestHandler(request, {}))
                 const response = propagate(await responseHandler(state))
-                await cleanup?.(response, state)
+                if (cleanup !== undefined) {
+                    propagate(await cleanup(response))
+                }
                 return ok(response)
             })
             response = result.ok
@@ -294,5 +295,282 @@ export function createRequestListener<State, Errors>({
         else {
             res.end()
         }
+    }
+}
+
+
+async function composeCleanups<Errors>(
+    cleanups: ReadonlyArray<Cleanup<Errors>>,
+    response: Readonly<Response> | undefined,
+    composeErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
+): Promise<Result<void, Errors>> {
+    const errors: Errors[] = []
+    for (let index = cleanups.length; index >= 0; index--) {
+        const result = await cleanups[index](response)
+        if (!result.ok) {
+            errors.push(result.value)
+        }
+    }
+    if (errors.length !== 0) {
+        const composed = await composeErrors(errors)
+        return error(composed)
+    }
+    return ok(undefined)
+}
+
+
+// there's probably some way to do this with variadic tuple types but fuck it
+// see generateTypings.py in the root of the project
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2>>
+    ) => Awaitable<Errors1 | Errors2>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2,
+    Errors1 | Errors2
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3,
+    Errors1 | Errors2 | Errors3
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4,
+    Errors1 | Errors2 | Errors3 | Errors4
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+    NewState6, Errors6,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+    NewState6, Errors6,
+    NewState7, Errors7,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+    NewState6, Errors6,
+    NewState7, Errors7,
+    NewState8, Errors8,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+    NewState6, Errors6,
+    NewState7, Errors7,
+    NewState8, Errors8,
+    NewState9, Errors9,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8, NewState9, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9
+>
+export function composeRequestHandlers<
+    ExistingState,
+    NewState1, Errors1,
+    NewState2, Errors2,
+    NewState3, Errors3,
+    NewState4, Errors4,
+    NewState5, Errors5,
+    NewState6, Errors6,
+    NewState7, Errors7,
+    NewState8, Errors8,
+    NewState9, Errors9,
+    NewState10, Errors10,
+>(
+    handlers: [
+        RequestHandler<ExistingState, NewState1, Errors1>,
+        RequestHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
+        RequestHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8, NewState9, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>,
+        RequestHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9, NewState10, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>,
+    ],
+    composeCleanupErrors: (
+        errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>>
+    ) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>
+): RequestHandler<
+    ExistingState,
+    NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9 & NewState10,
+    Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10
+>
+export function composeRequestHandlers<Errors>(
+    handlers: ReadonlyArray<RequestHandler<any, any, Errors>>,
+    composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
+): RequestHandler<{}, any, Errors> {
+    return async (request, state) => {
+        let cleanups: Cleanup<Errors>[] = []
+
+        for (const handler of handlers) {
+            const result = await handler(request, state)
+            if (!result.ok) {
+                return asyncFallible(async propagate => {
+                    propagate(await composeCleanups(cleanups, undefined, composeCleanupErrors))
+                    return result
+                })
+            }
+            state = result.value.state
+            if (result.value.cleanup !== undefined) {
+                cleanups.push(result.value.cleanup)
+            }
+        }
+
+        return ok({
+            state,
+            cleanup: response =>
+                composeCleanups(cleanups, response, composeCleanupErrors)
+        })
     }
 }
