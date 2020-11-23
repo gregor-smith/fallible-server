@@ -1,191 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.composeRequestHandlers = exports.createRequestListener = exports.defaultResponseHandler = exports.defaultErrorHandler = exports.Request = void 0;
+exports.composeMessageHandlers = exports.createRequestListener = exports.defaultResponseHandler = exports.defaultErrorHandler = void 0;
 var tslib_1 = require("tslib");
-var cookies_1 = tslib_1.__importDefault(require("cookies"));
 var fallible_1 = require("fallible");
-function parseQueryString(queryString) {
-    var e_1, _a;
-    if (queryString === undefined) {
-        return {};
-    }
-    var query = {};
-    try {
-        for (var _b = tslib_1.__values(queryString.split('&')), _c = _b.next(); !_c.done; _c = _b.next()) {
-            var pair = _c.value;
-            var _d = tslib_1.__read(pair.split('='), 2), key = _d[0], value = _d[1];
-            if (value === undefined) {
-                continue;
-            }
-            key = decodeURIComponent(key);
-            value = decodeURIComponent(value);
-            query[key] = value;
-        }
-    }
-    catch (e_1_1) { e_1 = { error: e_1_1 }; }
-    finally {
-        try {
-            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-        }
-        finally { if (e_1) throw e_1.error; }
-    }
-    return query;
-}
-function parseHash(hash) {
-    if (hash === undefined) {
-        return '';
-    }
-    return decodeURIComponent(hash);
-}
-function parsePath(path) {
-    var e_2, _a;
-    var segments = [];
-    try {
-        for (var _b = tslib_1.__values(path.split('/')), _c = _b.next(); !_c.done; _c = _b.next()) {
-            var segment = _c.value;
-            segment = decodeURIComponent(segment);
-            if (segment.length === 0) {
-                continue;
-            }
-            segments.push(segment);
-        }
-    }
-    catch (e_2_1) { e_2 = { error: e_2_1 }; }
-    finally {
-        try {
-            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
-        }
-        finally { if (e_2) throw e_2.error; }
-    }
-    return segments;
-}
-function parseURL(url) {
-    var _a, _b, _c, _d, _e;
-    var match = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url);
-    return match === null
-        ? {
-            path: parsePath(url),
-            query: {},
-            hash: ''
-        }
-        : {
-            path: parsePath((_c = (_b = (_a = match[6]) !== null && _a !== void 0 ? _a : match[4]) !== null && _b !== void 0 ? _b : match[1]) !== null && _c !== void 0 ? _c : url),
-            query: parseQueryString((_d = match[5]) !== null && _d !== void 0 ? _d : match[2]),
-            hash: parseHash((_e = match[7]) !== null && _e !== void 0 ? _e : match[3])
-        };
-}
-function parseContentType(contentType) {
-    if (contentType === undefined) {
-        return undefined;
-    }
-    var match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType);
-    if (match == null) {
-        contentType = contentType.trim();
-        if (contentType.length === 0) {
-            return undefined;
-        }
-        return {
-            type: contentType.toLowerCase()
-        };
-    }
-    var _a = tslib_1.__read(match, 4), type = _a[1], characterSet = _a[3];
-    return {
-        type: type.toLowerCase(),
-        characterSet: characterSet.toLowerCase()
-    };
-}
-var Request = /** @class */ (function () {
-    function Request(_a) {
-        var getCookie = _a.getCookie, behindProxy = _a.behindProxy, ip = _a.ip, method = _a.method, headers = _a.headers, url = _a.url;
-        this.cookie = getCookie;
-        this.behindProxy = behindProxy;
-        this._ip = ip;
-        this.method = method;
-        this.headers = headers;
-        this.url = url;
-    }
-    Request.prototype.header = function (key) {
-        var header = this.headers[key];
-        return Array.isArray(header)
-            ? header[0]
-            : header;
-    };
-    Object.defineProperty(Request.prototype, "parsedContentType", {
-        get: function () {
-            var _a;
-            return (_a = this._parsedContentType) !== null && _a !== void 0 ? _a : (this._parsedContentType = parseContentType(this.headers['content-type']));
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "parsedURL", {
-        get: function () {
-            var _a;
-            return (_a = this._parsedURL) !== null && _a !== void 0 ? _a : (this._parsedURL = parseURL(this.url));
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "path", {
-        get: function () {
-            return this.parsedURL.path;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "query", {
-        get: function () {
-            return this.parsedURL.query;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "hash", {
-        get: function () {
-            return this.parsedURL.hash;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "contentLength", {
-        get: function () {
-            var length = Number(this.headers['content-length']);
-            return Number.isNaN(length) ? undefined : length;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "contentType", {
-        get: function () {
-            var _a;
-            return (_a = this.parsedContentType) === null || _a === void 0 ? void 0 : _a.type;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "characterSet", {
-        get: function () {
-            var _a;
-            return (_a = this.parsedContentType) === null || _a === void 0 ? void 0 : _a.characterSet;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Request.prototype, "ip", {
-        get: function () {
-            var _a, _b, _c, _d;
-            if (!this.behindProxy) {
-                return this._ip;
-            }
-            var header = this.header('x-forwarded-for');
-            return (_d = (_c = (_b = (_a = header === null || header === void 0 ? void 0 : header.match(/^(.+?),/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim()) !== null && _c !== void 0 ? _c : header === null || header === void 0 ? void 0 : header.trim()) !== null && _d !== void 0 ? _d : this._ip;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    return Request;
-}());
-exports.Request = Request;
+var utils_1 = require("./utils");
 function defaultErrorHandler() {
     return {
         status: 500,
@@ -202,34 +20,23 @@ function defaultResponseHandler() {
 exports.defaultResponseHandler = defaultResponseHandler;
 function createRequestListener(_a) {
     var _this = this;
-    var secretKey = _a.secretKey, _b = _a.behindProxy, behindProxy = _b === void 0 ? false : _b, requestHandler = _a.requestHandler, _c = _a.responseHandler, responseHandler = _c === void 0 ? defaultResponseHandler : _c, _d = _a.errorHandler, errorHandler = _d === void 0 ? defaultErrorHandler : _d;
+    var keys = _a.keys, messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var cookies, request, response, result, _a, _b, _c, _d, _e, _f, _g, key, _h, value, options, _j, _k, _l, key, value;
-        var e_3, _m, e_4, _o;
+        var response, result, _a, _b, _c, _d, _e, name, cookie, _f, _g, header, _h, _j, _k, key, value;
+        var e_1, _l, e_2, _m, e_3, _o;
         var _this = this;
-        var _p, _q, _r, _s, _t;
-        return tslib_1.__generator(this, function (_u) {
-            switch (_u.label) {
+        var _p;
+        return tslib_1.__generator(this, function (_q) {
+            switch (_q.label) {
                 case 0:
-                    cookies = cookies_1.default(req, res, { keys: [secretKey] });
-                    request = new Request({
-                        getCookie: function (key) { return cookies.get(key, { signed: true }); },
-                        behindProxy: behindProxy,
-                        headers: req.headers,
-                        ip: (_p = req.connection.remoteAddress) !== null && _p !== void 0 ? _p : req.socket.remoteAddress,
-                        method: (_r = (_q = req.method) === null || _q === void 0 ? void 0 : _q.toUpperCase()) !== null && _r !== void 0 ? _r : 'GET',
-                        url: (_s = req.url) !== null && _s !== void 0 ? _s : '/'
-                    });
-                    _u.label = 1;
-                case 1:
-                    _u.trys.push([1, 6, , 7]);
+                    _q.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                             var _a, state, cleanup, _b, response, _c, _d;
                             return tslib_1.__generator(this, function (_e) {
                                 switch (_e.label) {
                                     case 0:
                                         _b = propagate;
-                                        return [4 /*yield*/, requestHandler(request, {})];
+                                        return [4 /*yield*/, messageHandler(req, {})];
                                     case 1:
                                         _a = _b.apply(void 0, [_e.sent()]), state = _a.state, cleanup = _a.cleanup;
                                         _c = propagate;
@@ -246,53 +53,64 @@ function createRequestListener(_a) {
                                 }
                             });
                         }); })];
-                case 2:
-                    result = _u.sent();
-                    if (!result.ok) return [3 /*break*/, 3];
+                case 1:
+                    result = _q.sent();
+                    if (!result.ok) return [3 /*break*/, 2];
                     _a = result.value;
-                    return [3 /*break*/, 5];
-                case 3: return [4 /*yield*/, errorHandler(result.value)];
+                    return [3 /*break*/, 4];
+                case 2: return [4 /*yield*/, errorHandler(result.value)];
+                case 3:
+                    _a = _q.sent();
+                    _q.label = 4;
                 case 4:
-                    _a = _u.sent();
-                    _u.label = 5;
-                case 5:
                     response = _a;
-                    return [3 /*break*/, 7];
-                case 6:
-                    _b = _u.sent();
+                    return [3 /*break*/, 6];
+                case 5:
+                    _b = _q.sent();
                     response = defaultErrorHandler();
-                    return [3 /*break*/, 7];
-                case 7:
-                    res.statusCode = (_t = response.status) !== null && _t !== void 0 ? _t : 200;
+                    return [3 /*break*/, 6];
+                case 6:
+                    res.statusCode = (_p = response.status) !== null && _p !== void 0 ? _p : 200;
                     if (response.cookies !== undefined) {
                         try {
                             for (_c = tslib_1.__values(Object.entries(response.cookies)), _d = _c.next(); !_d.done; _d = _c.next()) {
-                                _e = _d.value;
-                                _f = _e, _g = tslib_1.__read(_f, 2), key = _g[0], _h = _g[1], value = _h.value, options = tslib_1.__rest(_h, ["value"]);
-                                cookies.set(key, value, options);
+                                _e = tslib_1.__read(_d.value, 2), name = _e[0], cookie = _e[1];
+                                try {
+                                    for (_f = (e_2 = void 0, tslib_1.__values(utils_1.cookieToSignedHeaders(name, cookie, keys))), _g = _f.next(); !_g.done; _g = _f.next()) {
+                                        header = _g.value;
+                                        res.setHeader('Set-Cookie', header);
+                                    }
+                                }
+                                catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                                finally {
+                                    try {
+                                        if (_g && !_g.done && (_m = _f.return)) _m.call(_f);
+                                    }
+                                    finally { if (e_2) throw e_2.error; }
+                                }
+                            }
+                        }
+                        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+                        finally {
+                            try {
+                                if (_d && !_d.done && (_l = _c.return)) _l.call(_c);
+                            }
+                            finally { if (e_1) throw e_1.error; }
+                        }
+                    }
+                    if (response.headers !== undefined) {
+                        try {
+                            for (_h = tslib_1.__values(Object.entries(response.headers)), _j = _h.next(); !_j.done; _j = _h.next()) {
+                                _k = tslib_1.__read(_j.value, 2), key = _k[0], value = _k[1];
+                                res.setHeader(key, value);
                             }
                         }
                         catch (e_3_1) { e_3 = { error: e_3_1 }; }
                         finally {
                             try {
-                                if (_d && !_d.done && (_m = _c.return)) _m.call(_c);
+                                if (_j && !_j.done && (_o = _h.return)) _o.call(_h);
                             }
                             finally { if (e_3) throw e_3.error; }
-                        }
-                    }
-                    if (response.headers !== undefined) {
-                        try {
-                            for (_j = tslib_1.__values(Object.entries(response.headers)), _k = _j.next(); !_k.done; _k = _j.next()) {
-                                _l = tslib_1.__read(_k.value, 2), key = _l[0], value = _l[1];
-                                res.setHeader(key, value);
-                            }
-                        }
-                        catch (e_4_1) { e_4 = { error: e_4_1 }; }
-                        finally {
-                            try {
-                                if (_k && !_k.done && (_o = _j.return)) _o.call(_j);
-                            }
-                            finally { if (e_4) throw e_4.error; }
                         }
                     }
                     if (typeof response.body === 'string') {
@@ -355,16 +173,16 @@ function composeCleanups(cleanups, response, composeErrors) {
                 case 5:
                     composed = _a.sent();
                     return [2 /*return*/, fallible_1.error(composed)];
-                case 6: return [2 /*return*/, fallible_1.ok(undefined)];
+                case 6: return [2 /*return*/, fallible_1.ok()];
             }
         });
     });
 }
-function composeRequestHandlers(handlers, composeCleanupErrors) {
+function composeMessageHandlers(handlers, composeCleanupErrors) {
     var _this = this;
-    return function (request, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var cleanups, _loop_1, handlers_1, handlers_1_1, handler, state_1, e_5_1;
-        var e_5, _a;
+    return function (message, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+        var cleanups, _loop_1, handlers_1, handlers_1_1, handler, state_1, e_4_1;
+        var e_4, _a;
         var _this = this;
         return tslib_1.__generator(this, function (_b) {
             switch (_b.label) {
@@ -374,7 +192,7 @@ function composeRequestHandlers(handlers, composeCleanupErrors) {
                         var result;
                         return tslib_1.__generator(this, function (_a) {
                             switch (_a.label) {
-                                case 0: return [4 /*yield*/, handler(request, state)];
+                                case 0: return [4 /*yield*/, handler(message, state)];
                                 case 1:
                                     result = _a.sent();
                                     if (!result.ok) {
@@ -419,14 +237,14 @@ function composeRequestHandlers(handlers, composeCleanupErrors) {
                     return [3 /*break*/, 2];
                 case 5: return [3 /*break*/, 8];
                 case 6:
-                    e_5_1 = _b.sent();
-                    e_5 = { error: e_5_1 };
+                    e_4_1 = _b.sent();
+                    e_4 = { error: e_4_1 };
                     return [3 /*break*/, 8];
                 case 7:
                     try {
                         if (handlers_1_1 && !handlers_1_1.done && (_a = handlers_1.return)) _a.call(handlers_1);
                     }
-                    finally { if (e_5) throw e_5.error; }
+                    finally { if (e_4) throw e_4.error; }
                     return [7 /*endfinally*/];
                 case 8: return [2 /*return*/, fallible_1.ok({
                         state: state,
@@ -438,5 +256,5 @@ function composeRequestHandlers(handlers, composeCleanupErrors) {
         });
     }); };
 }
-exports.composeRequestHandlers = composeRequestHandlers;
+exports.composeMessageHandlers = composeMessageHandlers;
 //# sourceMappingURL=index.js.map
