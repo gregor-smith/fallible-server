@@ -1,9 +1,100 @@
 import type { RequestListener, IncomingHttpHeaders } from 'http'
 import type { Readable } from 'stream'
 
-import URLParse from 'url-parse'
 import Cookies, { SetOption } from 'cookies'
 import { Result, Awaitable, asyncFallible, ok, Ok, error } from 'fallible'
+
+
+export type ParsedURL = {
+    path: ReadonlyArray<string>
+    query: Readonly<Partial<Record<string, string>>>
+    hash: string
+}
+
+
+function parseQueryString(queryString?: string) {
+    if (queryString === undefined) {
+        return {}
+    }
+    const query: Partial<Record<string, string>> = {}
+    for (const pair of queryString.split('&')) {
+        let [ key, value ] = pair.split('=')
+        if (value === undefined) {
+            continue
+        }
+        key = decodeURIComponent(key)
+        value = decodeURIComponent(value)
+        query[key] = value
+    }
+    return query
+}
+
+
+function parseHash(hash?: string) {
+    if (hash === undefined) {
+        return ''
+    }
+    return decodeURIComponent(hash)
+}
+
+
+function parsePath(path: string) {
+    const segments: string[] = []
+    for (let segment of path.split('/')) {
+        segment = decodeURIComponent(segment)
+        if (segment.length === 0) {
+            continue
+        }
+        segments.push(segment)
+    }
+    return segments
+}
+
+
+function parseURL(url: string): ParsedURL {
+    const match: (string | undefined)[] | null = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url)
+    return match === null
+        ? {
+            path: parsePath(url),
+            query: {},
+            hash: ''
+        }
+        : {
+            path: parsePath(match[6] ?? match[4] ?? match[1] ?? url),
+            query: parseQueryString(match[5] ?? match[2]),
+            hash: parseHash(match[7] ?? match[3])
+        }
+}
+
+
+export type ParsedContentType = {
+    type: string
+    characterSet?: string
+}
+
+
+function parseContentType(contentType?: string): ParsedContentType | undefined {
+    if (contentType === undefined) {
+        return undefined
+    }
+
+    const match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType)
+    if (match == null) {
+        contentType = contentType.trim()
+        if (contentType.length === 0) {
+            return undefined
+        }
+        return {
+            type: contentType.toLowerCase()
+        }
+    }
+
+    const [ , type, , characterSet ] = match
+    return {
+        type: type.toLowerCase(),
+        characterSet: characterSet.toLowerCase()
+    }
+}
 
 
 export type Method =
@@ -16,21 +107,6 @@ export type Method =
     | 'TRACE'
     | 'OPTIONS'
     | 'CONNECT'
-
-
-export type ParsedURL = {
-    protocol: string
-    host: string
-    path: ReadonlyArray<string>
-    query: Readonly<Partial<Record<string, string>>>
-    hash: string
-}
-
-
-export type ParsedContentType = {
-    type: string
-    characterSet?: string
-}
 
 
 export type RequestArguments = {
@@ -71,55 +147,11 @@ export class Request {
     }
 
     public get parsedContentType(): Readonly<ParsedContentType> | undefined {
-        if (this._parsedContentType === undefined) {
-            const match = this.headers['content-type']
-                ?.match(/^\s*(?:(.+?)\s*;\s*charset="?(.+?)"?|(.+))\s*$/)
-            if (match === null || match === undefined) {
-                return undefined
-            }
-            const [ , type, characterSet, full ] = match as (string | undefined)[]
-            this._parsedContentType = {
-                type: type?.toLowerCase() ?? full!.toLowerCase(),
-                characterSet: characterSet?.toLowerCase()
-            }
-        }
-        return this._parsedContentType
+        return this._parsedContentType ??= parseContentType(this.headers['content-type'])
     }
 
     public get parsedURL(): Readonly<ParsedURL> {
-        if (this._parsedURL === undefined) {
-            const { protocol, host, pathname, query, hash } = URLParse(this.url, true)
-
-            const path: string[] = []
-            for (const segment of pathname.split('/')) {
-                const decoded = decodeURIComponent(segment).trim()
-                if (decoded.length === 0) {
-                    continue
-                }
-                path.push(decoded)
-            }
-
-            this._parsedURL = {
-                protocol,
-                host,
-                path,
-                query,
-                hash: hash.slice(1)
-            }
-        }
-
-        return this._parsedURL
-    }
-
-    public get protocol(): string {
-        if (!this.behindProxy) {
-            return this.parsedURL.protocol
-        }
-        return this.header('x-forwarded-proto') ?? this.parsedURL.protocol
-    }
-
-    public get host(): string {
-        return this.parsedURL.host
+        return this._parsedURL ??= parseURL(this.url)
     }
 
     public get path(): ReadonlyArray<string> {
@@ -551,7 +583,7 @@ export function composeRequestHandlers<Errors>(
     composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
 ): RequestHandler<{}, any, Errors> {
     return async (request, state) => {
-        let cleanups: Cleanup<Errors>[] = []
+        const cleanups: Cleanup<Errors>[] = []
 
         for (const handler of handlers) {
             const result = await handler(request, state)

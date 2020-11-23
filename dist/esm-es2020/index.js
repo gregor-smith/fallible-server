@@ -1,6 +1,72 @@
-import URLParse from 'url-parse';
 import Cookies from 'cookies';
 import { asyncFallible, ok, error } from 'fallible';
+function parseQueryString(queryString) {
+    if (queryString === undefined) {
+        return {};
+    }
+    const query = {};
+    for (const pair of queryString.split('&')) {
+        let [key, value] = pair.split('=');
+        if (value === undefined) {
+            continue;
+        }
+        key = decodeURIComponent(key);
+        value = decodeURIComponent(value);
+        query[key] = value;
+    }
+    return query;
+}
+function parseHash(hash) {
+    if (hash === undefined) {
+        return '';
+    }
+    return decodeURIComponent(hash);
+}
+function parsePath(path) {
+    const segments = [];
+    for (let segment of path.split('/')) {
+        segment = decodeURIComponent(segment);
+        if (segment.length === 0) {
+            continue;
+        }
+        segments.push(segment);
+    }
+    return segments;
+}
+function parseURL(url) {
+    const match = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url);
+    return match === null
+        ? {
+            path: parsePath(url),
+            query: {},
+            hash: ''
+        }
+        : {
+            path: parsePath(match[6] ?? match[4] ?? match[1] ?? url),
+            query: parseQueryString(match[5] ?? match[2]),
+            hash: parseHash(match[7] ?? match[3])
+        };
+}
+function parseContentType(contentType) {
+    if (contentType === undefined) {
+        return undefined;
+    }
+    const match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType);
+    if (match == null) {
+        contentType = contentType.trim();
+        if (contentType.length === 0) {
+            return undefined;
+        }
+        return {
+            type: contentType.toLowerCase()
+        };
+    }
+    const [, type, , characterSet] = match;
+    return {
+        type: type.toLowerCase(),
+        characterSet: characterSet.toLowerCase()
+    };
+}
 export class Request {
     constructor({ getCookie, behindProxy, ip, method, headers, url }) {
         this.cookie = getCookie;
@@ -17,49 +83,10 @@ export class Request {
             : header;
     }
     get parsedContentType() {
-        if (this._parsedContentType === undefined) {
-            const match = this.headers['content-type']
-                ?.match(/^\s*(?:(.+?)\s*;\s*charset="?(.+?)"?|(.+))\s*$/);
-            if (match === null || match === undefined) {
-                return undefined;
-            }
-            const [, type, characterSet, full] = match;
-            this._parsedContentType = {
-                type: type?.toLowerCase() ?? full.toLowerCase(),
-                characterSet: characterSet?.toLowerCase()
-            };
-        }
-        return this._parsedContentType;
+        return this._parsedContentType ?? (this._parsedContentType = parseContentType(this.headers['content-type']));
     }
     get parsedURL() {
-        if (this._parsedURL === undefined) {
-            const { protocol, host, pathname, query, hash } = URLParse(this.url, true);
-            const path = [];
-            for (const segment of pathname.split('/')) {
-                const decoded = decodeURIComponent(segment).trim();
-                if (decoded.length === 0) {
-                    continue;
-                }
-                path.push(decoded);
-            }
-            this._parsedURL = {
-                protocol,
-                host,
-                path,
-                query,
-                hash: hash.slice(1)
-            };
-        }
-        return this._parsedURL;
-    }
-    get protocol() {
-        if (!this.behindProxy) {
-            return this.parsedURL.protocol;
-        }
-        return this.header('x-forwarded-proto') ?? this.parsedURL.protocol;
-    }
-    get host() {
-        return this.parsedURL.host;
+        return this._parsedURL ?? (this._parsedURL = parseURL(this.url));
     }
     get path() {
         return this.parsedURL.path;
@@ -187,7 +214,7 @@ async function composeCleanups(cleanups, response, composeErrors) {
 }
 export function composeRequestHandlers(handlers, composeCleanupErrors) {
     return async (request, state) => {
-        let cleanups = [];
+        const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(request, state);
             if (!result.ok) {

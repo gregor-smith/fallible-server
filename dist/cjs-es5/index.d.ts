@@ -3,10 +3,7 @@ import type { RequestListener, IncomingHttpHeaders } from 'http';
 import type { Readable } from 'stream';
 import { SetOption } from 'cookies';
 import { Result, Awaitable, Ok } from 'fallible';
-export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
 export declare type ParsedURL = {
-    protocol: string;
-    host: string;
     path: ReadonlyArray<string>;
     query: Readonly<Partial<Record<string, string>>>;
     hash: string;
@@ -15,6 +12,7 @@ export declare type ParsedContentType = {
     type: string;
     characterSet?: string;
 };
+export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
 export declare type RequestArguments = {
     getCookie: (key: string) => string | undefined;
     behindProxy: boolean;
@@ -36,8 +34,6 @@ export declare class Request {
     header(key: string): string | undefined;
     get parsedContentType(): Readonly<ParsedContentType> | undefined;
     get parsedURL(): Readonly<ParsedURL>;
-    get protocol(): string;
-    get host(): string;
     get path(): ReadonlyArray<string>;
     get query(): Readonly<Partial<Record<string, string>>>;
     get hash(): string;
