@@ -66,7 +66,7 @@ export function getMessageHeader(
 }
 
 
-interface HasIP {
+export interface IncomingMessageIPFields {
     headers: Pick<IncomingMessage['headers'], 'x-forwarded-for'>
     connection: Pick<IncomingMessage['connection'], 'remoteAddress'>
     socket: Pick<IncomingMessage['socket'], 'remoteAddress'>
@@ -74,7 +74,7 @@ interface HasIP {
 
 
 export function getMessageIP(
-    message: HasIP,
+    message: IncomingMessageIPFields,
     useXForwardedFor = false
 ): string | undefined {
     if (!useXForwardedFor) {
@@ -83,7 +83,6 @@ export function getMessageIP(
     const header = getMessageHeader(message, 'x-forwarded-for')
     return header?.match(/^\s*(.+?)\s*,/)
         ?.[1]
-        ?? header?.trim()
         ?? message.connection.remoteAddress
         ?? message.socket.remoteAddress
 }
@@ -184,7 +183,9 @@ export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'
 
 export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined {
     const length = Number(message.headers['content-length'])
-    return Number.isNaN(length) ? undefined : length
+    return Number.isSafeInteger(length)
+        ? length
+        : undefined
 }
 
 
