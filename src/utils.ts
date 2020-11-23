@@ -67,7 +67,7 @@ export function getMessageHeader(
 
 
 export interface IncomingMessageIPFields {
-    headers: Pick<IncomingMessage['headers'], 'x-forwarded-for'>
+    headers: IncomingMessage['headers']
     connection: Pick<IncomingMessage['connection'], 'remoteAddress'>
     socket: Pick<IncomingMessage['socket'], 'remoteAddress'>
 }
@@ -80,8 +80,8 @@ export function getMessageIP(
     if (!useXForwardedFor) {
         return message.connection.remoteAddress ?? message.socket.remoteAddress
     }
-    const header = getMessageHeader(message, 'x-forwarded-for')
-    return header?.match(/^\s*(.+?)\s*,/)
+    return getMessageHeader(message, 'x-forwarded-for')
+        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)
         ?.[1]
         ?? message.connection.remoteAddress
         ?? message.socket.remoteAddress
@@ -182,10 +182,17 @@ export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'
 
 
 export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined {
-    const length = Number(message.headers['content-length'])
-    return Number.isSafeInteger(length)
-        ? length
-        : undefined
+    const header = message.headers['content-length']
+    // today i learnt passing an all whitespace string to Number gives you 0
+    // to what end?
+    if (!header?.match(/[0-9]/)) {
+        return
+    }
+    const length = Number(header)
+    if (!Number.isSafeInteger(length)) {
+        return
+    }
+    return length
 }
 
 

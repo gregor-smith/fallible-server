@@ -3,6 +3,9 @@ import type { IncomingHttpHeaders } from 'http'
 import { Cookie, ParsedContentType, ParsedURLPath } from '../src/types'
 import {
     getMessageHeader,
+    getMessageIP,
+    getMessageMethod,
+    getMessageURL,
     parseMessageContentLength,
     parseMessageContentType,
     parseMessageURL
@@ -44,25 +47,103 @@ describe('getMessageHeader', () => {
 
 
 describe('getMessageIP', () => {
-    test.todo('returns connection remote address when useXForwardedFor false')
+    test('returns connection remote address when useXForwardedFor false', () => {
+        const remoteAddress = 'test connection remote address'
+        const result = getMessageIP({
+            headers: {},
+            connection: { remoteAddress },
+            socket: {}
+        })
+        expect(result).toBe(remoteAddress)
+    })
 
-    test.todo('returns socket remote address when useXForwardedFor false and connection remote address undefined')
+    test('returns socket remote address when useXForwardedFor false and connection remote address undefined', () => {
+        const remoteAddress = 'test socket remote address'
+        const result = getMessageIP({
+            headers: {},
+            connection: {},
+            socket: { remoteAddress }
+        })
+        expect(result).toBe(remoteAddress)
+    })
 
-    test.todo('returns first entry of x-forwarded-for header when useXForwardedFor true')
+    test.each<string | string[]>([
+        'test-x-forwarded-address',
+        'test-x-forwarded-address, other',
+        ' test-x-forwarded-address  , other',
+        [ 'test-x-forwarded-address', 'other' ],
+        [ '  test-x-forwarded-address ', 'other' ],
+        [ 'test-x-forwarded-address, other', 'other 2' ],
+        [ ' test-x-forwarded-address  , other', 'other 2' ],
+    ])('returns first entry of x-forwarded-for header when useXForwardedFor true', header => {
+        const result = getMessageIP({
+            headers: {
+                'x-forwarded-for': header
+            },
+            connection: {},
+            socket: {}
+        }, true)
+        expect(result).toBe('test-x-forwarded-address')
+    })
 
-    test.todo('returns connection remote address when x-forwarded-for header invalid')
+    test.each([
+        '',
+        ' ',
+    ])('returns connection remote address when x-forwarded-for header invalid', header => {
+        const remoteAddress = 'test connection remote address'
+        const result = getMessageIP({
+            headers: {
+                'x-forwarded-for': header
+            },
+            connection: { remoteAddress },
+            socket: {}
+        }, true)
+        expect(result).toBe(remoteAddress)
+    })
 
-    test.todo('returns socket remote address when x-forwarded-for header invalid and connection remote address undefined')
+    test.each([
+        '',
+        ' ',
+    ])('returns socket remote address when x-forwarded-for header invalid and connection remote address undefined', header => {
+        const remoteAddress = 'test socket remote address'
+        const result = getMessageIP({
+            headers: {
+                'x-forwarded-for': header
+            },
+            connection: {},
+            socket: { remoteAddress }
+        }, true)
+        expect(result).toBe(remoteAddress)
+    })
 })
 
 
 describe('getMessageMethod', () => {
-    test.todo('returns uppercase method or GET if missing')
+    test.each([
+        'post',
+        'get',
+    ])('returns uppercase method', method => {
+        const result = getMessageMethod({ method })
+        expect(result).toBe(method.toUpperCase())
+    })
+
+    test('returns GET when method undefined', () => {
+        const result = getMessageMethod({})
+        expect(result).toBe('GET')
+    })
 })
 
 
 describe('getMessageURL', () => {
-    test.todo("returns URL or '/' if missing")
+    test.each([ '/', '/test' ])('returns URL', url => {
+        const result = getMessageURL({ url })
+        expect(result).toBe(url)
+    })
+
+    test("returns '/' when url undefined", () => {
+        const result = getMessageURL({})
+        expect(result).toBe('/')
+    })
 })
 
 
