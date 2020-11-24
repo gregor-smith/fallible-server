@@ -4,13 +4,6 @@ import type { IncomingMessage } from 'http'
 import type { Awaitable, Result } from 'fallible'
 
 
-export type ParsedURLPath = {
-    path: ReadonlyArray<string>
-    query: Readonly<Partial<Record<string, string>>>
-    hash: string
-}
-
-
 export type ParsedContentType = {
     type: string
     characterSet?: string

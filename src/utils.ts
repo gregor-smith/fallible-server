@@ -2,10 +2,10 @@ import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
 
-import type { Cookie, Method, ParsedContentType, ParsedURLPath } from './types'
+import type { Cookie, Method, ParsedContentType } from './types'
 
 
-export function getMessageCookie(
+export function parseMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string
 ): string | undefined {
@@ -23,16 +23,16 @@ function cookieSignatureName(name: string): string {
 }
 
 
-export function getSignedMessageCookie(
+export function parseSignedMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string,
     keys: Pick<Keygrip, 'verify'>
 ): string | undefined {
-    const value = getMessageCookie(message, name)
+    const value = parseMessageCookie(message, name)
     if (value === undefined) {
         return
     }
-    const signature = getMessageCookie(message, cookieSignatureName(name))
+    const signature = parseMessageCookie(message, cookieSignatureName(name))
     if (signature === undefined) {
         return
     }
@@ -130,75 +130,63 @@ export function getMessageURL(message: Pick<IncomingMessage, 'url'>): string {
 }
 
 
-function parseURLQueryString(queryString?: string): Partial<Record<string, string>> {
-    if (queryString === undefined) {
-        return {}
-    }
+export function parseURLQueryString(
+    url: string,
+    { skipEmptyValues = true, skipMissingValues = true } = {}
+): Partial<Record<string, string>> {
     const query: Partial<Record<string, string>> = {}
-    for (const pair of queryString.split('&')) {
-        let [ key, value ] = pair.split('=')
+    const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g)
+    for (const match of matches) {
+        let [ , key, value ] = match as [ unknown, string, string | undefined ]
         if (value === undefined) {
+            if (skipMissingValues) {
+                continue
+            }
+            value = ''
+        }
+        else if (value.length === 0 && skipEmptyValues) {
             continue
         }
+        else {
+            value = decodeURIComponent(value)
+        }
         key = decodeURIComponent(key)
-        value = decodeURIComponent(value)
         query[key] = value
     }
     return query
 }
 
 
-function parseURLHash(hash?: string): string {
-    if (hash === undefined) {
-        return ''
-    }
-    return decodeURIComponent(hash)
+export function parseURLHash(url: string): string {
+    const match = url.match(/#(.+)/)?.[1]
+    return match === undefined
+        ? ''
+        : decodeURIComponent(match)
 }
 
 
-function parseURLPathSegments(path: string): string[] {
+export function parseURLPath(url: string): string[] {
     const segments: string[] = []
-    for (let segment of path.split('/')) {
+    const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g)
+    for (let [ segment ] of matches) {
         segment = decodeURIComponent(segment)
-        if (segment.length === 0) {
-            continue
-        }
         segments.push(segment)
     }
     return segments
 }
 
 
-export function parseMessageURL(message: Pick<IncomingMessage, 'url'>): ParsedURLPath {
-    const url = getMessageURL(message)
-
-    // this is actually faster than using .split()
-    const match: (string | undefined)[] | null = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url)
-    return match === null
-        ? {
-            path: parseURLPathSegments(url),
-            query: {},
-            hash: ''
-        }
-        : {
-            path: parseURLPathSegments(match[6] ?? match[4] ?? match[1] ?? url),
-            query: parseURLQueryString(match[5] ?? match[2]),
-            hash: parseURLHash(match[7] ?? match[3])
-        }
-}
-
-
 export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined {
     let contentType = message.headers['content-type']
     if (contentType === undefined) {
-        return undefined
+        return
     }
 
-    const match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType)
+    const match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i)
     if (match === null) {
         contentType = contentType.trim()
         if (contentType.length === 0) {
-            return undefined
+            return
         }
         return {
             type: contentType.toLowerCase()

@@ -1,24 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseMessageURL = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.getSignedMessageCookie = exports.getMessageCookie = void 0;
+exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = void 0;
 var tslib_1 = require("tslib");
-function getMessageCookie(message, name) {
+function parseMessageCookie(message, name) {
     var _a, _b;
     return (_b = (_a = message.headers.cookie) === null || _a === void 0 ? void 0 : _a.match("(?:^|; )" + name + "=([^;]*)")) === null || _b === void 0 ? void 0 : _b[1];
 }
-exports.getMessageCookie = getMessageCookie;
+exports.parseMessageCookie = parseMessageCookie;
 function joinCookieValue(name, value) {
     return name + "=" + value;
 }
 function cookieSignatureName(name) {
     return name + ".sig";
 }
-function getSignedMessageCookie(message, name, keys) {
-    var value = getMessageCookie(message, name);
+function parseSignedMessageCookie(message, name, keys) {
+    var value = parseMessageCookie(message, name);
     if (value === undefined) {
         return;
     }
-    var signature = getMessageCookie(message, cookieSignatureName(name));
+    var signature = parseMessageCookie(message, cookieSignatureName(name));
     if (signature === undefined) {
         return;
     }
@@ -27,7 +27,7 @@ function getSignedMessageCookie(message, name, keys) {
     }
     return value;
 }
-exports.getSignedMessageCookie = getSignedMessageCookie;
+exports.parseSignedMessageCookie = parseSignedMessageCookie;
 function cookieHeader(name, _a) {
     var value = _a.value, path = _a.path, maxAge = _a.maxAge, domain = _a.domain, sameSite = _a.sameSite, _b = _a.secure, secure = _b === void 0 ? false : _b, _c = _a.httpOnly, httpOnly = _c === void 0 ? false : _c;
     var segments = [joinCookieValue(name, value)];
@@ -82,89 +82,80 @@ function getMessageURL(message) {
     return (_a = message.url) !== null && _a !== void 0 ? _a : '/';
 }
 exports.getMessageURL = getMessageURL;
-function parseURLQueryString(queryString) {
-    var e_1, _a;
-    if (queryString === undefined) {
-        return {};
-    }
+function parseURLQueryString(url, _a) {
+    var e_1, _b;
+    var _c = _a === void 0 ? {} : _a, _d = _c.skipEmptyValues, skipEmptyValues = _d === void 0 ? true : _d, _e = _c.skipMissingValues, skipMissingValues = _e === void 0 ? true : _e;
     var query = {};
+    var matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g);
     try {
-        for (var _b = tslib_1.__values(queryString.split('&')), _c = _b.next(); !_c.done; _c = _b.next()) {
-            var pair = _c.value;
-            var _d = tslib_1.__read(pair.split('='), 2), key = _d[0], value = _d[1];
+        for (var matches_1 = tslib_1.__values(matches), matches_1_1 = matches_1.next(); !matches_1_1.done; matches_1_1 = matches_1.next()) {
+            var match = matches_1_1.value;
+            var _f = tslib_1.__read(match, 3), key = _f[1], value = _f[2];
             if (value === undefined) {
+                if (skipMissingValues) {
+                    continue;
+                }
+                value = '';
+            }
+            else if (value.length === 0 && skipEmptyValues) {
                 continue;
             }
+            else {
+                value = decodeURIComponent(value);
+            }
             key = decodeURIComponent(key);
-            value = decodeURIComponent(value);
             query[key] = value;
         }
     }
     catch (e_1_1) { e_1 = { error: e_1_1 }; }
     finally {
         try {
-            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            if (matches_1_1 && !matches_1_1.done && (_b = matches_1.return)) _b.call(matches_1);
         }
         finally { if (e_1) throw e_1.error; }
     }
     return query;
 }
-function parseURLHash(hash) {
-    if (hash === undefined) {
-        return '';
-    }
-    return decodeURIComponent(hash);
+exports.parseURLQueryString = parseURLQueryString;
+function parseURLHash(url) {
+    var _a;
+    var match = (_a = url.match(/#(.+)/)) === null || _a === void 0 ? void 0 : _a[1];
+    return match === undefined
+        ? ''
+        : decodeURIComponent(match);
 }
-function parseURLPathSegments(path) {
+exports.parseURLHash = parseURLHash;
+function parseURLPath(url) {
     var e_2, _a;
     var segments = [];
+    var matches = url.matchAll(/(?<=\/)[^\/\?#]+/g);
     try {
-        for (var _b = tslib_1.__values(path.split('/')), _c = _b.next(); !_c.done; _c = _b.next()) {
-            var segment = _c.value;
+        for (var matches_2 = tslib_1.__values(matches), matches_2_1 = matches_2.next(); !matches_2_1.done; matches_2_1 = matches_2.next()) {
+            var _b = tslib_1.__read(matches_2_1.value, 1), segment = _b[0];
             segment = decodeURIComponent(segment);
-            if (segment.length === 0) {
-                continue;
-            }
             segments.push(segment);
         }
     }
     catch (e_2_1) { e_2 = { error: e_2_1 }; }
     finally {
         try {
-            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            if (matches_2_1 && !matches_2_1.done && (_a = matches_2.return)) _a.call(matches_2);
         }
         finally { if (e_2) throw e_2.error; }
     }
     return segments;
 }
-function parseMessageURL(message) {
-    var _a, _b, _c, _d, _e;
-    var url = getMessageURL(message);
-    // this is actually faster than using .split()
-    var match = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url);
-    return match === null
-        ? {
-            path: parseURLPathSegments(url),
-            query: {},
-            hash: ''
-        }
-        : {
-            path: parseURLPathSegments((_c = (_b = (_a = match[6]) !== null && _a !== void 0 ? _a : match[4]) !== null && _b !== void 0 ? _b : match[1]) !== null && _c !== void 0 ? _c : url),
-            query: parseURLQueryString((_d = match[5]) !== null && _d !== void 0 ? _d : match[2]),
-            hash: parseURLHash((_e = match[7]) !== null && _e !== void 0 ? _e : match[3])
-        };
-}
-exports.parseMessageURL = parseMessageURL;
+exports.parseURLPath = parseURLPath;
 function parseMessageContentType(message) {
     var contentType = message.headers['content-type'];
     if (contentType === undefined) {
-        return undefined;
+        return;
     }
-    var match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType);
+    var match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
     if (match === null) {
         contentType = contentType.trim();
         if (contentType.length === 0) {
-            return undefined;
+            return;
         }
         return {
             type: contentType.toLowerCase()

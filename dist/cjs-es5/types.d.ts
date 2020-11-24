@@ -2,11 +2,6 @@
 import type { Readable } from 'stream';
 import type { IncomingMessage } from 'http';
 import type { Awaitable, Result } from 'fallible';
-export declare type ParsedURLPath = {
-    path: ReadonlyArray<string>;
-    query: Readonly<Partial<Record<string, string>>>;
-    hash: string;
-};
 export declare type ParsedContentType = {
     type: string;
     characterSet?: string;

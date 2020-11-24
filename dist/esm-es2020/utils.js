@@ -1,4 +1,4 @@
-export function getMessageCookie(message, name) {
+export function parseMessageCookie(message, name) {
     return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
 function joinCookieValue(name, value) {
@@ -7,12 +7,12 @@ function joinCookieValue(name, value) {
 function cookieSignatureName(name) {
     return `${name}.sig`;
 }
-export function getSignedMessageCookie(message, name, keys) {
-    const value = getMessageCookie(message, name);
+export function parseSignedMessageCookie(message, name, keys) {
+    const value = parseMessageCookie(message, name);
     if (value === undefined) {
         return;
     }
-    const signature = getMessageCookie(message, cookieSignatureName(name));
+    const signature = parseMessageCookie(message, cookieSignatureName(name));
     if (signature === undefined) {
         return;
     }
@@ -70,65 +70,53 @@ export function getMessageMethod(message) {
 export function getMessageURL(message) {
     return message.url ?? '/';
 }
-function parseURLQueryString(queryString) {
-    if (queryString === undefined) {
-        return {};
-    }
+export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingValues = true } = {}) {
     const query = {};
-    for (const pair of queryString.split('&')) {
-        let [key, value] = pair.split('=');
+    const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g);
+    for (const match of matches) {
+        let [, key, value] = match;
         if (value === undefined) {
+            if (skipMissingValues) {
+                continue;
+            }
+            value = '';
+        }
+        else if (value.length === 0 && skipEmptyValues) {
             continue;
         }
+        else {
+            value = decodeURIComponent(value);
+        }
         key = decodeURIComponent(key);
-        value = decodeURIComponent(value);
         query[key] = value;
     }
     return query;
 }
-function parseURLHash(hash) {
-    if (hash === undefined) {
-        return '';
-    }
-    return decodeURIComponent(hash);
+export function parseURLHash(url) {
+    const match = url.match(/#(.+)/)?.[1];
+    return match === undefined
+        ? ''
+        : decodeURIComponent(match);
 }
-function parseURLPathSegments(path) {
+export function parseURLPath(url) {
     const segments = [];
-    for (let segment of path.split('/')) {
+    const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g);
+    for (let [segment] of matches) {
         segment = decodeURIComponent(segment);
-        if (segment.length === 0) {
-            continue;
-        }
         segments.push(segment);
     }
     return segments;
 }
-export function parseMessageURL(message) {
-    const url = getMessageURL(message);
-    // this is actually faster than using .split()
-    const match = /^(?:(.+)\?(.+)#(.+)|(.+)\?(.+)|(.+)#(.+))/.exec(url);
-    return match === null
-        ? {
-            path: parseURLPathSegments(url),
-            query: {},
-            hash: ''
-        }
-        : {
-            path: parseURLPathSegments(match[6] ?? match[4] ?? match[1] ?? url),
-            query: parseURLQueryString(match[5] ?? match[2]),
-            hash: parseURLHash(match[7] ?? match[3])
-        };
-}
 export function parseMessageContentType(message) {
     let contentType = message.headers['content-type'];
     if (contentType === undefined) {
-        return undefined;
+        return;
     }
-    const match = /^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i.exec(contentType);
+    const match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
     if (match === null) {
         contentType = contentType.trim();
         if (contentType.length === 0) {
-            return undefined;
+            return;
         }
         return {
             type: contentType.toLowerCase()
