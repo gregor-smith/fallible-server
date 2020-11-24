@@ -2,7 +2,7 @@ import type { RequestListener  } from 'http'
 
 import { Result, Awaitable, asyncFallible, ok, Ok, error } from 'fallible'
 
-import type { Cleanup, ErrorHandler, MessageHandler, Response, ResponseHandler } from './types'
+import type { Cleanup, ErrorHandler, ExceptionHandler, MessageHandler, Response, ResponseHandler } from './types'
 import { cookieHeader } from './utils'
 
 
@@ -26,6 +26,7 @@ export type CreateRequestListenerArguments<State, Errors> = {
     messageHandler: MessageHandler<{}, State, Errors>
     responseHandler?: ResponseHandler<State, Errors>
     errorHandler?: ErrorHandler<Errors>
+    exceptionHandler?: ExceptionHandler
 }
 
 
@@ -35,25 +36,26 @@ export type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Pr
 export function createRequestListener<State, Errors>({
     messageHandler,
     responseHandler = defaultResponseHandler,
-    errorHandler = defaultErrorHandler
+    errorHandler = defaultErrorHandler,
+    exceptionHandler = defaultErrorHandler
 }: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
         try {
             const result = await asyncFallible<Response, Errors>(async propagate => {
                 const { state, cleanup } = propagate(await messageHandler(req, {}))
-                const response = propagate(await responseHandler(state))
+                const response = await responseHandler(state)
                 if (cleanup !== undefined) {
-                    propagate(await cleanup(response))
+                    propagate(await cleanup())
                 }
-                return ok(response)
+                return response
             })
             response = result.ok
                 ? result.value
                 : await errorHandler(result.value)
         }
-        catch {
-            response = defaultErrorHandler()
+        catch (exception: unknown) {
+            response = await exceptionHandler(exception)
         }
 
         res.statusCode = response.status ?? 200
@@ -104,12 +106,11 @@ export function createRequestListener<State, Errors>({
 
 async function composeCleanups<Errors>(
     cleanups: ReadonlyArray<Cleanup<Errors>>,
-    response: Readonly<Response> | undefined,
     composeErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
 ): Promise<Result<void, Errors>> {
     const errors: Errors[] = []
     for (let index = cleanups.length; index >= 0; index--) {
-        const result = await cleanups[index](response)
+        const result = await cleanups[index]()
         if (!result.ok) {
             errors.push(result.value)
         }
@@ -360,7 +361,7 @@ export function composeMessageHandlers<ExistingState, Errors>(
             const result = await handler(message, state)
             if (!result.ok) {
                 return asyncFallible(async propagate => {
-                    propagate(await composeCleanups(cleanups, undefined, composeCleanupErrors))
+                    propagate(await composeCleanups(cleanups, composeCleanupErrors))
                     return result
                 })
             }
@@ -374,7 +375,7 @@ export function composeMessageHandlers<ExistingState, Errors>(
             state,
             cleanup: cleanups.length === 0
                 ? undefined
-                : response => composeCleanups(cleanups, response, composeCleanupErrors)
+                : () => composeCleanups(cleanups, composeCleanupErrors)
         })
     }
 }

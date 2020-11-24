@@ -41,9 +41,7 @@ export type Response = {
 }
 
 
-export type Cleanup<Errors> = (
-    response?: Readonly<Response>
-) => Awaitable<Result<void, Errors>>
+export type Cleanup<Errors> = () => Awaitable<Result<void, Errors>>
 
 
 export type MessageHandlerResult<State, Errors> = {
@@ -66,3 +64,6 @@ export type ResponseHandler<State, Errors> = (
 export type ErrorHandler<Errors> = (
     error: Readonly<Errors>
 ) => Awaitable<Response>
+
+
+export type ExceptionHandler = (exception: unknown) => Awaitable<Response>

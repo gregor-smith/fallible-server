@@ -1,4 +1,4 @@
-import { Ok, ok } from 'fallible'
+import { error, Ok, ok } from 'fallible'
 import { IncomingMessage, ServerResponse } from 'http'
 
 import {
@@ -6,7 +6,7 @@ import {
     defaultErrorHandler,
     defaultResponseHandler
 } from '../src/server'
-import { MessageHandler, Response } from '../src/types'
+import { MessageHandler } from '../src/types'
 
 
 describe('defaultErrorHandler', () => {
@@ -37,7 +37,7 @@ describe('createRequestListener', () => {
         }
     }
 
-    test('messageHandler and responseHandler called', async () => {
+    test('messageHandler and responseHandler params called', async () => {
         const incomingMessageMock: IncomingMessage = { message: 'test' } as any
         const serverResponseMock: ServerResponse = new ServerResponseMock() as any
 
@@ -61,13 +61,13 @@ describe('createRequestListener', () => {
         expect(responseHandlerMock).toHaveBeenCalledWith(state)
     })
 
-    test('cleanup called if returned by messageHandler', async () => {
+    test('cleanup returned by messageHandler called if responseHandler succeeds', async () => {
         const incomingMessageMock: IncomingMessage = { message: 'test' } as any
         const serverResponseMock: ServerResponse = new ServerResponseMock() as any
 
         const state = { state: 'test' }
 
-        const cleanupMock = jest.fn<Ok<void>, [ Response | undefined ]>()
+        const cleanupMock = jest.fn<Ok<void>, []>()
 
         type MessageHandlerMock = MessageHandler<{}, typeof state, void>
         const messageHandlerMock = jest.fn<ReturnType<MessageHandlerMock>, Parameters<MessageHandlerMock>>(
@@ -76,9 +76,7 @@ describe('createRequestListener', () => {
                 cleanup: cleanupMock
             })
         )
-
-        const response: Response = { body: 'test' }
-        const responseHandlerMock = jest.fn(() => ok(response))
+        const responseHandlerMock = jest.fn(defaultResponseHandler)
 
         const listener = createRequestListener({
             messageHandler: messageHandlerMock,
@@ -87,26 +85,80 @@ describe('createRequestListener', () => {
         await listener(incomingMessageMock, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(messageHandlerMock).toHaveBeenCalledWith(incomingMessageMock, {})
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledWith(state)
         expect(cleanupMock).toHaveBeenCalledTimes(1)
-        expect(cleanupMock).toHaveBeenCalledWith(response)
+    })
+
+    test('cleanup still called even if responseHandler fails', async () => {
+        const incomingMessageMock: IncomingMessage = { message: 'test' } as any
+        const serverResponseMock: ServerResponse = new ServerResponseMock() as any
+
+        const state = { state: 'test' }
+        const err = { error: 'test' }
+
+        const cleanupMock = jest.fn<Ok<void>, []>()
+
+        type MessageHandlerMock = MessageHandler<{}, typeof state, typeof err>
+        const messageHandlerMock = jest.fn<ReturnType<MessageHandlerMock>, Parameters<MessageHandlerMock>>(
+            () => ok({
+                state,
+                cleanup: cleanupMock
+            })
+        )
+        const responseHandlerMock = jest.fn(() => error(err))
+
+        const listener = createRequestListener({
+            messageHandler: messageHandlerMock,
+            responseHandler: responseHandlerMock
+        })
+        await listener(incomingMessageMock, serverResponseMock)
+
+        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
+        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
+        expect(cleanupMock).toHaveBeenCalledTimes(1)
     })
 
     test.todo('default response handler used')
 
     test.todo('default error handler used')
 
-    test.todo('error from messageHandler is passed to errorHandler')
+    test('messageHandler error propagates to errorHandler', async () => {
+        const incomingMessageMock: IncomingMessage = { message: 'test' } as any
+        const serverResponseMock: ServerResponse = new ServerResponseMock() as any
 
-    test.todo('error from responseHandler is passed to errorHandler')
+        const err = { error: 'test' }
 
-    test.todo('error from cleanup is passed to errorHandler')
+        type MessageHandlerMock = MessageHandler<{}, unknown, typeof err>
+        const messageHandlerMock = jest.fn<ReturnType<MessageHandlerMock>, Parameters<MessageHandlerMock>>(
+            () => error(err)
+        )
+        const responseHandlerMock = jest.fn(defaultResponseHandler)
+        const errorHandlerMock = jest.fn(defaultErrorHandler)
 
-    test.todo('exception from any handler results in default error handler response')
+        const listener = createRequestListener({
+            messageHandler: messageHandlerMock,
+            responseHandler: responseHandlerMock,
+            errorHandler: errorHandlerMock
+        })
+        await listener(incomingMessageMock, serverResponseMock)
 
-    test.todo('status passed to response')
+        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
+        expect(responseHandlerMock).not.toHaveBeenCalled()
+        expect(errorHandlerMock).toHaveBeenCalledTimes(1)
+        expect(errorHandlerMock).toHaveBeenCalledWith(err)
+    })
+
+    test.todo('responseHandler error propagates to errorHandler')
+
+    test.todo('cleanup error propagates to errorHandler')
+
+    test.todo('exception from any handler calls exceptionHandler')
+
+    test.todo('response from responseHandler is used when all handlers succeed')
+
+    test.todo('response from errorHandler is used when error propagates')
+
+    test.todo('response from exceptionHandler is used if all else fails')
 
     test.todo('status defaults to 200')
 
