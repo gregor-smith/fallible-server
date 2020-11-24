@@ -23,22 +23,25 @@ export function defaultResponseHandler(): Ok<Response> {
 
 
 export type CreateRequestListenerArguments<State, Errors> = {
-    messageHandler: MessageHandler<void, State, Errors>
+    messageHandler: MessageHandler<{}, State, Errors>
     responseHandler?: ResponseHandler<State, Errors>
     errorHandler?: ErrorHandler<Errors>
 }
+
+
+export type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Promise<ReturnType<RequestListener>>
 
 
 export function createRequestListener<State, Errors>({
     messageHandler,
     responseHandler = defaultResponseHandler,
     errorHandler = defaultErrorHandler
-}: CreateRequestListenerArguments<State, Errors>): RequestListener {
+}: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
         try {
             const result = await asyncFallible<Response, Errors>(async propagate => {
-                const { state, cleanup } = propagate(await messageHandler(req))
+                const { state, cleanup } = propagate(await messageHandler(req, {}))
                 const response = propagate(await responseHandler(state))
                 if (cleanup !== undefined) {
                     propagate(await cleanup(response))

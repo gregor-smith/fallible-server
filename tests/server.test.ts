@@ -1,7 +1,12 @@
+import { Ok, ok } from 'fallible'
+import { IncomingMessage, ServerResponse } from 'http'
+
 import {
+    createRequestListener,
     defaultErrorHandler,
     defaultResponseHandler
 } from '../src/server'
+import { MessageHandler, Response } from '../src/types'
 
 
 describe('defaultErrorHandler', () => {
@@ -21,11 +26,73 @@ describe('defaultResponseHandler', () => {
 
 
 describe('createRequestListener', () => {
-    test.todo('messageHandler called with request')
+    class ServerResponseMock {
+        public readonly setStatusCode = jest.fn<void, [ number ]>()
+        public readonly setHeader = jest.fn<void, [ string, string ]>()
+        public readonly hasHeader = jest.fn<void, [ string ]>()
+        public readonly end = jest.fn<void, [] | [ string | Buffer ]>()
 
-    test.todo('responseHandler called with state from messageHandler')
+        public set statusCode(value: number) {
+            this.setStatusCode(value)
+        }
+    }
 
-    test.todo('cleanup called with response from responseHandler')
+    test('messageHandler and responseHandler called', async () => {
+        const incomingMessageMock: IncomingMessage = { message: 'test' } as any
+        const serverResponseMock: ServerResponse = new ServerResponseMock() as any
+
+        const state = { state: 'test' }
+
+        type MessageHandlerMock = MessageHandler<{}, typeof state, void>
+        const messageHandlerMock = jest.fn<ReturnType<MessageHandlerMock>, Parameters<MessageHandlerMock>>(
+            () => ok({ state })
+        )
+        const responseHandlerMock = jest.fn(defaultResponseHandler)
+
+        const listener = createRequestListener({
+            messageHandler: messageHandlerMock,
+            responseHandler: responseHandlerMock
+        })
+        await listener(incomingMessageMock, serverResponseMock)
+
+        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
+        expect(messageHandlerMock).toHaveBeenCalledWith(incomingMessageMock, {})
+        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
+        expect(responseHandlerMock).toHaveBeenCalledWith(state)
+    })
+
+    test('cleanup called if returned by messageHandler', async () => {
+        const incomingMessageMock: IncomingMessage = { message: 'test' } as any
+        const serverResponseMock: ServerResponse = new ServerResponseMock() as any
+
+        const state = { state: 'test' }
+
+        const cleanupMock = jest.fn<Ok<void>, [ Response | undefined ]>()
+
+        type MessageHandlerMock = MessageHandler<{}, typeof state, void>
+        const messageHandlerMock = jest.fn<ReturnType<MessageHandlerMock>, Parameters<MessageHandlerMock>>(
+            () => ok({
+                state,
+                cleanup: cleanupMock
+            })
+        )
+
+        const response: Response = { body: 'test' }
+        const responseHandlerMock = jest.fn(() => ok(response))
+
+        const listener = createRequestListener({
+            messageHandler: messageHandlerMock,
+            responseHandler: responseHandlerMock
+        })
+        await listener(incomingMessageMock, serverResponseMock)
+
+        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
+        expect(messageHandlerMock).toHaveBeenCalledWith(incomingMessageMock, {})
+        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
+        expect(responseHandlerMock).toHaveBeenCalledWith(state)
+        expect(cleanupMock).toHaveBeenCalledTimes(1)
+        expect(cleanupMock).toHaveBeenCalledWith(response)
+    })
 
     test.todo('default response handler used')
 
