@@ -31,7 +31,7 @@ export type Method =
 
 export type Cookie = {
     value: string
-    expires?: Date
+    maxAge?: number
     path?: string
     domain?: string
     secure?: boolean

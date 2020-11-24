@@ -1,6 +1,5 @@
 import type { IncomingMessage } from 'http'
 
-import Base64 from 'js-base64'
 import type Keygrip from 'keygrip'
 
 import type { Cookie, Method, ParsedContentType, ParsedURLPath } from './types'
@@ -10,18 +9,7 @@ export function getMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string
 ): string | undefined {
-    const header = message.headers['cookie']
-    if (header === undefined) {
-        return
-    }
-    name = Base64.encodeURI(name)
-    const value = new RegExp(`(?:^|; )${name}=([^;]*)`)
-        .exec(header)
-        ?.[1]
-    if (value === undefined) {
-        return
-    }
-    return Base64.decode(value)
+    return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1]
 }
 
 
@@ -35,23 +23,67 @@ function cookieSignatureName(name: string): string {
 }
 
 
-export function getMessageSignedCookie(
+export function getSignedMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string,
     keys: Pick<Keygrip, 'verify'>
 ): string | undefined {
-    const signature = getMessageCookie(message, cookieSignatureName(name))
-    if (signature === undefined) {
-        return
-    }
     const value = getMessageCookie(message, name)
     if (value === undefined) {
+        return
+    }
+    const signature = getMessageCookie(message, cookieSignatureName(name))
+    if (signature === undefined) {
         return
     }
     if (!keys.verify(joinCookieValue(name, value), signature)) {
         return
     }
     return value
+}
+
+
+export function cookieHeader(
+    name: string,
+    { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }: Readonly<Cookie>
+): string {
+    const segments = [ joinCookieValue(name, value) ]
+    if (path !== undefined) {
+        segments.push(`Path=${path}`)
+    }
+    if (maxAge !== undefined) {
+        segments.push(`Max-Age=${maxAge}`)
+    }
+    if (domain !== undefined) {
+        segments.push(`Domain=${domain}`)
+    }
+    if (sameSite !== undefined) {
+        segments.push(`SameSite=${sameSite}`)
+    }
+    if (secure) {
+        segments.push('Secure')
+    }
+    if (httpOnly) {
+        segments.push('HttpOnly')
+    }
+    return segments.join('; ')
+}
+
+
+export function signedCookieHeader(
+    name: string,
+    cookie: Readonly<Cookie>,
+    keys: Pick<Keygrip, 'sign'>
+): string {
+    return cookieHeader(
+        cookieSignatureName(name),
+        {
+            ...cookie,
+            value: keys.sign(
+                joinCookieValue(name, cookie.value)
+            )
+        }
+    )
 }
 
 
@@ -193,52 +225,4 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
         return
     }
     return length
-}
-
-
-export function cookieToHeader(
-    name: string,
-    { value, path, expires, domain, sameSite, secure = false, httpOnly = false }: Readonly<Cookie>
-): string {
-    name = Base64.encodeURI(name)
-    value = Base64.encodeURI(value)
-    const segments = [ joinCookieValue(name, value) ]
-    if (path !== undefined) {
-        segments.push(`Path=${path}`)
-    }
-    if (expires !== undefined) {
-        segments.push(`Expires=${expires.toUTCString()}`)
-    }
-    if (domain !== undefined) {
-        segments.push(`Domain=${domain}`)
-    }
-    if (sameSite !== undefined) {
-        segments.push(`SameSite=${sameSite}`)
-    }
-    if (secure) {
-        segments.push('Secure')
-    }
-    if (httpOnly) {
-        segments.push('HttpOnly')
-    }
-    return segments.join('; ')
-}
-
-
-export function cookieToSignedHeaders(
-    name: string,
-    cookie: Readonly<Cookie>,
-    keys: Pick<Keygrip, 'sign'>
-): [ cookie: string, signature: string ] {
-    const header = cookieToHeader(name, cookie)
-    const signature = cookieToHeader(
-        cookieSignatureName(name),
-        {
-            ...cookie,
-            value: keys.sign(
-                joinCookieValue(name, cookie.value)
-            )
-        }
-    )
-    return [ header, signature ]
 }

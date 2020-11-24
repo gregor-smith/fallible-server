@@ -1,17 +1,15 @@
 /// <reference types="node" />
 import type { RequestListener } from 'http';
 import { Awaitable, Ok } from 'fallible';
-import type Keygrip from 'keygrip';
 import type { ErrorHandler, MessageHandler, Response, ResponseHandler } from './types';
 export declare function defaultErrorHandler(): Response;
 export declare function defaultResponseHandler(): Ok<Response>;
 export declare type CreateRequestListenerArguments<State, Errors> = {
-    keys: Keygrip;
     messageHandler: MessageHandler<{}, State, Errors>;
     responseHandler?: ResponseHandler<State, Errors>;
     errorHandler?: ErrorHandler<Errors>;
 };
-export declare function createRequestListener<State, Errors>({ keys, messageHandler, responseHandler, errorHandler }: CreateRequestListenerArguments<State, Errors>): RequestListener;
+export declare function createRequestListener<State, Errors>({ messageHandler, responseHandler, errorHandler }: CreateRequestListenerArguments<State, Errors>): RequestListener;
 export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2>(handlers: [
     MessageHandler<ExistingState, NewState1, Errors1>,
     MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>

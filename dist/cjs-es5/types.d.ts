@@ -14,7 +14,7 @@ export declare type ParsedContentType = {
 export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
 export declare type Cookie = {
     value: string;
-    expires?: Date;
+    maxAge?: number;
     path?: string;
     domain?: string;
     secure?: boolean;

@@ -1,21 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cookieToSignedHeaders = exports.cookieToHeader = exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseMessageURL = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.getMessageSignedCookie = exports.getMessageCookie = void 0;
+exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseMessageURL = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.getSignedMessageCookie = exports.getMessageCookie = void 0;
 var tslib_1 = require("tslib");
-var js_base64_1 = tslib_1.__importDefault(require("js-base64"));
 function getMessageCookie(message, name) {
-    var _a;
-    var header = message.headers['cookie'];
-    if (header === undefined) {
-        return;
-    }
-    name = js_base64_1.default.encodeURI(name);
-    var value = (_a = new RegExp("(?:^|; )" + name + "=([^;]*)")
-        .exec(header)) === null || _a === void 0 ? void 0 : _a[1];
-    if (value === undefined) {
-        return;
-    }
-    return js_base64_1.default.decode(value);
+    var _a, _b;
+    return (_b = (_a = message.headers.cookie) === null || _a === void 0 ? void 0 : _a.match("(?:^|; )" + name + "=([^;]*)")) === null || _b === void 0 ? void 0 : _b[1];
 }
 exports.getMessageCookie = getMessageCookie;
 function joinCookieValue(name, value) {
@@ -24,13 +13,13 @@ function joinCookieValue(name, value) {
 function cookieSignatureName(name) {
     return name + ".sig";
 }
-function getMessageSignedCookie(message, name, keys) {
-    var signature = getMessageCookie(message, cookieSignatureName(name));
-    if (signature === undefined) {
-        return;
-    }
+function getSignedMessageCookie(message, name, keys) {
     var value = getMessageCookie(message, name);
     if (value === undefined) {
+        return;
+    }
+    var signature = getMessageCookie(message, cookieSignatureName(name));
+    if (signature === undefined) {
         return;
     }
     if (!keys.verify(joinCookieValue(name, value), signature)) {
@@ -38,7 +27,35 @@ function getMessageSignedCookie(message, name, keys) {
     }
     return value;
 }
-exports.getMessageSignedCookie = getMessageSignedCookie;
+exports.getSignedMessageCookie = getSignedMessageCookie;
+function cookieHeader(name, _a) {
+    var value = _a.value, path = _a.path, maxAge = _a.maxAge, domain = _a.domain, sameSite = _a.sameSite, _b = _a.secure, secure = _b === void 0 ? false : _b, _c = _a.httpOnly, httpOnly = _c === void 0 ? false : _c;
+    var segments = [joinCookieValue(name, value)];
+    if (path !== undefined) {
+        segments.push("Path=" + path);
+    }
+    if (maxAge !== undefined) {
+        segments.push("Max-Age=" + maxAge);
+    }
+    if (domain !== undefined) {
+        segments.push("Domain=" + domain);
+    }
+    if (sameSite !== undefined) {
+        segments.push("SameSite=" + sameSite);
+    }
+    if (secure) {
+        segments.push('Secure');
+    }
+    if (httpOnly) {
+        segments.push('HttpOnly');
+    }
+    return segments.join('; ');
+}
+exports.cookieHeader = cookieHeader;
+function signedCookieHeader(name, cookie, keys) {
+    return cookieHeader(cookieSignatureName(name), tslib_1.__assign(tslib_1.__assign({}, cookie), { value: keys.sign(joinCookieValue(name, cookie.value)) }));
+}
+exports.signedCookieHeader = signedCookieHeader;
 function getMessageHeader(message, name) {
     var header = message.headers[name];
     return Array.isArray(header)
@@ -52,8 +69,7 @@ function getMessageIP(message, useXForwardedFor) {
     if (!useXForwardedFor) {
         return (_a = message.connection.remoteAddress) !== null && _a !== void 0 ? _a : message.socket.remoteAddress;
     }
-    var header = getMessageHeader(message, 'x-forwarded-for');
-    return (_e = (_d = (_c = (_b = header === null || header === void 0 ? void 0 : header.match(/^\s*(.+?)\s*,/)) === null || _b === void 0 ? void 0 : _b[1]) !== null && _c !== void 0 ? _c : header === null || header === void 0 ? void 0 : header.trim()) !== null && _d !== void 0 ? _d : message.connection.remoteAddress) !== null && _e !== void 0 ? _e : message.socket.remoteAddress;
+    return (_e = (_d = (_c = (_b = getMessageHeader(message, 'x-forwarded-for')) === null || _b === void 0 ? void 0 : _b.match(/^\s*([^\s]+)\s*(?:,|$)/)) === null || _c === void 0 ? void 0 : _c[1]) !== null && _d !== void 0 ? _d : message.connection.remoteAddress) !== null && _e !== void 0 ? _e : message.socket.remoteAddress;
 }
 exports.getMessageIP = getMessageIP;
 function getMessageMethod(message) {
@@ -162,40 +178,17 @@ function parseMessageContentType(message) {
 }
 exports.parseMessageContentType = parseMessageContentType;
 function parseMessageContentLength(message) {
-    var length = Number(message.headers['content-length']);
-    return Number.isNaN(length) ? undefined : length;
+    var header = message.headers['content-length'];
+    // today i learnt passing an all whitespace string to Number gives you 0
+    // to what end?
+    if (!(header === null || header === void 0 ? void 0 : header.match(/[0-9]/))) {
+        return;
+    }
+    var length = Number(header);
+    if (!Number.isSafeInteger(length)) {
+        return;
+    }
+    return length;
 }
 exports.parseMessageContentLength = parseMessageContentLength;
-function cookieToHeader(name, _a) {
-    var value = _a.value, path = _a.path, expires = _a.expires, domain = _a.domain, sameSite = _a.sameSite, _b = _a.secure, secure = _b === void 0 ? false : _b, _c = _a.httpOnly, httpOnly = _c === void 0 ? false : _c;
-    name = js_base64_1.default.encodeURI(name);
-    value = js_base64_1.default.encodeURI(value);
-    var segments = [joinCookieValue(name, value)];
-    if (path !== undefined) {
-        segments.push("Path=" + path);
-    }
-    if (expires !== undefined) {
-        segments.push("Expires=" + expires.toUTCString());
-    }
-    if (domain !== undefined) {
-        segments.push("Domain=" + domain);
-    }
-    if (sameSite !== undefined) {
-        segments.push("SameSite=" + sameSite);
-    }
-    if (secure) {
-        segments.push('Secure');
-    }
-    if (httpOnly) {
-        segments.push('HttpOnly');
-    }
-    return segments.join('; ');
-}
-exports.cookieToHeader = cookieToHeader;
-function cookieToSignedHeaders(name, cookie, keys) {
-    var header = cookieToHeader(name, cookie);
-    var signature = cookieToHeader(cookieSignatureName(name), tslib_1.__assign(tslib_1.__assign({}, cookie), { value: keys.sign(joinCookieValue(name, cookie.value)) }));
-    return [header, signature];
-}
-exports.cookieToSignedHeaders = cookieToSignedHeaders;
 //# sourceMappingURL=utils.js.map

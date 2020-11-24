@@ -1,5 +1,5 @@
 import { asyncFallible, ok, error } from 'fallible';
-import { cookieToSignedHeaders } from './utils';
+import { cookieHeader } from './utils';
 export function defaultErrorHandler() {
     return {
         status: 500,
@@ -12,7 +12,7 @@ export function defaultResponseHandler() {
         body: ''
     });
 }
-export function createRequestListener({ keys, messageHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler }) {
+export function createRequestListener({ messageHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler }) {
     return async (req, res) => {
         let response;
         try {
@@ -34,9 +34,8 @@ export function createRequestListener({ keys, messageHandler, responseHandler = 
         res.statusCode = response.status ?? 200;
         if (response.cookies !== undefined) {
             for (const [name, cookie] of Object.entries(response.cookies)) {
-                for (const header of cookieToSignedHeaders(name, cookie, keys)) {
-                    res.setHeader('Set-Cookie', header);
-                }
+                const header = cookieHeader(name, cookie);
+                res.setHeader('Set-Cookie', header);
             }
         }
         if (response.headers !== undefined) {

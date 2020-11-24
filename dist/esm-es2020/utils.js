@@ -1,16 +1,5 @@
-import Base64 from 'js-base64';
 export function getMessageCookie(message, name) {
-    const header = message.headers['cookie'];
-    if (header === undefined) {
-        return;
-    }
-    name = Base64.encodeURI(name);
-    const value = new RegExp(`(?:^|; )${name}=([^;]*)`)
-        .exec(header)?.[1];
-    if (value === undefined) {
-        return;
-    }
-    return Base64.decode(value);
+    return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
 function joinCookieValue(name, value) {
     return `${name}=${value}`;
@@ -18,19 +7,47 @@ function joinCookieValue(name, value) {
 function cookieSignatureName(name) {
     return `${name}.sig`;
 }
-export function getMessageSignedCookie(message, name, keys) {
-    const signature = getMessageCookie(message, cookieSignatureName(name));
-    if (signature === undefined) {
-        return;
-    }
+export function getSignedMessageCookie(message, name, keys) {
     const value = getMessageCookie(message, name);
     if (value === undefined) {
+        return;
+    }
+    const signature = getMessageCookie(message, cookieSignatureName(name));
+    if (signature === undefined) {
         return;
     }
     if (!keys.verify(joinCookieValue(name, value), signature)) {
         return;
     }
     return value;
+}
+export function cookieHeader(name, { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }) {
+    const segments = [joinCookieValue(name, value)];
+    if (path !== undefined) {
+        segments.push(`Path=${path}`);
+    }
+    if (maxAge !== undefined) {
+        segments.push(`Max-Age=${maxAge}`);
+    }
+    if (domain !== undefined) {
+        segments.push(`Domain=${domain}`);
+    }
+    if (sameSite !== undefined) {
+        segments.push(`SameSite=${sameSite}`);
+    }
+    if (secure) {
+        segments.push('Secure');
+    }
+    if (httpOnly) {
+        segments.push('HttpOnly');
+    }
+    return segments.join('; ');
+}
+export function signedCookieHeader(name, cookie, keys) {
+    return cookieHeader(cookieSignatureName(name), {
+        ...cookie,
+        value: keys.sign(joinCookieValue(name, cookie.value))
+    });
 }
 export function getMessageHeader(message, name) {
     const header = message.headers[name];
@@ -42,9 +59,8 @@ export function getMessageIP(message, useXForwardedFor = false) {
     if (!useXForwardedFor) {
         return message.connection.remoteAddress ?? message.socket.remoteAddress;
     }
-    const header = getMessageHeader(message, 'x-forwarded-for');
-    return header?.match(/^\s*(.+?)\s*,/)?.[1]
-        ?? header?.trim()
+    return getMessageHeader(message, 'x-forwarded-for')
+        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1]
         ?? message.connection.remoteAddress
         ?? message.socket.remoteAddress;
 }
@@ -125,39 +141,16 @@ export function parseMessageContentType(message) {
     };
 }
 export function parseMessageContentLength(message) {
-    const length = Number(message.headers['content-length']);
-    return Number.isNaN(length) ? undefined : length;
-}
-export function cookieToHeader(name, { value, path, expires, domain, sameSite, secure = false, httpOnly = false }) {
-    name = Base64.encodeURI(name);
-    value = Base64.encodeURI(value);
-    const segments = [joinCookieValue(name, value)];
-    if (path !== undefined) {
-        segments.push(`Path=${path}`);
+    const header = message.headers['content-length'];
+    // today i learnt passing an all whitespace string to Number gives you 0
+    // to what end?
+    if (!header?.match(/[0-9]/)) {
+        return;
     }
-    if (expires !== undefined) {
-        segments.push(`Expires=${expires.toUTCString()}`);
+    const length = Number(header);
+    if (!Number.isSafeInteger(length)) {
+        return;
     }
-    if (domain !== undefined) {
-        segments.push(`Domain=${domain}`);
-    }
-    if (sameSite !== undefined) {
-        segments.push(`SameSite=${sameSite}`);
-    }
-    if (secure) {
-        segments.push('Secure');
-    }
-    if (httpOnly) {
-        segments.push('HttpOnly');
-    }
-    return segments.join('; ');
-}
-export function cookieToSignedHeaders(name, cookie, keys) {
-    const header = cookieToHeader(name, cookie);
-    const signature = cookieToHeader(cookieSignatureName(name), {
-        ...cookie,
-        value: keys.sign(joinCookieValue(name, cookie.value))
-    });
-    return [header, signature];
+    return length;
 }
 //# sourceMappingURL=utils.js.map

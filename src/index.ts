@@ -1,10 +1,9 @@
 import type { RequestListener  } from 'http'
 
 import { Result, Awaitable, asyncFallible, ok, Ok, error } from 'fallible'
-import type Keygrip from 'keygrip'
 
 import type { Cleanup, ErrorHandler, MessageHandler, Response, ResponseHandler } from './types'
-import { cookieToSignedHeaders } from './utils'
+import { cookieHeader } from './utils'
 
 
 export function defaultErrorHandler(): Response {
@@ -24,7 +23,6 @@ export function defaultResponseHandler(): Ok<Response> {
 
 
 export type CreateRequestListenerArguments<State, Errors> = {
-    keys: Keygrip
     messageHandler: MessageHandler<{}, State, Errors>
     responseHandler?: ResponseHandler<State, Errors>
     errorHandler?: ErrorHandler<Errors>
@@ -32,7 +30,6 @@ export type CreateRequestListenerArguments<State, Errors> = {
 
 
 export function createRequestListener<State, Errors>({
-    keys,
     messageHandler,
     responseHandler = defaultResponseHandler,
     errorHandler = defaultErrorHandler
@@ -60,9 +57,8 @@ export function createRequestListener<State, Errors>({
 
         if (response.cookies !== undefined) {
             for (const [ name, cookie ] of Object.entries(response.cookies)) {
-                for (const header of cookieToSignedHeaders(name, cookie, keys)) {
-                    res.setHeader('Set-Cookie', header)
-                }
+                const header = cookieHeader(name, cookie)
+                res.setHeader('Set-Cookie', header)
             }
         }
 

@@ -1,36 +1,162 @@
 import type { IncomingHttpHeaders } from 'http'
+import Keygrip from 'keygrip'
 
 import { Cookie, ParsedContentType, ParsedURLPath } from '../src/types'
 import {
+    cookieHeader,
+    signedCookieHeader,
+    getMessageCookie,
     getMessageHeader,
     getMessageIP,
     getMessageMethod,
     getMessageURL,
     parseMessageContentLength,
     parseMessageContentType,
-    parseMessageURL
+    parseMessageURL,
+    getSignedMessageCookie
 } from '../src/utils'
 
 
 describe('getMessageCookie', () => {
-    test.todo('returns undefined when cookie header missing')
+    test('returns undefined when cookie header missing', () => {
+        const result = getMessageCookie({ headers: {} }, 'test')
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns undefined when base64 encoded name missing from cookie header')
+    test.each([
+        'test',
+        'test=value',
+        'test=value; test2=value2; test3=value3'
+    ])('returns undefined when name missing from cookie header', header => {
+        const result = getMessageCookie({ headers: { cookie: header } }, 'test4')
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns value base64 decoded')
+    test.each<[ string, string ]>([
+        [ 'test=value; test2=value2; test3=value3', 'value2' ],
+        [ 'test2=value', 'value' ]
+    ])('returns cookie value', (header, value) => {
+        const result = getMessageCookie({ headers: { cookie: header } }, 'test2')
+        expect(result).toBe(value)
+    })
 })
 
 
-describe('getMessageSignedCookie', () => {
-    test.todo('returns undefined when cookie header missing')
+describe('getSignedMessageCookie', () => {
+    test('returns undefined when cookie header missing', () => {
+        const result = getSignedMessageCookie(
+            { headers: {} },
+            'test',
+            new Keygrip([ 'test key' ])
+        )
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns undefined when base64 encoded signature name missing from cookie header')
+    test.each([
+        'test',
+        'test=value',
+        'test=value; test2=value2; test3=value3'
+    ])('returns undefined when signature name missing from cookie header', header => {
+        const result = getSignedMessageCookie(
+            { headers: { cookie: header } },
+            'test',
+            new Keygrip([ 'test key' ])
+        )
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns undefined when base64 encoded name missing from cookie header')
+    test.each([
+        'test',
+        'test=value',
+        'test=value; test2=value2; test3=value3'
+    ])('returns undefined when name missing from cookie header', header => {
+        const result = getSignedMessageCookie(
+            { headers: { cookie: header } },
+            'test4',
+            new Keygrip([ 'test key' ])
+        )
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns undefined when signature does not match')
+    test.each([
+        [ 'test=value; test.sig=ItukCx0lb6-dY71Zps-69Gkz5XE', 'test' ],
+        [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2' ]
+    ])('returns undefined when signature does not match', (header, name) => {
+        const result = getSignedMessageCookie(
+            { headers: { cookie: header } },
+            name,
+            new Keygrip([ 'invalid key' ])
+        )
+        expect(result).toBeUndefined()
+    })
 
-    test.todo('returns value base64 decoded')
+    test.each([
+        [ 'test=value; test.sig=ItukCx0lb6-dY71Zps-69Gkz5XE', 'test', 'value', 'test key' ],
+        [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2', 'value2', 'test key 2' ]
+    ])('returns cookie value', (header, name, value, key) => {
+        const result = getSignedMessageCookie(
+            { headers: { cookie: header } },
+            name,
+            new Keygrip([ key ])
+        )
+        expect(result).toBe(value)
+    })
+})
+
+
+describe('cookieHeader', () => {
+    test.each<[ string, Cookie, string ]>([
+        [
+            'test-cookie',
+            { value: 'test value' },
+            'test-cookie=test value'
+        ],
+        [
+            'test-cookie-2',
+            {
+                value: 'test value 2',
+                path: '/test/path',
+                maxAge: 1337,
+                domain: 'test.domain',
+                httpOnly: true,
+                sameSite: 'lax',
+                secure: true
+            },
+            'test-cookie-2=test value 2; Path=/test/path; Max-Age=1337; Domain=test.domain; SameSite=lax; Secure; HttpOnly'
+        ]
+    ])('returns formatted cookie', (name, cookie, header) => {
+        const result = cookieHeader(name, cookie)
+        expect(result).toBe(header)
+    })
+})
+
+
+describe('signedCookieHeader', () => {
+    test.each<[ string, Cookie, string, string ]>([
+        [
+            'test-cookie',
+            { value: 'test value' },
+            'test key',
+            'test-cookie.sig=7LcOkGwGNIdyT4SLKCdgLl0ayb0'
+        ],
+        [
+            'test-cookie-2',
+            {
+                value: 'test value 2',
+                path: '/test/path',
+                maxAge: 1337,
+                domain: 'test.domain',
+                httpOnly: true,
+                sameSite: 'lax',
+                secure: true
+            },
+            'test key 2',
+            'test-cookie-2.sig=47eK_2MpYl2oFIWr2WmPDwXWZmg; Path=/test/path; Max-Age=1337; Domain=test.domain; SameSite=lax; Secure; HttpOnly'
+        ]
+    ])('returns signature header signed with key', (name, cookie, key, header) => {
+        const result = signedCookieHeader(name, cookie, new Keygrip([ key ]))
+        expect(result).toBe(header)
+    })
 })
 
 
@@ -261,23 +387,5 @@ describe('parseMessageContentLength', () => {
             headers: { 'content-length': header }
         })
         expect(result).toBe(Number(header))
-    })
-})
-
-
-describe('cookieToHeader', () => {
-    test.each<[ Cookie, string ]>([
-
-    ])('returns name and values based64 encoded with properties joined', () => {
-
-    })
-})
-
-
-describe('cookieToSignedHeaders', () => {
-    test.each<[ Cookie, string, string, string ]>([
-
-    ])('returns cookie header and signature header signed with key', () => {
-
     })
 })
