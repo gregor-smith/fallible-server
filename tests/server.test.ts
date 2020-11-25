@@ -50,15 +50,11 @@ describe('createRequestListener', () => {
     type TestError = typeof testError
 
     type TestMessageHandler = MessageHandler<{}, TestState, TestError>
-    type TestCleanup = Cleanup<TestError>
 
     function createMessageHandlerMock(
-        cleanup?: TestCleanup
+        cleanup?: Cleanup<TestError>
     ): jest.MockedFunction<TestMessageHandler> {
         return jest.fn((..._) => ok({ state: testState, cleanup }))
-    }
-    function createErrorMessageHandlerMock(): jest.MockedFunction<TestMessageHandler> {
-        return jest.fn((..._) => error(testError))
     }
 
     afterEach(jest.resetAllMocks)
@@ -78,8 +74,6 @@ describe('createRequestListener', () => {
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledWith(testState)
     })
-
-    test.todo('default response handler used when none given as parameter')
 
     test('cleanup returned by messageHandler called if responseHandler succeeds', async () => {
         const cleanupMock = jest.fn()
@@ -114,7 +108,9 @@ describe('createRequestListener', () => {
     })
 
     test('messageHandler error propagates to errorHandler', async () => {
-        const messageHandlerMock = createErrorMessageHandlerMock()
+        const messageHandlerMock: jest.MockedFunction<TestMessageHandler> = jest.fn(
+            (..._) => error(testError)
+        )
         const responseHandlerMock = jest.fn(defaultResponseHandler)
         const errorHandlerMock = jest.fn(defaultErrorHandler)
 
@@ -167,8 +163,6 @@ describe('createRequestListener', () => {
         expect(errorHandlerMock).toHaveBeenCalledWith(testError)
     })
 
-    test.todo('default error handler used when none given as parameter')
-
     test('cookies, headers and status code passed to response', async () => {
         const cookies: Record<string, Cookie> = {
             'test-cookie': {
@@ -191,7 +185,7 @@ describe('createRequestListener', () => {
         const status = 123
 
         const listener = createRequestListener({
-            messageHandler: createMessageHandlerMock(),
+            messageHandler: () => ok({ state: {} }),
             responseHandler: jest.fn(() =>
                 ok({
                     status,
@@ -222,7 +216,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -239,7 +233,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -263,7 +257,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -280,7 +274,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -305,7 +299,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -322,7 +316,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -341,7 +335,7 @@ describe('createRequestListener', () => {
     describe('no response body', () => {
         test('response ended with no body', async () => {
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({})
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -354,7 +348,7 @@ describe('createRequestListener', () => {
     test('response from errorHandler is used when error propagates', async () => {
         const body = 'test body'
         const listener = createRequestListener({
-            messageHandler: createErrorMessageHandlerMock(),
+            messageHandler: error,
             errorHandler: () => ({ body })
         })
         await listener(incomingMessageMock, serverResponseMock)
@@ -377,7 +371,7 @@ describe('createRequestListener', () => {
 
         test('during response handler', async () => {
             const listener = createRequestListener({
-                messageHandler: createMessageHandlerMock(),
+                messageHandler: () => ok({ state: {} }),
                 responseHandler: () => { throw 'test' }
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -401,7 +395,7 @@ describe('createRequestListener', () => {
 
         test('during error handler', async () => {
             const listener = createRequestListener({
-                messageHandler: createErrorMessageHandlerMock(),
+                messageHandler: error,
                 errorHandler: () => { throw 'test' }
             })
             await listener(incomingMessageMock, serverResponseMock)
@@ -409,6 +403,28 @@ describe('createRequestListener', () => {
             expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
         })
+    })
+
+    test('default response handler used when none given as parameter', async () => {
+        const listener = createRequestListener({
+            messageHandler: () => ok({ state: {} })
+        })
+        await listener(incomingMessageMock, serverResponseMock)
+
+        const { value: { status, body } } = defaultResponseHandler()
+        expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+    })
+
+    test('default error handler used when none given as parameter', async () => {
+        const listener = createRequestListener({
+            messageHandler: error
+        })
+        await listener(incomingMessageMock, serverResponseMock)
+
+        const { status, body } = defaultErrorHandler()
+        expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
     })
 })
 
