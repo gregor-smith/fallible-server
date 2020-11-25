@@ -20,7 +20,7 @@ function defaultResponseHandler() {
 exports.defaultResponseHandler = defaultResponseHandler;
 function createRequestListener(_a) {
     var _this = this;
-    var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c, _d = _a.exceptionHandler, exceptionHandler = _d === void 0 ? defaultErrorHandler : _d;
+    var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
         var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value;
         var e_1, _h, e_2, _j;
@@ -29,7 +29,7 @@ function createRequestListener(_a) {
         return tslib_1.__generator(this, function (_l) {
             switch (_l.label) {
                 case 0:
-                    _l.trys.push([0, 5, , 7]);
+                    _l.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                             var _a, state, cleanup, _b, response, _c;
                             return tslib_1.__generator(this, function (_d) {
@@ -63,14 +63,12 @@ function createRequestListener(_a) {
                     _l.label = 4;
                 case 4:
                     response = _a;
-                    return [3 /*break*/, 7];
+                    return [3 /*break*/, 6];
                 case 5:
                     exception_1 = _l.sent();
-                    return [4 /*yield*/, exceptionHandler(exception_1)];
+                    response = defaultErrorHandler();
+                    return [3 /*break*/, 6];
                 case 6:
-                    response = _l.sent();
-                    return [3 /*break*/, 7];
-                case 7:
                     res.statusCode = (_k = response.status) !== null && _k !== void 0 ? _k : 200;
                     if (response.cookies !== undefined) {
                         try {

@@ -1,17 +1,16 @@
 /// <reference types="node" />
 import type { RequestListener } from 'http';
 import { Awaitable, Ok } from 'fallible';
-import type { ErrorHandler, ExceptionHandler, MessageHandler, Response, ResponseHandler } from './types';
+import type { ErrorHandler, MessageHandler, Response, ResponseHandler } from './types';
 export declare function defaultErrorHandler(): Response;
 export declare function defaultResponseHandler(): Ok<Response>;
 export declare type CreateRequestListenerArguments<State, Errors> = {
     messageHandler: MessageHandler<{}, State, Errors>;
     responseHandler?: ResponseHandler<State, Errors>;
     errorHandler?: ErrorHandler<Errors>;
-    exceptionHandler?: ExceptionHandler;
 };
 export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Promise<ReturnType<RequestListener>>;
-export declare function createRequestListener<State, Errors>({ messageHandler, responseHandler, errorHandler, exceptionHandler }: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener;
+export declare function createRequestListener<State, Errors>({ messageHandler, responseHandler, errorHandler }: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener;
 export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2>(handlers: [
     MessageHandler<ExistingState, NewState1, Errors1>,
     MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>

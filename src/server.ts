@@ -1,8 +1,14 @@
 import type { RequestListener  } from 'http'
 
-import { Result, Awaitable, asyncFallible, ok, Ok, error } from 'fallible'
+import { Result, Awaitable, Ok, asyncFallible, ok, error } from 'fallible'
 
-import type { Cleanup, ErrorHandler, ExceptionHandler, MessageHandler, Response, ResponseHandler } from './types'
+import type {
+    Cleanup,
+    ErrorHandler,
+    MessageHandler,
+    Response,
+    ResponseHandler
+} from './types'
 import { cookieHeader } from './utils'
 
 
@@ -26,7 +32,6 @@ export type CreateRequestListenerArguments<State, Errors> = {
     messageHandler: MessageHandler<{}, State, Errors>
     responseHandler?: ResponseHandler<State, Errors>
     errorHandler?: ErrorHandler<Errors>
-    exceptionHandler?: ExceptionHandler
 }
 
 
@@ -36,8 +41,7 @@ export type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Pr
 export function createRequestListener<State, Errors>({
     messageHandler,
     responseHandler = defaultResponseHandler,
-    errorHandler = defaultErrorHandler,
-    exceptionHandler = defaultErrorHandler
+    errorHandler = defaultErrorHandler
 }: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
@@ -55,7 +59,7 @@ export function createRequestListener<State, Errors>({
                 : await errorHandler(result.value)
         }
         catch (exception: unknown) {
-            response = await exceptionHandler(exception)
+            response = defaultErrorHandler()
         }
 
         res.statusCode = response.status ?? 200

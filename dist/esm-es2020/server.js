@@ -12,7 +12,7 @@ export function defaultResponseHandler() {
         body: ''
     });
 }
-export function createRequestListener({ messageHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler, exceptionHandler = defaultErrorHandler }) {
+export function createRequestListener({ messageHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler }) {
     return async (req, res) => {
         let response;
         try {
@@ -29,7 +29,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                 : await errorHandler(result.value);
         }
         catch (exception) {
-            response = await exceptionHandler(exception);
+            response = defaultErrorHandler();
         }
         res.statusCode = response.status ?? 200;
         if (response.cookies !== undefined) {
