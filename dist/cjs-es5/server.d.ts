@@ -1,9 +1,15 @@
 /// <reference types="node" />
 import type { RequestListener } from 'http';
-import { Awaitable, Ok } from 'fallible';
-import type { ErrorHandler, MessageHandler, Response, ResponseHandler } from './types';
-export declare function defaultErrorHandler(): Response;
-export declare function defaultResponseHandler(): Ok<Response>;
+import { Awaitable } from 'fallible';
+import type { ErrorHandler, MessageHandler, ResponseHandler } from './types';
+export declare function defaultErrorHandler(): {
+    status: number;
+    body: string;
+};
+export declare function defaultResponseHandler(): import("fallible").Ok<{
+    status: number;
+    body: string;
+}>;
 export declare type CreateRequestListenerArguments<State, Errors> = {
     messageHandler: MessageHandler<{}, State, Errors>;
     responseHandler?: ResponseHandler<State, Errors>;

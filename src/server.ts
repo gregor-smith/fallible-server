@@ -1,6 +1,6 @@
 import type { RequestListener  } from 'http'
 
-import { Result, Awaitable, Ok, asyncFallible, ok, error } from 'fallible'
+import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
 
 import type {
     Cleanup,
@@ -12,7 +12,7 @@ import type {
 import { cookieHeader } from './utils'
 
 
-export function defaultErrorHandler(): Response {
+export function defaultErrorHandler() {
     return {
         status: 500,
         body: 'Internal server error'
@@ -20,7 +20,7 @@ export function defaultErrorHandler(): Response {
 }
 
 
-export function defaultResponseHandler(): Ok<Response> {
+export function defaultResponseHandler() {
     return ok({
         status: 200,
         body: ''

@@ -351,15 +351,65 @@ describe('createRequestListener', () => {
         })
     })
 
-    test.todo('response from errorHandler is used when error propagates')
+    test('response from errorHandler is used when error propagates', async () => {
+        const body = 'test body'
+        const listener = createRequestListener({
+            messageHandler: createErrorMessageHandlerMock(),
+            errorHandler: () => ({ body })
+        })
+        await listener(incomingMessageMock, serverResponseMock)
 
-    test.todo('exception from message handler results in default error handler response')
+        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+    })
 
-    test.todo('exception from response handler results in default error handler response')
+    describe('exception from handlers results in default error handler response', () => {
+        const { status, body } = defaultErrorHandler()
 
-    test.todo('exception from message handler cleanup results in default error handler response')
+        test('during message handler', async () => {
+            const listener = createRequestListener({
+                messageHandler: () => { throw 'test' }
+            })
+            await listener(incomingMessageMock, serverResponseMock)
 
-    test.todo('exception from error handler results in default error handler response')
+            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+        })
+
+        test('during response handler', async () => {
+            const listener = createRequestListener({
+                messageHandler: createMessageHandlerMock(),
+                responseHandler: () => { throw 'test' }
+            })
+            await listener(incomingMessageMock, serverResponseMock)
+
+            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+        })
+
+        test('during message handler cleanup', async () => {
+            const listener = createRequestListener({
+                messageHandler: () => ok({
+                    state: {},
+                    cleanup: () => { throw 'test' }
+                })
+            })
+            await listener(incomingMessageMock, serverResponseMock)
+
+            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+        })
+
+        test('during error handler', async () => {
+            const listener = createRequestListener({
+                messageHandler: createErrorMessageHandlerMock(),
+                errorHandler: () => { throw 'test' }
+            })
+            await listener(incomingMessageMock, serverResponseMock)
+
+            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
+            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+        })
+    })
 })
 
 
