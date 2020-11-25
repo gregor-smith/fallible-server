@@ -113,7 +113,7 @@ async function composeCleanups<Errors>(
     composeErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
 ): Promise<Result<void, Errors>> {
     const errors: Errors[] = []
-    for (let index = cleanups.length; index >= 0; index--) {
+    for (let index = cleanups.length - 1; index >= 0; index--) {
         const result = await cleanups[index]()
         if (!result.ok) {
             errors.push(result.value)

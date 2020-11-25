@@ -1,9 +1,12 @@
+import 'jest-extended'
+
 import type { IncomingMessage, ServerResponse } from 'http'
 import type { Readable } from 'stream'
 
-import { error, ok } from 'fallible'
+import { error, Ok, ok } from 'fallible'
 
 import {
+    composeMessageHandlers,
     createRequestListener,
     defaultErrorHandler,
     defaultResponseHandler
@@ -28,6 +31,9 @@ describe('defaultResponseHandler', () => {
 })
 
 
+const dummyIncomingMessage: IncomingMessage = { tag: 'message' } as any
+
+
 describe('createRequestListener', () => {
     class ServerResponseMock {
         public readonly setStatusCode = jest.fn<void, [ number ]>()
@@ -41,7 +47,6 @@ describe('createRequestListener', () => {
     }
 
     const serverResponseMock: ServerResponse & ServerResponseMock = new ServerResponseMock() as any
-    const incomingMessageMock: IncomingMessage = { tag: 'message' } as any
 
     const testState = { tag: 'state' } as const
     const testError = { tag: 'error' } as const
@@ -67,10 +72,10 @@ describe('createRequestListener', () => {
             messageHandler: messageHandlerMock,
             responseHandler: responseHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(messageHandlerMock).toHaveBeenCalledWith(incomingMessageMock, {})
+        expect(messageHandlerMock).toHaveBeenCalledWith(dummyIncomingMessage, {})
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledWith(testState)
     })
@@ -84,7 +89,7 @@ describe('createRequestListener', () => {
             messageHandler: messageHandlerMock,
             responseHandler: responseHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
@@ -100,7 +105,7 @@ describe('createRequestListener', () => {
             messageHandler: messageHandlerMock,
             responseHandler: responseHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
@@ -119,7 +124,7 @@ describe('createRequestListener', () => {
             responseHandler: responseHandlerMock,
             errorHandler: errorHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).not.toHaveBeenCalled()
@@ -137,7 +142,7 @@ describe('createRequestListener', () => {
             responseHandler: responseHandlerMock,
             errorHandler: errorHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
@@ -155,7 +160,7 @@ describe('createRequestListener', () => {
             responseHandler: responseHandlerMock,
             errorHandler: errorHandlerMock
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
@@ -194,7 +199,7 @@ describe('createRequestListener', () => {
                 })
             )
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         const expectedHeaders: [ string, string ][]  = []
         for (const [ name, cookie ] of Object.entries(cookies)) {
@@ -219,7 +224,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ],
@@ -236,7 +241,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ],
@@ -260,7 +265,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ],
@@ -277,7 +282,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ],
@@ -302,7 +307,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ]
@@ -319,7 +324,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({ body })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.hasHeader.mock.calls).toEqual([
                 [ 'Content-Type' ]
@@ -338,7 +343,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => ok({})
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.setHeader).not.toHaveBeenCalled()
             expect(serverResponseMock.end.mock.calls).toEqual([ [] ])
@@ -351,7 +356,7 @@ describe('createRequestListener', () => {
             messageHandler: error,
             errorHandler: () => ({ body })
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(serverResponseMock.end).toHaveBeenCalledWith(body)
     })
@@ -363,7 +368,7 @@ describe('createRequestListener', () => {
             const listener = createRequestListener({
                 messageHandler: () => { throw 'test' }
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
@@ -374,7 +379,7 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({ state: {} }),
                 responseHandler: () => { throw 'test' }
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
@@ -387,7 +392,7 @@ describe('createRequestListener', () => {
                     cleanup: () => { throw 'test' }
                 })
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
@@ -398,7 +403,7 @@ describe('createRequestListener', () => {
                 messageHandler: error,
                 errorHandler: () => { throw 'test' }
             })
-            await listener(incomingMessageMock, serverResponseMock)
+            await listener(dummyIncomingMessage, serverResponseMock)
 
             expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
@@ -409,7 +414,7 @@ describe('createRequestListener', () => {
         const listener = createRequestListener({
             messageHandler: () => ok({ state: {} })
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         const { value: { status, body } } = defaultResponseHandler()
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
@@ -420,7 +425,7 @@ describe('createRequestListener', () => {
         const listener = createRequestListener({
             messageHandler: error
         })
-        await listener(incomingMessageMock, serverResponseMock)
+        await listener(dummyIncomingMessage, serverResponseMock)
 
         const { status, body } = defaultErrorHandler()
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
@@ -430,13 +435,77 @@ describe('createRequestListener', () => {
 
 
 describe('composeMessageHandlers', () => {
-    test.todo('handlers called with message and each successive state')
+    test('handlers called with message and each successive state', async () => {
+        expect.assertions(7)
 
-    test.todo('cleanups of previous handlers called in reverse order and initial error returned')
+        const a: MessageHandler<{}, { a: true }, void> = (message, state) => {
+            expect(message).toBe(dummyIncomingMessage)
+            expect(state).toEqual({})
+            return ok({
+                state: { a: true }
+            })
+        }
+
+        const b: MessageHandler<{ a: true }, { b: true }, void> = (message, state) => {
+            expect(message).toBe(dummyIncomingMessage)
+            expect(state).toEqual({ a: true })
+            return ok({
+                state: { ...state, b: true }
+            })
+        }
+
+        const c: MessageHandler<{ a: true, b: true }, { c: true }, void> = (message, state) => {
+            expect(message).toBe(dummyIncomingMessage)
+            expect(state).toEqual({ a: true, b: true })
+            return ok({
+                state: { ...state, c: true }
+            })
+        }
+
+        const composed = composeMessageHandlers(
+            [ a, b, c ],
+            errors => errors[0]
+        )
+        const result = await composed(dummyIncomingMessage, {})
+
+        expect(result).toEqual(
+            ok({
+                state: { a: true, b: true, c: true }
+            })
+        )
+    })
+
+    test('cleanups of previous handlers called in reverse order and initial error returned', async () => {
+        const testError = 'test'
+
+        const aCleanup = jest.fn<Ok<void>, []>(ok)
+        const a: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+            ok({ state, cleanup: aCleanup })
+
+        const bCleanup = jest.fn<Ok<void>, []>(ok)
+        const b: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+            ok({ state, cleanup: bCleanup })
+
+        const c: MessageHandler<{}, {}, typeof testError> = () => error(testError)
+
+        const dCleanup = jest.fn()
+        const d: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+            ok({ state, cleanup: dCleanup })
+
+        const composed = composeMessageHandlers(
+            [ a, b, c, d ],
+            errors => errors[0]
+        )
+        const result = await composed(dummyIncomingMessage, {})
+
+        expect(result).toEqual(error(testError))
+        expect(aCleanup).toHaveBeenCalled()
+        expect(bCleanup).toHaveBeenCalled()
+        expect(dCleanup).not.toHaveBeenCalled()
+        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
+    })
 
     test.todo('composed error returned on previous handler cleanup error')
-
-    test.todo('final reduced state returned')
 
     test.todo('no cleanup returned if no handlers had cleanup')
 

@@ -74,7 +74,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
 }
 async function composeCleanups(cleanups, composeErrors) {
     const errors = [];
-    for (let index = cleanups.length; index >= 0; index--) {
+    for (let index = cleanups.length - 1; index >= 0; index--) {
         const result = await cleanups[index]();
         if (!result.ok) {
             errors.push(result.value);

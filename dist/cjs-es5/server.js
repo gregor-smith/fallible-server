@@ -141,7 +141,7 @@ function composeCleanups(cleanups, composeErrors) {
             switch (_a.label) {
                 case 0:
                     errors = [];
-                    index = cleanups.length;
+                    index = cleanups.length - 1;
                     _a.label = 1;
                 case 1:
                     if (!(index >= 0)) return [3 /*break*/, 4];
