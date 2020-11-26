@@ -1,7 +1,7 @@
 import { error, ok, Result } from 'fallible'
 
-import type { MessageHandler } from './types'
-import { getMessageHeader } from './utils'
+import type { MessageHandler } from '../types'
+import { getMessageHeader } from '../utils'
 
 
 export type AuthorisationTokenState = {

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import type { RequestListener } from 'http';
 import { Awaitable } from 'fallible';
-import type { ErrorHandler, MessageHandler, ResponseHandler } from './types';
+import type { ErrorHandler, MessageHandler, ResponseHandler } from '../types';
 export declare function defaultErrorHandler(): {
     status: number;
     body: string;

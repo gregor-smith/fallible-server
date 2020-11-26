@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
 
-import type { Cookie, Method, ParsedContentType } from './types'
+import type { Cookie, Method, ParsedContentType } from '../types'
 
 
 export function parseMessageCookie(

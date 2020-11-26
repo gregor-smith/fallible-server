@@ -141,4 +141,4 @@ export function parseMessageContentLength(message) {
     }
     return length;
 }
-//# sourceMappingURL=utils.js.map
+//# sourceMappingURL=index.js.map

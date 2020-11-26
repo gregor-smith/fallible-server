@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
-import type { Cookie, Method, ParsedContentType } from './types';
+import type { Cookie, Method, ParsedContentType } from '../types';
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export declare function parseSignedMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string, keys: Pick<Keygrip, 'verify'>): string | undefined;
 export declare function cookieHeader(name: string, { value, path, maxAge, domain, sameSite, secure, httpOnly }: Readonly<Cookie>): string;

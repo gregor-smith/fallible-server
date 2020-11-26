@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getIsWebSocket = exports.parseAuthorisationBearer = void 0;
 var tslib_1 = require("tslib");
 var fallible_1 = require("fallible");
-var utils_1 = require("./utils");
+var utils_1 = require("../utils");
 function parseAuthorisationBearer() {
     return function (message, state) {
         var _a;
@@ -32,4 +32,4 @@ function getIsWebSocket() {
     };
 }
 exports.getIsWebSocket = getIsWebSocket;
-//# sourceMappingURL=handlers.js.map
+//# sourceMappingURL=index.js.map

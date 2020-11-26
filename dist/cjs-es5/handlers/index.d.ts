@@ -1,5 +1,5 @@
 import { Result } from 'fallible';
-import type { MessageHandler } from './types';
+import type { MessageHandler } from '../types';
 export declare type AuthorisationTokenState = {
     authorisationToken: Result<string, 'HeaderMissing' | 'HeaderInvalid'>;
 };
