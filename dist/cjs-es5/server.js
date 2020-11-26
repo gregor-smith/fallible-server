@@ -23,7 +23,7 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value, wss_1, _h, onOpen_1, onMessage_1, onError_1, onClose_1;
+        var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value, wss_1, socket_1, _h, onOpen, onMessage_1, onError, onClose;
         var e_1, _j, e_2, _k;
         var _this = this;
         var _l;
@@ -135,64 +135,62 @@ function createRequestListener(_a) {
                             return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
                         })];
                 case 10:
-                    _m.sent();
-                    _h = response.body, onOpen_1 = _h.onOpen, onMessage_1 = _h.onMessage, onError_1 = _h.onError, onClose_1 = _h.onClose;
-                    wss_1.on('connection', function (socket) {
-                        if (onOpen_1 !== undefined) {
-                            socket.on('open', onOpen_1);
-                        }
-                        if (onClose_1 !== undefined) {
-                            socket.on('close', onClose_1);
-                        }
-                        if (onError_1 !== undefined) {
-                            socket.on('error', onError_1);
-                        }
-                        socket.on('message', function (data) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                            var _a, _b, response_1, e_3_1;
-                            var e_3, _c;
-                            return tslib_1.__generator(this, function (_d) {
-                                switch (_d.label) {
-                                    case 0:
-                                        _d.trys.push([0, 6, 7, 12]);
-                                        _a = tslib_1.__asyncValues(onMessage_1(data));
-                                        _d.label = 1;
-                                    case 1: return [4 /*yield*/, _a.next()];
-                                    case 2:
-                                        if (!(_b = _d.sent(), !_b.done)) return [3 /*break*/, 5];
-                                        response_1 = _b.value;
-                                        return [4 /*yield*/, new Promise(function (resolve, reject) {
-                                                return socket.send(response_1, function (error) {
-                                                    return error === undefined
-                                                        ? resolve()
-                                                        : reject(error);
-                                                });
-                                            })];
-                                    case 3:
-                                        _d.sent();
-                                        _d.label = 4;
-                                    case 4: return [3 /*break*/, 1];
-                                    case 5: return [3 /*break*/, 12];
-                                    case 6:
-                                        e_3_1 = _d.sent();
-                                        e_3 = { error: e_3_1 };
-                                        return [3 /*break*/, 12];
-                                    case 7:
-                                        _d.trys.push([7, , 10, 11]);
-                                        if (!(_b && !_b.done && (_c = _a.return))) return [3 /*break*/, 9];
-                                        return [4 /*yield*/, _c.call(_a)];
-                                    case 8:
-                                        _d.sent();
-                                        _d.label = 9;
-                                    case 9: return [3 /*break*/, 11];
-                                    case 10:
-                                        if (e_3) throw e_3.error;
-                                        return [7 /*endfinally*/];
-                                    case 11: return [7 /*endfinally*/];
-                                    case 12: return [2 /*return*/];
-                                }
-                            });
-                        }); });
-                    });
+                    socket_1 = _m.sent();
+                    _h = response.body, onOpen = _h.onOpen, onMessage_1 = _h.onMessage, onError = _h.onError, onClose = _h.onClose;
+                    if (onOpen !== undefined) {
+                        socket_1.on('open', onOpen);
+                    }
+                    if (onClose !== undefined) {
+                        socket_1.on('close', onClose);
+                    }
+                    if (onError !== undefined) {
+                        socket_1.on('error', onError);
+                    }
+                    socket_1.on('message', function (data) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+                        var _a, _b, response_1, e_3_1;
+                        var e_3, _c;
+                        return tslib_1.__generator(this, function (_d) {
+                            switch (_d.label) {
+                                case 0:
+                                    _d.trys.push([0, 6, 7, 12]);
+                                    _a = tslib_1.__asyncValues(onMessage_1(data));
+                                    _d.label = 1;
+                                case 1: return [4 /*yield*/, _a.next()];
+                                case 2:
+                                    if (!(_b = _d.sent(), !_b.done)) return [3 /*break*/, 5];
+                                    response_1 = _b.value;
+                                    return [4 /*yield*/, new Promise(function (resolve, reject) {
+                                            return socket_1.send(response_1, function (error) {
+                                                return error === undefined
+                                                    ? resolve()
+                                                    : reject(error);
+                                            });
+                                        })];
+                                case 3:
+                                    _d.sent();
+                                    _d.label = 4;
+                                case 4: return [3 /*break*/, 1];
+                                case 5: return [3 /*break*/, 12];
+                                case 6:
+                                    e_3_1 = _d.sent();
+                                    e_3 = { error: e_3_1 };
+                                    return [3 /*break*/, 12];
+                                case 7:
+                                    _d.trys.push([7, , 10, 11]);
+                                    if (!(_b && !_b.done && (_c = _a.return))) return [3 /*break*/, 9];
+                                    return [4 /*yield*/, _c.call(_a)];
+                                case 8:
+                                    _d.sent();
+                                    _d.label = 9;
+                                case 9: return [3 /*break*/, 11];
+                                case 10:
+                                    if (e_3) throw e_3.error;
+                                    return [7 /*endfinally*/];
+                                case 11: return [7 /*endfinally*/];
+                                case 12: return [2 /*return*/];
+                            }
+                        });
+                    }); });
                     _m.label = 11;
                 case 11: return [3 /*break*/, 13];
                 case 12:

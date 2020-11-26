@@ -73,25 +73,23 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
             // websocket
             else {
                 const wss = new WebSocketServer({ noServer: true });
-                await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
+                const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
                 const { onOpen, onMessage, onError, onClose } = response.body;
-                wss.on('connection', socket => {
-                    if (onOpen !== undefined) {
-                        socket.on('open', onOpen);
+                if (onOpen !== undefined) {
+                    socket.on('open', onOpen);
+                }
+                if (onClose !== undefined) {
+                    socket.on('close', onClose);
+                }
+                if (onError !== undefined) {
+                    socket.on('error', onError);
+                }
+                socket.on('message', async (data) => {
+                    for await (const response of onMessage(data)) {
+                        await new Promise((resolve, reject) => socket.send(response, error => error === undefined
+                            ? resolve()
+                            : reject(error)));
                     }
-                    if (onClose !== undefined) {
-                        socket.on('close', onClose);
-                    }
-                    if (onError !== undefined) {
-                        socket.on('error', onError);
-                    }
-                    socket.on('message', async (data) => {
-                        for await (const response of onMessage(data)) {
-                            await new Promise((resolve, reject) => socket.send(response, error => error === undefined
-                                ? resolve()
-                                : reject(error)));
-                        }
-                    });
                 });
             }
         }

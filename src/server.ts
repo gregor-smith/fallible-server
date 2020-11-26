@@ -1,6 +1,6 @@
 import type { RequestListener  } from 'http'
 
-import { Server as WebSocketServer } from 'ws'
+import WebSocket, { Server as WebSocketServer } from 'ws'
 import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
 
 import type {
@@ -107,7 +107,7 @@ export function createRequestListener<State, Errors>({
             // websocket
             else {
                 const wss = new WebSocketServer({ noServer: true })
-                await new Promise(resolve =>
+                const socket = await new Promise<WebSocket>(resolve =>
                     wss.handleUpgrade(
                         req,
                         req.socket,
@@ -116,27 +116,27 @@ export function createRequestListener<State, Errors>({
                     )
                 )
                 const { onOpen, onMessage, onError, onClose } = response.body
-                wss.on('connection', socket => {
-                    if (onOpen !== undefined) {
-                        socket.on('open', onOpen)
-                    }
-                    if (onClose !== undefined) {
-                        socket.on('close', onClose)
-                    }
-                    if (onError !== undefined) {
-                        socket.on('error', onError)
-                    }
-                    socket.on('message', async data => {
-                        for await (const response of onMessage(data)) {
-                            await new Promise((resolve, reject) =>
-                                socket.send(response, error =>
-                                    error === undefined
-                                        ? resolve()
-                                        : reject(error)
-                                )
+
+                if (onOpen !== undefined) {
+                    socket.on('open', onOpen)
+                }
+                if (onClose !== undefined) {
+                    socket.on('close', onClose)
+                }
+                if (onError !== undefined) {
+                    socket.on('error', onError)
+                }
+
+                socket.on('message', async data => {
+                    for await (const response of onMessage(data)) {
+                        await new Promise((resolve, reject) =>
+                            socket.send(response, error =>
+                                error === undefined
+                                    ? resolve()
+                                    : reject(error)
                             )
-                        }
-                    })
+                        )
+                    }
                 })
             }
         }

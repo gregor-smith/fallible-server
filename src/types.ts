@@ -34,11 +34,16 @@ export type Cookie = {
 }
 
 
+export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> =
+    | Generator<TYield, TReturn, TNext>
+    | AsyncGenerator<TYield, TReturn, TNext>
+
+
 export type WebsocketResponse = {
     onOpen?: () => Awaitable<void>
     onClose?: (code: number, reason: string) => Awaitable<void>
     onError?: (error: Error) => Awaitable<void>
-    onMessage: (message: Data) => AsyncGenerator<string | Buffer>
+    onMessage: (message: Data) => AwaitableGenerator<string | Buffer>
 }
 
 

@@ -17,11 +17,12 @@ export declare type Cookie = {
     httpOnly?: boolean;
     sameSite?: 'strict' | 'lax' | 'none';
 };
+export declare type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> = Generator<TYield, TReturn, TNext> | AsyncGenerator<TYield, TReturn, TNext>;
 export declare type WebsocketResponse = {
     onOpen?: () => Awaitable<void>;
     onClose?: (code: number, reason: string) => Awaitable<void>;
     onError?: (error: Error) => Awaitable<void>;
-    onMessage: (message: Data) => AsyncGenerator<string | Buffer>;
+    onMessage: (message: Data) => AwaitableGenerator<string | Buffer>;
 };
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
