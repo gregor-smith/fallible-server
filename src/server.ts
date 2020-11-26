@@ -9,8 +9,8 @@ import type {
     MessageHandler,
     Response,
     ResponseHandler
-} from '../types'
-import { cookieHeader } from '../utils'
+} from './types'
+import { cookieHeader } from './utils'
 
 
 export function defaultErrorHandler() {

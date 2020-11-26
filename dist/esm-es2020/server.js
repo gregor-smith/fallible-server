@@ -1,6 +1,6 @@
 import { Server as WebSocketServer } from 'ws';
 import { asyncFallible, ok, error } from 'fallible';
-import { cookieHeader } from '../utils';
+import { cookieHeader } from './utils';
 export function defaultErrorHandler() {
     return {
         status: 500,
@@ -138,4 +138,4 @@ export function composeMessageHandlers(handlers, composeCleanupErrors) {
         });
     };
 }
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=server.js.map

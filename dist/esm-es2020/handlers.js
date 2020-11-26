@@ -1,5 +1,5 @@
 import { error, ok } from 'fallible';
-import { getMessageHeader } from '../utils';
+import { getMessageHeader } from './utils';
 export function parseAuthorisationBearer() {
     return (message, state) => {
         let authorisationToken;
@@ -29,4 +29,4 @@ export function getIsWebSocket() {
         }
     });
 }
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=handlers.js.map

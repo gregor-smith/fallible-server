@@ -4,7 +4,7 @@ exports.composeMessageHandlers = exports.createRequestListener = exports.default
 var tslib_1 = require("tslib");
 var ws_1 = require("ws");
 var fallible_1 = require("fallible");
-var utils_1 = require("../utils");
+var utils_1 = require("./utils");
 function defaultErrorHandler() {
     return {
         status: 500,
@@ -315,4 +315,4 @@ function composeMessageHandlers(handlers, composeCleanupErrors) {
     }); };
 }
 exports.composeMessageHandlers = composeMessageHandlers;
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=server.js.map
