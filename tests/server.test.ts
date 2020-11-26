@@ -11,7 +11,7 @@ import {
     defaultErrorHandler,
     defaultResponseHandler
 } from '../src/server'
-import type { Cleanup, Cookie, MessageHandler } from '../src/types'
+import type { Cleanup, Cookie, MessageHandler, MessageHandlerResult } from '../src/types'
 import { cookieHeader } from '../src/utils'
 
 
@@ -435,7 +435,7 @@ describe('createRequestListener', () => {
 
 
 describe('composeMessageHandlers', () => {
-    test('handlers called with message and each successive state', async () => {
+    test('handlers called in order with message and each successive state', async () => {
         expect.assertions(7)
 
         const a: MessageHandler<{}, { a: true }, void> = (message, state) => {
@@ -475,7 +475,60 @@ describe('composeMessageHandlers', () => {
         )
     })
 
-    test('cleanups of previous handlers called in reverse order and initial error returned', async () => {
+    test('cleanup returned if at least one handler had cleanup', async () => {
+        const a: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state })
+        const b: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state, cleanup: ok })
+        const c: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state })
+
+        const composed = composeMessageHandlers(
+            [ a, b, c ],
+            errors => errors[0]
+        )
+        const result = await composed(dummyIncomingMessage, {})
+        expect(result.ok).toBeTrue()
+        const { cleanup } = result.value as MessageHandlerResult<{}, void>
+        expect(cleanup).not.toBeUndefined()
+    })
+
+    test('cleanup calls handler cleanups in reverse order', async () => {
+        const aCleanup = jest.fn<Ok<void>, []>(ok)
+        const a: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state, cleanup: aCleanup })
+
+        const bCleanup = jest.fn<Ok<void>, []>(ok)
+        const b: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state, cleanup: bCleanup })
+
+        const c: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state })
+
+        const dCleanup = jest.fn<Ok<void>, []>(ok)
+        const d: MessageHandler<{}, {}, void> = (_, state) =>
+            ok({ state, cleanup: dCleanup })
+
+        const composed = composeMessageHandlers(
+            [ a, b, c, d ],
+            errors => errors[0]
+        )
+        const handlerResult = await composed(dummyIncomingMessage, {})
+
+        expect(handlerResult.ok).toBeTrue()
+        const { cleanup } = handlerResult.value as MessageHandlerResult<{}, void>
+        expect(cleanup).not.toBeUndefined()
+
+        const cleanupResult = await cleanup!()
+        expect(cleanupResult.ok).toBeTrue()
+        expect(aCleanup).toHaveBeenCalled()
+        expect(bCleanup).toHaveBeenCalled()
+        expect(dCleanup).toHaveBeenCalled()
+        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
+        expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
+    })
+
+    test('on handler error, cleanups of previous handlers called in reverse order and error returned ', async () => {
         const testError = 'test'
 
         const aCleanup = jest.fn<Ok<void>, []>(ok)
@@ -505,13 +558,85 @@ describe('composeMessageHandlers', () => {
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
     })
 
-    test.todo('composed error returned on previous handler cleanup error')
+    test('on cleanup error, all cleanups still called and composed cleanup error returned', async () => {
+        expect.assertions(12)
 
-    test.todo('no cleanup returned if no handlers had cleanup')
+        type TestError = 'AError' | 'BError' | 'DError' | 'ComposedError'
 
-    test.todo('cleanup returned if at least one handler had cleanup')
+        const aCleanup = jest.fn(() => error<TestError>('AError'))
+        const a: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: aCleanup })
 
-    test.todo('cleanup calls handler cleanups in reverse order')
+        const bCleanup = jest.fn(() => error<TestError>('BError'))
+        const b: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: bCleanup })
 
-    test.todo('composed error returned on cleanup error')
+        const cCleanup = jest.fn<Ok<void>, []>(ok)
+        const c: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: cCleanup })
+
+        const dCleanup = jest.fn(() => error<TestError>('DError'))
+        const d: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: dCleanup })
+
+        const composed = composeMessageHandlers(
+            [ a, b, c, d ],
+            (errors): TestError => {
+                expect(errors).toEqual([ 'DError', 'BError', 'AError' ])
+                return 'ComposedError'
+            }
+        )
+
+        const handlerResult = await composed(dummyIncomingMessage, {})
+        expect(handlerResult.ok).toBeTrue()
+        const { cleanup } = handlerResult.value as MessageHandlerResult<{}, TestError>
+        expect(cleanup).not.toBeUndefined()
+
+        const cleanupResult = await cleanup!()
+        expect(cleanupResult.ok).toBeFalse()
+        expect(cleanupResult.value).toBe<TestError>('ComposedError')
+        expect(aCleanup).toHaveBeenCalled()
+        expect(bCleanup).toHaveBeenCalled()
+        expect(cCleanup).toHaveBeenCalled()
+        expect(dCleanup).toHaveBeenCalled()
+        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
+        expect(bCleanup).toHaveBeenCalledAfter(cCleanup)
+        expect(cCleanup).toHaveBeenCalledAfter(dCleanup)
+    })
+
+    test('on handler error and cleanup error, all cleanups called and composed cleanup error returned', async () => {
+        expect.assertions(7)
+
+        type TestError = 'AError' | 'CError' | 'DError' | 'ComposedError'
+
+        const aCleanup = jest.fn(() => error<TestError>('AError'))
+        const a: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: aCleanup })
+
+        const bCleanup = jest.fn<Ok<void>, []>(ok)
+        const b: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: bCleanup })
+
+        const cCleanup = jest.fn(() => error<TestError>('CError'))
+        const c: MessageHandler<{}, {}, TestError> = (_, state) =>
+            ok({ state, cleanup: cCleanup })
+
+        const d: MessageHandler<{}, {}, TestError> = () => error('DError')
+
+        const composed = composeMessageHandlers(
+            [ a, b, c, d ],
+            (errors): TestError => {
+                expect(errors).toEqual([ 'CError', 'AError' ])
+                return 'ComposedError'
+            }
+        )
+
+        const handlerResult = await composed(dummyIncomingMessage, {})
+        expect(handlerResult).toEqual(error<TestError>('ComposedError'))
+        expect(aCleanup).toHaveBeenCalled()
+        expect(bCleanup).toHaveBeenCalled()
+        expect(cCleanup).toHaveBeenCalled()
+        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
+        expect(bCleanup).toHaveBeenCalledAfter(cCleanup)
+    })
 })
