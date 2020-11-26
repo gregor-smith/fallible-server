@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.composeMessageHandlers = exports.createRequestListener = exports.defaultResponseHandler = exports.defaultErrorHandler = void 0;
 var tslib_1 = require("tslib");
+var ws_1 = require("ws");
 var fallible_1 = require("fallible");
 var utils_1 = require("./utils");
 function defaultErrorHandler() {
@@ -22,14 +23,14 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value;
-        var e_1, _h, e_2, _j;
+        var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value, wss_1, _h, onOpen_1, onMessage_1, onError_1, onClose_1;
+        var e_1, _j, e_2, _k;
         var _this = this;
-        var _k;
-        return tslib_1.__generator(this, function (_l) {
-            switch (_l.label) {
+        var _l;
+        return tslib_1.__generator(this, function (_m) {
+            switch (_m.label) {
                 case 0:
-                    _l.trys.push([0, 5, , 6]);
+                    _m.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                             var _a, state, cleanup, _b, response, _c;
                             return tslib_1.__generator(this, function (_d) {
@@ -53,23 +54,23 @@ function createRequestListener(_a) {
                             });
                         }); })];
                 case 1:
-                    result = _l.sent();
+                    result = _m.sent();
                     if (!result.ok) return [3 /*break*/, 2];
                     _a = result.value;
                     return [3 /*break*/, 4];
                 case 2: return [4 /*yield*/, errorHandler(result.value)];
                 case 3:
-                    _a = _l.sent();
-                    _l.label = 4;
+                    _a = _m.sent();
+                    _m.label = 4;
                 case 4:
                     response = _a;
                     return [3 /*break*/, 6];
                 case 5:
-                    exception_1 = _l.sent();
+                    exception_1 = _m.sent();
                     response = defaultErrorHandler();
                     return [3 /*break*/, 6];
                 case 6:
-                    res.statusCode = (_k = response.status) !== null && _k !== void 0 ? _k : 200;
+                    res.statusCode = (_l = response.status) !== null && _l !== void 0 ? _l : 200;
                     if (response.cookies !== undefined) {
                         try {
                             for (_b = tslib_1.__values(Object.entries(response.cookies)), _c = _b.next(); !_c.done; _c = _b.next()) {
@@ -81,7 +82,7 @@ function createRequestListener(_a) {
                         catch (e_1_1) { e_1 = { error: e_1_1 }; }
                         finally {
                             try {
-                                if (_c && !_c.done && (_h = _b.return)) _h.call(_b);
+                                if (_c && !_c.done && (_j = _b.return)) _j.call(_b);
                             }
                             finally { if (e_1) throw e_1.error; }
                         }
@@ -96,39 +97,71 @@ function createRequestListener(_a) {
                         catch (e_2_1) { e_2 = { error: e_2_1 }; }
                         finally {
                             try {
-                                if (_f && !_f.done && (_j = _e.return)) _j.call(_e);
+                                if (_f && !_f.done && (_k = _e.return)) _k.call(_e);
                             }
                             finally { if (e_2) throw e_2.error; }
                         }
                     }
-                    if (typeof response.body === 'string') {
-                        if (!res.hasHeader('Content-Type')) {
-                            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-                        }
-                        if (!res.hasHeader('Content-Length')) {
-                            res.setHeader('Content-Length', Buffer.byteLength(response.body));
-                        }
-                        res.end(response.body);
+                    if (!(typeof response.body === 'string')) return [3 /*break*/, 7];
+                    if (!res.hasHeader('Content-Type')) {
+                        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                     }
-                    else if (response.body instanceof Buffer) {
-                        if (!res.hasHeader('Content-Type')) {
-                            res.setHeader('Content-Type', 'application/octet-stream');
-                        }
-                        if (!res.hasHeader('Content-Length')) {
-                            res.setHeader('Content-Length', response.body.length);
-                        }
-                        res.end(response.body);
+                    if (!res.hasHeader('Content-Length')) {
+                        res.setHeader('Content-Length', Buffer.byteLength(response.body));
                     }
-                    else if (response.body !== undefined) {
-                        if (!res.hasHeader('Content-Type')) {
-                            res.setHeader('Content-Type', 'application/octet-stream');
-                        }
-                        response.body.pipe(res);
+                    res.end(response.body);
+                    return [3 /*break*/, 14];
+                case 7:
+                    if (!(response.body instanceof Buffer)) return [3 /*break*/, 8];
+                    if (!res.hasHeader('Content-Type')) {
+                        res.setHeader('Content-Type', 'application/octet-stream');
                     }
-                    else {
-                        res.end();
+                    if (!res.hasHeader('Content-Length')) {
+                        res.setHeader('Content-Length', response.body.length);
                     }
-                    return [2 /*return*/];
+                    res.end(response.body);
+                    return [3 /*break*/, 14];
+                case 8:
+                    if (!(response.body !== undefined)) return [3 /*break*/, 13];
+                    if (!('pipe' in response.body)) return [3 /*break*/, 9];
+                    if (!res.hasHeader('Content-Type')) {
+                        res.setHeader('Content-Type', 'application/octet-stream');
+                    }
+                    response.body.pipe(res);
+                    return [3 /*break*/, 12];
+                case 9:
+                    if (!(utils_1.getMessageHeader(req, 'upgrade') !== 'websocket')) return [3 /*break*/, 10];
+                    res.end();
+                    return [3 /*break*/, 12];
+                case 10:
+                    wss_1 = new ws_1.Server({ noServer: true });
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
+                        })];
+                case 11:
+                    _m.sent();
+                    _h = response.body, onOpen_1 = _h.onOpen, onMessage_1 = _h.onMessage, onError_1 = _h.onError, onClose_1 = _h.onClose;
+                    wss_1.on('connection', function (socket) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+                        return tslib_1.__generator(this, function (_a) {
+                            if (onOpen_1 !== undefined) {
+                                socket.on('open', onOpen_1);
+                            }
+                            if (onClose_1 !== undefined) {
+                                socket.on('close', onClose_1);
+                            }
+                            if (onError_1 !== undefined) {
+                                socket.on('error', onError_1);
+                            }
+                            socket.on('message', onMessage_1);
+                            return [2 /*return*/];
+                        });
+                    }); });
+                    _m.label = 12;
+                case 12: return [3 /*break*/, 14];
+                case 13:
+                    res.end();
+                    _m.label = 14;
+                case 14: return [2 /*return*/];
             }
         });
     }); };

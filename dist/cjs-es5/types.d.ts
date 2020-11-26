@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import type { Readable } from 'stream';
 import type { IncomingMessage } from 'http';
+import type { Data } from 'ws';
 import type { Awaitable, Result } from 'fallible';
 export declare type ParsedContentType = {
     type: string;
@@ -16,11 +17,17 @@ export declare type Cookie = {
     httpOnly?: boolean;
     sameSite?: 'strict' | 'lax' | 'none';
 };
+export declare type WebsocketResponse = {
+    onOpen?: () => Awaitable<void>;
+    onClose?: (code: number, reason: string) => Awaitable<void>;
+    onError?: (error: Error) => Awaitable<void>;
+    onMessage: (message: Data) => AsyncGenerator<string>;
+};
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
     headers?: Readonly<Record<string, string | number>>;
     status?: number;
-    body?: string | Buffer | Readable;
+    body?: string | Buffer | Readable | WebsocketResponse;
 };
 export declare type Cleanup<Errors> = () => Awaitable<Result<void, Errors>>;
 export declare type MessageHandlerResult<State, Errors> = {

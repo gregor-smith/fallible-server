@@ -1,5 +1,6 @@
 import type { RequestListener  } from 'http'
 
+import { Server as WebSocketServer } from 'ws'
 import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
 
 import type {
@@ -9,7 +10,7 @@ import type {
     Response,
     ResponseHandler
 } from './types'
-import { cookieHeader } from './utils'
+import { cookieHeader, getMessageHeader } from './utils'
 
 
 export function defaultErrorHandler() {
@@ -96,10 +97,41 @@ export function createRequestListener<State, Errors>({
             res.end(response.body)
         }
         else if (response.body !== undefined) {
-            if (!res.hasHeader('Content-Type')) {
-                res.setHeader('Content-Type', 'application/octet-stream')
+            // stream
+            if ('pipe' in response.body) {
+                if (!res.hasHeader('Content-Type')) {
+                    res.setHeader('Content-Type', 'application/octet-stream')
+                }
+                response.body.pipe(res)
             }
-            response.body.pipe(res)
+            // websocket
+            else if (getMessageHeader(req, 'upgrade') !== 'websocket') {
+                res.end()
+            }
+            else {
+                const wss = new WebSocketServer({ noServer: true })
+                await new Promise(resolve =>
+                    wss.handleUpgrade(
+                        req,
+                        req.socket,
+                        Buffer.alloc(0),
+                        resolve
+                    )
+                )
+                const { onOpen, onMessage, onError, onClose } = response.body
+                wss.on('connection', async socket => {
+                    if (onOpen !== undefined) {
+                        socket.on('open', onOpen)
+                    }
+                    if (onClose !== undefined) {
+                        socket.on('close', onClose)
+                    }
+                    if (onError !== undefined) {
+                        socket.on('error', onError)
+                    }
+                    socket.on('message', onMessage)
+                })
+            }
         }
         else {
             res.end()
