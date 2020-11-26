@@ -1,6 +1,6 @@
 import { Server as WebSocketServer } from 'ws';
 import { asyncFallible, ok, error } from 'fallible';
-import { cookieHeader, getMessageHeader } from './utils';
+import { cookieHeader } from './utils';
 export function defaultErrorHandler() {
     return {
         status: 500,
@@ -71,9 +71,6 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                 response.body.pipe(res);
             }
             // websocket
-            else if (getMessageHeader(req, 'upgrade') !== 'websocket') {
-                res.end();
-            }
             else {
                 const wss = new WebSocketServer({ noServer: true });
                 await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));

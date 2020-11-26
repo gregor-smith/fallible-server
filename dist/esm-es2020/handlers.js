@@ -21,4 +21,12 @@ export function parseAuthorisationBearer() {
         });
     };
 }
+export function getIsWebSocket() {
+    return (message, state) => ok({
+        state: {
+            ...state,
+            isWebSocket: getMessageHeader(message, 'upgrade') === 'websocket'
+        }
+    });
+}
 //# sourceMappingURL=handlers.js.map

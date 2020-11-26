@@ -110,7 +110,7 @@ function createRequestListener(_a) {
                         res.setHeader('Content-Length', Buffer.byteLength(response.body));
                     }
                     res.end(response.body);
-                    return [3 /*break*/, 14];
+                    return [3 /*break*/, 13];
                 case 7:
                     if (!(response.body instanceof Buffer)) return [3 /*break*/, 8];
                     if (!res.hasHeader('Content-Type')) {
@@ -120,25 +120,21 @@ function createRequestListener(_a) {
                         res.setHeader('Content-Length', response.body.length);
                     }
                     res.end(response.body);
-                    return [3 /*break*/, 14];
+                    return [3 /*break*/, 13];
                 case 8:
-                    if (!(response.body !== undefined)) return [3 /*break*/, 13];
+                    if (!(response.body !== undefined)) return [3 /*break*/, 12];
                     if (!('pipe' in response.body)) return [3 /*break*/, 9];
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'application/octet-stream');
                     }
                     response.body.pipe(res);
-                    return [3 /*break*/, 12];
+                    return [3 /*break*/, 11];
                 case 9:
-                    if (!(utils_1.getMessageHeader(req, 'upgrade') !== 'websocket')) return [3 /*break*/, 10];
-                    res.end();
-                    return [3 /*break*/, 12];
-                case 10:
                     wss_1 = new ws_1.Server({ noServer: true });
                     return [4 /*yield*/, new Promise(function (resolve) {
                             return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
                         })];
-                case 11:
+                case 10:
                     _m.sent();
                     _h = response.body, onOpen_1 = _h.onOpen, onMessage_1 = _h.onMessage, onError_1 = _h.onError, onClose_1 = _h.onClose;
                     wss_1.on('connection', function (socket) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
@@ -156,12 +152,12 @@ function createRequestListener(_a) {
                             return [2 /*return*/];
                         });
                     }); });
-                    _m.label = 12;
-                case 12: return [3 /*break*/, 14];
-                case 13:
+                    _m.label = 11;
+                case 11: return [3 /*break*/, 13];
+                case 12:
                     res.end();
-                    _m.label = 14;
-                case 14: return [2 /*return*/];
+                    _m.label = 13;
+                case 13: return [2 /*return*/];
             }
         });
     }); };

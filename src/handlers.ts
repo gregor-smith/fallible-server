@@ -30,3 +30,19 @@ export function parseAuthorisationBearer<State, Error>(): MessageHandler<State, 
         })
     }
 }
+
+
+export type GetWebSocketState = {
+    isWebSocket: boolean
+}
+
+
+export function getIsWebSocket<State, Error>(): MessageHandler<State, GetWebSocketState, Error> {
+    return (message, state) =>
+        ok({
+            state: {
+                ...state,
+                isWebSocket: getMessageHeader(message, 'upgrade') === 'websocket'
+            }
+        })
+}

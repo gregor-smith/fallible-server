@@ -10,7 +10,7 @@ import type {
     Response,
     ResponseHandler
 } from './types'
-import { cookieHeader, getMessageHeader } from './utils'
+import { cookieHeader } from './utils'
 
 
 export function defaultErrorHandler() {
@@ -105,9 +105,6 @@ export function createRequestListener<State, Errors>({
                 response.body.pipe(res)
             }
             // websocket
-            else if (getMessageHeader(req, 'upgrade') !== 'websocket') {
-                res.end()
-            }
             else {
                 const wss = new WebSocketServer({ noServer: true })
                 await new Promise(resolve =>
