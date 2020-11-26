@@ -116,7 +116,7 @@ export function createRequestListener<State, Errors>({
                     )
                 )
                 const { onOpen, onMessage, onError, onClose } = response.body
-                wss.on('connection', async socket => {
+                wss.on('connection', socket => {
                     if (onOpen !== undefined) {
                         socket.on('open', onOpen)
                     }
@@ -126,7 +126,17 @@ export function createRequestListener<State, Errors>({
                     if (onError !== undefined) {
                         socket.on('error', onError)
                     }
-                    socket.on('message', onMessage)
+                    socket.on('message', async data => {
+                        for await (const response of onMessage(data)) {
+                            await new Promise((resolve, reject) =>
+                                socket.send(response, error =>
+                                    error === undefined
+                                        ? resolve()
+                                        : reject(error)
+                                )
+                            )
+                        }
+                    })
                 })
             }
         }

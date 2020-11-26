@@ -75,7 +75,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                 const wss = new WebSocketServer({ noServer: true });
                 await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
                 const { onOpen, onMessage, onError, onClose } = response.body;
-                wss.on('connection', async (socket) => {
+                wss.on('connection', socket => {
                     if (onOpen !== undefined) {
                         socket.on('open', onOpen);
                     }
@@ -85,7 +85,13 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                     if (onError !== undefined) {
                         socket.on('error', onError);
                     }
-                    socket.on('message', onMessage);
+                    socket.on('message', async (data) => {
+                        for await (const response of onMessage(data)) {
+                            await new Promise((resolve, reject) => socket.send(response, error => error === undefined
+                                ? resolve()
+                                : reject(error)));
+                        }
+                    });
                 });
             }
         }
