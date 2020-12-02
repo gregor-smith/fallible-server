@@ -201,7 +201,7 @@ function createRequestListener(_a) {
                                                 case 2:
                                                     error_1 = _a.sent();
                                                     if (!(error_1 !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
-                                                    return [4 /*yield*/, onSendError_1(error_1)];
+                                                    return [4 /*yield*/, onSendError_1(result.value, error_1)];
                                                 case 3:
                                                     _a.sent();
                                                     _a.label = 4;

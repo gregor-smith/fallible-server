@@ -24,7 +24,7 @@ export declare type WebsocketResponse = {
     onClose?: (code: number, reason: string) => Awaitable<void>;
     onError?: (error: Error) => Awaitable<void>;
     onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;
-    onSendError?: (error: Error) => Awaitable<void>;
+    onSendError?: (message: Data, error: Error) => Awaitable<void>;
 };
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;

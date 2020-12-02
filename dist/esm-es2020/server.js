@@ -104,7 +104,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                         }
                         const error = await new Promise(resolve => socket.send(result.value, resolve));
                         if (error !== undefined && onSendError !== undefined) {
-                            await onSendError(error);
+                            await onSendError(result.value, error);
                         }
                     }
                 };

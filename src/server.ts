@@ -150,7 +150,7 @@ export function createRequestListener<State, Errors>({
                             socket.send(result.value, resolve)
                         )
                         if (error !== undefined && onSendError !== undefined) {
-                            await onSendError(error)
+                            await onSendError(result.value, error)
                         }
                     }
                 }
