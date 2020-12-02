@@ -1,6 +1,6 @@
-import type { RequestListener  } from 'http'
+import type { RequestListener, ServerResponse  } from 'http'
 
-import WebSocket, { Server as WebSocketServer } from 'ws'
+import WebSocket, { Data, Server as WebSocketServer } from 'ws'
 import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
 
 import type {
@@ -10,7 +10,7 @@ import type {
     Response,
     ResponseHandler
 } from './types'
-import { cookieHeader } from './utils'
+import { CloseWebSocket, cookieHeader } from './utils'
 
 
 export function defaultErrorHandler() {
@@ -26,6 +26,21 @@ export function defaultResponseHandler() {
         status: 200,
         body: ''
     })
+}
+
+
+function setHeaders(response: ServerResponse, { cookies, headers }: Response) {
+    if (cookies !== undefined) {
+        for (const [ name, cookie ] of Object.entries(cookies)) {
+            const header = cookieHeader(name, cookie)
+            response.setHeader('Set-Cookie', header)
+        }
+    }
+    if (headers !== undefined) {
+        for (const [ key, value ] of Object.entries(headers)) {
+            response.setHeader(key, String(value))
+        }
+    }
 }
 
 
@@ -65,20 +80,8 @@ export function createRequestListener<State, Errors>({
 
         res.statusCode = response.status ?? 200
 
-        if (response.cookies !== undefined) {
-            for (const [ name, cookie ] of Object.entries(response.cookies)) {
-                const header = cookieHeader(name, cookie)
-                res.setHeader('Set-Cookie', header)
-            }
-        }
-
-        if (response.headers !== undefined) {
-            for (const [ key, value ] of Object.entries(response.headers)) {
-                res.setHeader(key, value)
-            }
-        }
-
         if (typeof response.body === 'string') {
+            setHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8')
             }
@@ -88,6 +91,7 @@ export function createRequestListener<State, Errors>({
             res.end(response.body)
         }
         else if (response.body instanceof Buffer) {
+            setHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
@@ -99,6 +103,7 @@ export function createRequestListener<State, Errors>({
         else if (response.body !== undefined) {
             // stream
             if ('pipe' in response.body) {
+                setHeaders(res, response)
                 if (!res.hasHeader('Content-Type')) {
                     res.setHeader('Content-Type', 'application/octet-stream')
                 }
@@ -107,6 +112,19 @@ export function createRequestListener<State, Errors>({
             // websocket
             else {
                 const wss = new WebSocketServer({ noServer: true })
+                wss.on('headers', headers => {
+                    if (response.cookies !== undefined) {
+                        for (const [ name, cookie ] of Object.entries(response.cookies)) {
+                            const header = cookieHeader(name, cookie)
+                            headers.push(`Set-Cookie: ${header}`)
+                        }
+                    }
+                    if (response.headers !== undefined) {
+                        for (const [ key, value ] of Object.entries(response.headers)) {
+                            headers.push(`${key}: ${value}`)
+                        }
+                    }
+                })
                 const socket = await new Promise<WebSocket>(resolve =>
                     wss.handleUpgrade(
                         req,
@@ -115,7 +133,8 @@ export function createRequestListener<State, Errors>({
                         resolve
                     )
                 )
-                const { onOpen, onMessage, onError, onClose } = response.body
+
+                const { onOpen, onClose, onError, onMessage } = response.body
 
                 if (onOpen !== undefined) {
                     socket.on('open', onOpen)
@@ -128,19 +147,38 @@ export function createRequestListener<State, Errors>({
                 }
 
                 socket.on('message', async data => {
-                    for await (const response of onMessage(data)) {
-                        await new Promise((resolve, reject) =>
-                            socket.send(response, error =>
-                                error === undefined
-                                    ? resolve()
-                                    : reject(error)
-                            )
+                    const generator = onMessage(data)
+                    let last: Result<void, Error> = ok()
+                    while (true) {
+                        // for some reason, this 'result' variable declaration
+                        // and the 'err' declaration on line 164 cannot be
+                        // inferred so long as the assignment on line 173 is
+                        // present, and need to be typed manually.
+                        const result: IteratorResult<Data, void | typeof CloseWebSocket> = await generator.next(last)
+                        if (result.done) {
+                            if (result.value === CloseWebSocket) {
+                                socket.close(1000)
+                            }
+                            return
+                        }
+                        const err: Error | undefined = await new Promise(resolve =>
+                            socket.send(result.value, resolve)
                         )
+                        if (err === undefined) {
+                            if (!last.ok) {
+                                last = ok()
+                            }
+                        }
+                        else {
+                            last = error(err)
+                        }
                     }
                 })
             }
         }
+        // no body
         else {
+            setHeaders(res, response)
             res.end()
         }
     }

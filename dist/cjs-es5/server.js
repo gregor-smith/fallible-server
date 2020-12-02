@@ -19,18 +19,52 @@ function defaultResponseHandler() {
     });
 }
 exports.defaultResponseHandler = defaultResponseHandler;
+function setHeaders(response, _a) {
+    var e_1, _b, e_2, _c;
+    var cookies = _a.cookies, headers = _a.headers;
+    if (cookies !== undefined) {
+        try {
+            for (var _d = tslib_1.__values(Object.entries(cookies)), _e = _d.next(); !_e.done; _e = _d.next()) {
+                var _f = tslib_1.__read(_e.value, 2), name = _f[0], cookie = _f[1];
+                var header = utils_1.cookieHeader(name, cookie);
+                response.setHeader('Set-Cookie', header);
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_e && !_e.done && (_b = _d.return)) _b.call(_d);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    }
+    if (headers !== undefined) {
+        try {
+            for (var _g = tslib_1.__values(Object.entries(headers)), _h = _g.next(); !_h.done; _h = _g.next()) {
+                var _j = tslib_1.__read(_h.value, 2), key = _j[0], value = _j[1];
+                response.setHeader(key, String(value));
+            }
+        }
+        catch (e_2_1) { e_2 = { error: e_2_1 }; }
+        finally {
+            try {
+                if (_h && !_h.done && (_c = _g.return)) _c.call(_g);
+            }
+            finally { if (e_2) throw e_2.error; }
+        }
+    }
+}
 function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, _a, exception_1, _b, _c, _d, name, cookie, header, _e, _f, _g, key, value, wss_1, socket_1, _h, onOpen, onMessage_1, onError, onClose;
-        var e_1, _j, e_2, _k;
+        var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen, onClose, onError, onMessage_1;
         var _this = this;
-        var _l;
-        return tslib_1.__generator(this, function (_m) {
-            switch (_m.label) {
+        var _c;
+        return tslib_1.__generator(this, function (_d) {
+            switch (_d.label) {
                 case 0:
-                    _m.trys.push([0, 5, , 6]);
+                    _d.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
                             var _a, state, cleanup, _b, response, _c;
                             return tslib_1.__generator(this, function (_d) {
@@ -54,55 +88,25 @@ function createRequestListener(_a) {
                             });
                         }); })];
                 case 1:
-                    result = _m.sent();
+                    result = _d.sent();
                     if (!result.ok) return [3 /*break*/, 2];
                     _a = result.value;
                     return [3 /*break*/, 4];
                 case 2: return [4 /*yield*/, errorHandler(result.value)];
                 case 3:
-                    _a = _m.sent();
-                    _m.label = 4;
+                    _a = _d.sent();
+                    _d.label = 4;
                 case 4:
                     response = _a;
                     return [3 /*break*/, 6];
                 case 5:
-                    exception_1 = _m.sent();
+                    exception_1 = _d.sent();
                     response = defaultErrorHandler();
                     return [3 /*break*/, 6];
                 case 6:
-                    res.statusCode = (_l = response.status) !== null && _l !== void 0 ? _l : 200;
-                    if (response.cookies !== undefined) {
-                        try {
-                            for (_b = tslib_1.__values(Object.entries(response.cookies)), _c = _b.next(); !_c.done; _c = _b.next()) {
-                                _d = tslib_1.__read(_c.value, 2), name = _d[0], cookie = _d[1];
-                                header = utils_1.cookieHeader(name, cookie);
-                                res.setHeader('Set-Cookie', header);
-                            }
-                        }
-                        catch (e_1_1) { e_1 = { error: e_1_1 }; }
-                        finally {
-                            try {
-                                if (_c && !_c.done && (_j = _b.return)) _j.call(_b);
-                            }
-                            finally { if (e_1) throw e_1.error; }
-                        }
-                    }
-                    if (response.headers !== undefined) {
-                        try {
-                            for (_e = tslib_1.__values(Object.entries(response.headers)), _f = _e.next(); !_f.done; _f = _e.next()) {
-                                _g = tslib_1.__read(_f.value, 2), key = _g[0], value = _g[1];
-                                res.setHeader(key, value);
-                            }
-                        }
-                        catch (e_2_1) { e_2 = { error: e_2_1 }; }
-                        finally {
-                            try {
-                                if (_f && !_f.done && (_k = _e.return)) _k.call(_e);
-                            }
-                            finally { if (e_2) throw e_2.error; }
-                        }
-                    }
+                    res.statusCode = (_c = response.status) !== null && _c !== void 0 ? _c : 200;
                     if (!(typeof response.body === 'string')) return [3 /*break*/, 7];
+                    setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                     }
@@ -113,6 +117,7 @@ function createRequestListener(_a) {
                     return [3 /*break*/, 13];
                 case 7:
                     if (!(response.body instanceof Buffer)) return [3 /*break*/, 8];
+                    setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'application/octet-stream');
                     }
@@ -124,6 +129,7 @@ function createRequestListener(_a) {
                 case 8:
                     if (!(response.body !== undefined)) return [3 /*break*/, 12];
                     if (!('pipe' in response.body)) return [3 /*break*/, 9];
+                    setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'application/octet-stream');
                     }
@@ -131,12 +137,46 @@ function createRequestListener(_a) {
                     return [3 /*break*/, 11];
                 case 9:
                     wss_1 = new ws_1.Server({ noServer: true });
+                    wss_1.on('headers', function (headers) {
+                        var e_3, _a, e_4, _b;
+                        if (response.cookies !== undefined) {
+                            try {
+                                for (var _c = tslib_1.__values(Object.entries(response.cookies)), _d = _c.next(); !_d.done; _d = _c.next()) {
+                                    var _e = tslib_1.__read(_d.value, 2), name = _e[0], cookie = _e[1];
+                                    var header = utils_1.cookieHeader(name, cookie);
+                                    headers.push("Set-Cookie: " + header);
+                                }
+                            }
+                            catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                            finally {
+                                try {
+                                    if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+                                }
+                                finally { if (e_3) throw e_3.error; }
+                            }
+                        }
+                        if (response.headers !== undefined) {
+                            try {
+                                for (var _f = tslib_1.__values(Object.entries(response.headers)), _g = _f.next(); !_g.done; _g = _f.next()) {
+                                    var _h = tslib_1.__read(_g.value, 2), key = _h[0], value = _h[1];
+                                    headers.push(key + ": " + value);
+                                }
+                            }
+                            catch (e_4_1) { e_4 = { error: e_4_1 }; }
+                            finally {
+                                try {
+                                    if (_g && !_g.done && (_b = _f.return)) _b.call(_f);
+                                }
+                                finally { if (e_4) throw e_4.error; }
+                            }
+                        }
+                    });
                     return [4 /*yield*/, new Promise(function (resolve) {
                             return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
                         })];
                 case 10:
-                    socket_1 = _m.sent();
-                    _h = response.body, onOpen = _h.onOpen, onMessage_1 = _h.onMessage, onError = _h.onError, onClose = _h.onClose;
+                    socket_1 = _d.sent();
+                    _b = response.body, onOpen = _b.onOpen, onClose = _b.onClose, onError = _b.onError, onMessage_1 = _b.onMessage;
                     if (onOpen !== undefined) {
                         socket_1.on('open', onOpen);
                     }
@@ -147,55 +187,61 @@ function createRequestListener(_a) {
                         socket_1.on('error', onError);
                     }
                     socket_1.on('message', function (data) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                        var _a, _b, response_1, e_3_1;
-                        var e_3, _c;
-                        return tslib_1.__generator(this, function (_d) {
-                            switch (_d.label) {
+                        var generator, last, _loop_1, state_1;
+                        return tslib_1.__generator(this, function (_a) {
+                            switch (_a.label) {
                                 case 0:
-                                    _d.trys.push([0, 6, 7, 12]);
-                                    _a = tslib_1.__asyncValues(onMessage_1(data));
-                                    _d.label = 1;
-                                case 1: return [4 /*yield*/, _a.next()];
+                                    generator = onMessage_1(data);
+                                    last = fallible_1.ok();
+                                    _loop_1 = function () {
+                                        var result, err;
+                                        return tslib_1.__generator(this, function (_a) {
+                                            switch (_a.label) {
+                                                case 0: return [4 /*yield*/, generator.next(last)];
+                                                case 1:
+                                                    result = _a.sent();
+                                                    if (result.done) {
+                                                        if (result.value === utils_1.CloseWebSocket) {
+                                                            socket_1.close(1000);
+                                                        }
+                                                        return [2 /*return*/, { value: void 0 }];
+                                                    }
+                                                    return [4 /*yield*/, new Promise(function (resolve) {
+                                                            return socket_1.send(result.value, resolve);
+                                                        })];
+                                                case 2:
+                                                    err = _a.sent();
+                                                    if (err === undefined) {
+                                                        if (!last.ok) {
+                                                            last = fallible_1.ok();
+                                                        }
+                                                    }
+                                                    else {
+                                                        last = fallible_1.error(err);
+                                                    }
+                                                    return [2 /*return*/];
+                                            }
+                                        });
+                                    };
+                                    _a.label = 1;
+                                case 1:
+                                    if (!true) return [3 /*break*/, 3];
+                                    return [5 /*yield**/, _loop_1()];
                                 case 2:
-                                    if (!(_b = _d.sent(), !_b.done)) return [3 /*break*/, 5];
-                                    response_1 = _b.value;
-                                    return [4 /*yield*/, new Promise(function (resolve, reject) {
-                                            return socket_1.send(response_1, function (error) {
-                                                return error === undefined
-                                                    ? resolve()
-                                                    : reject(error);
-                                            });
-                                        })];
-                                case 3:
-                                    _d.sent();
-                                    _d.label = 4;
-                                case 4: return [3 /*break*/, 1];
-                                case 5: return [3 /*break*/, 12];
-                                case 6:
-                                    e_3_1 = _d.sent();
-                                    e_3 = { error: e_3_1 };
-                                    return [3 /*break*/, 12];
-                                case 7:
-                                    _d.trys.push([7, , 10, 11]);
-                                    if (!(_b && !_b.done && (_c = _a.return))) return [3 /*break*/, 9];
-                                    return [4 /*yield*/, _c.call(_a)];
-                                case 8:
-                                    _d.sent();
-                                    _d.label = 9;
-                                case 9: return [3 /*break*/, 11];
-                                case 10:
-                                    if (e_3) throw e_3.error;
-                                    return [7 /*endfinally*/];
-                                case 11: return [7 /*endfinally*/];
-                                case 12: return [2 /*return*/];
+                                    state_1 = _a.sent();
+                                    if (typeof state_1 === "object")
+                                        return [2 /*return*/, state_1.value];
+                                    return [3 /*break*/, 1];
+                                case 3: return [2 /*return*/];
                             }
                         });
                     }); });
-                    _m.label = 11;
+                    _d.label = 11;
                 case 11: return [3 /*break*/, 13];
                 case 12:
+                    setHeaders(res, response);
                     res.end();
-                    _m.label = 13;
+                    _d.label = 13;
                 case 13: return [2 /*return*/];
             }
         });
@@ -237,14 +283,14 @@ function composeCleanups(cleanups, composeErrors) {
 function composeMessageHandlers(handlers, composeCleanupErrors) {
     var _this = this;
     return function (message, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var cleanups, _loop_1, handlers_1, handlers_1_1, handler, state_1, e_4_1;
-        var e_4, _a;
+        var cleanups, _loop_2, handlers_1, handlers_1_1, handler, state_2, e_5_1;
+        var e_5, _a;
         var _this = this;
         return tslib_1.__generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
                     cleanups = [];
-                    _loop_1 = function (handler) {
+                    _loop_2 = function (handler) {
                         var result;
                         return tslib_1.__generator(this, function (_a) {
                             switch (_a.label) {
@@ -282,25 +328,25 @@ function composeMessageHandlers(handlers, composeCleanupErrors) {
                 case 2:
                     if (!!handlers_1_1.done) return [3 /*break*/, 5];
                     handler = handlers_1_1.value;
-                    return [5 /*yield**/, _loop_1(handler)];
+                    return [5 /*yield**/, _loop_2(handler)];
                 case 3:
-                    state_1 = _b.sent();
-                    if (typeof state_1 === "object")
-                        return [2 /*return*/, state_1.value];
+                    state_2 = _b.sent();
+                    if (typeof state_2 === "object")
+                        return [2 /*return*/, state_2.value];
                     _b.label = 4;
                 case 4:
                     handlers_1_1 = handlers_1.next();
                     return [3 /*break*/, 2];
                 case 5: return [3 /*break*/, 8];
                 case 6:
-                    e_4_1 = _b.sent();
-                    e_4 = { error: e_4_1 };
+                    e_5_1 = _b.sent();
+                    e_5 = { error: e_5_1 };
                     return [3 /*break*/, 8];
                 case 7:
                     try {
                         if (handlers_1_1 && !handlers_1_1.done && (_a = handlers_1.return)) _a.call(handlers_1);
                     }
-                    finally { if (e_4) throw e_4.error; }
+                    finally { if (e_5) throw e_5.error; }
                     return [7 /*endfinally*/];
                 case 8: return [2 /*return*/, fallible_1.ok({
                         state: state,

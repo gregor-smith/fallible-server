@@ -5,6 +5,9 @@ import type Keygrip from 'keygrip'
 import type { Cookie, Method, ParsedContentType } from './types'
 
 
+export const CloseWebSocket = Symbol()
+
+
 export function parseMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string

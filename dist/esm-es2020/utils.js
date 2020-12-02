@@ -1,3 +1,4 @@
+export const CloseWebSocket = Symbol();
 export function parseMessageCookie(message, name) {
     return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }

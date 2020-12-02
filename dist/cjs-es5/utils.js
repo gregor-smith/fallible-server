@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = void 0;
+exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.CloseWebSocket = void 0;
 var tslib_1 = require("tslib");
+exports.CloseWebSocket = Symbol();
 function parseMessageCookie(message, name) {
     var _a, _b;
     return (_b = (_a = message.headers.cookie) === null || _a === void 0 ? void 0 : _a.match("(?:^|; )" + name + "=([^;]*)")) === null || _b === void 0 ? void 0 : _b[1];

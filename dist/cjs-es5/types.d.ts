@@ -3,6 +3,7 @@ import type { Readable } from 'stream';
 import type { IncomingMessage } from 'http';
 import type { Data } from 'ws';
 import type { Awaitable, Result } from 'fallible';
+import type { CloseWebSocket } from './utils';
 export declare type ParsedContentType = {
     type: string;
     characterSet?: string;
@@ -22,11 +23,11 @@ export declare type WebsocketResponse = {
     onOpen?: () => Awaitable<void>;
     onClose?: (code: number, reason: string) => Awaitable<void>;
     onError?: (error: Error) => Awaitable<void>;
-    onMessage: (message: Data) => AwaitableGenerator<string | Buffer>;
+    onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, Result<void, Error>>;
 };
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
-    headers?: Readonly<Record<string, string | number>>;
+    headers?: Readonly<Record<string, string | number | boolean>>;
     status?: number;
     body?: string | Buffer | Readable | WebsocketResponse;
 };
