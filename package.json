@@ -21,9 +21,13 @@
   "dependencies": {
     "@types/keygrip": "^1.0.2",
     "@types/node": "^14.14.10",
+    "@types/secure-json-parse": "^1.0.2",
     "@types/url-parse": "^1.4.3",
     "@types/ws": "^7.4.0",
     "fallible": "link:./../fallible",
+    "formidable": "^2.0.0-canary.20200504.1",
+    "raw-body": "^2.4.1",
+    "secure-json-parse": "^2.1.0",
     "tslib": "^2.0.3",
     "ws": "^7.4.0"
   },
