@@ -92,7 +92,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                     }
                 });
                 const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-                const { onOpen, onClose, onError, onMessage } = response.body;
+                const { onOpen, onClose, onError, onMessage, onSendError } = response.body;
                 if (onOpen !== undefined) {
                     socket.on('open', onOpen);
                 }
@@ -104,27 +104,17 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                 }
                 socket.on('message', async (data) => {
                     const generator = onMessage(data);
-                    let last = ok();
                     while (true) {
-                        // for some reason, this 'result' variable declaration
-                        // and the 'err' declaration on line 164 cannot be
-                        // inferred so long as the assignment on line 173 is
-                        // present, and need to be typed manually.
-                        const result = await generator.next(last);
+                        const result = await generator.next();
                         if (result.done) {
                             if (result.value === CloseWebSocket) {
                                 socket.close(1000);
                             }
                             return;
                         }
-                        const err = await new Promise(resolve => socket.send(result.value, resolve));
-                        if (err === undefined) {
-                            if (!last.ok) {
-                                last = ok();
-                            }
-                        }
-                        else {
-                            last = error(err);
+                        const error = await new Promise(resolve => socket.send(result.value, resolve));
+                        if (error !== undefined) {
+                            await onSendError?.(error);
                         }
                     }
                 });

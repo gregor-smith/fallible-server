@@ -58,7 +58,7 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen, onClose, onError, onMessage_1;
+        var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen, onClose, onError, onMessage_1, onSendError_1;
         var _this = this;
         var _c;
         return tslib_1.__generator(this, function (_d) {
@@ -176,7 +176,7 @@ function createRequestListener(_a) {
                         })];
                 case 10:
                     socket_1 = _d.sent();
-                    _b = response.body, onOpen = _b.onOpen, onClose = _b.onClose, onError = _b.onError, onMessage_1 = _b.onMessage;
+                    _b = response.body, onOpen = _b.onOpen, onClose = _b.onClose, onError = _b.onError, onMessage_1 = _b.onMessage, onSendError_1 = _b.onSendError;
                     if (onOpen !== undefined) {
                         socket_1.on('open', onOpen);
                     }
@@ -187,17 +187,16 @@ function createRequestListener(_a) {
                         socket_1.on('error', onError);
                     }
                     socket_1.on('message', function (data) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                        var generator, last, _loop_1, state_1;
+                        var generator, _loop_1, state_1;
                         return tslib_1.__generator(this, function (_a) {
                             switch (_a.label) {
                                 case 0:
                                     generator = onMessage_1(data);
-                                    last = fallible_1.ok();
                                     _loop_1 = function () {
-                                        var result, err;
+                                        var result, error_1;
                                         return tslib_1.__generator(this, function (_a) {
                                             switch (_a.label) {
-                                                case 0: return [4 /*yield*/, generator.next(last)];
+                                                case 0: return [4 /*yield*/, generator.next()];
                                                 case 1:
                                                     result = _a.sent();
                                                     if (result.done) {
@@ -210,16 +209,13 @@ function createRequestListener(_a) {
                                                             return socket_1.send(result.value, resolve);
                                                         })];
                                                 case 2:
-                                                    err = _a.sent();
-                                                    if (err === undefined) {
-                                                        if (!last.ok) {
-                                                            last = fallible_1.ok();
-                                                        }
-                                                    }
-                                                    else {
-                                                        last = fallible_1.error(err);
-                                                    }
-                                                    return [2 /*return*/];
+                                                    error_1 = _a.sent();
+                                                    if (!(error_1 !== undefined)) return [3 /*break*/, 4];
+                                                    return [4 /*yield*/, (onSendError_1 === null || onSendError_1 === void 0 ? void 0 : onSendError_1(error_1))];
+                                                case 3:
+                                                    _a.sent();
+                                                    _a.label = 4;
+                                                case 4: return [2 /*return*/];
                                             }
                                         });
                                     };
