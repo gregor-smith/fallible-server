@@ -58,7 +58,7 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen, onClose, onError, onMessage_1, onSendError_1;
+        var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen_1, onClose, onError, onMessage_1, onSendError_1, sendMessages_1;
         var _this = this;
         var _c;
         return tslib_1.__generator(this, function (_d) {
@@ -176,22 +176,12 @@ function createRequestListener(_a) {
                         })];
                 case 10:
                     socket_1 = _d.sent();
-                    _b = response.body, onOpen = _b.onOpen, onClose = _b.onClose, onError = _b.onError, onMessage_1 = _b.onMessage, onSendError_1 = _b.onSendError;
-                    if (onOpen !== undefined) {
-                        socket_1.on('open', onOpen);
-                    }
-                    if (onClose !== undefined) {
-                        socket_1.on('close', onClose);
-                    }
-                    if (onError !== undefined) {
-                        socket_1.on('error', onError);
-                    }
-                    socket_1.on('message', function (data) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                        var generator, _loop_1, state_1;
+                    _b = response.body, onOpen_1 = _b.onOpen, onClose = _b.onClose, onError = _b.onError, onMessage_1 = _b.onMessage, onSendError_1 = _b.onSendError;
+                    sendMessages_1 = function (generator) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+                        var _loop_1, state_1;
                         return tslib_1.__generator(this, function (_a) {
                             switch (_a.label) {
                                 case 0:
-                                    generator = onMessage_1(data);
                                     _loop_1 = function () {
                                         var result, error_1;
                                         return tslib_1.__generator(this, function (_a) {
@@ -210,8 +200,8 @@ function createRequestListener(_a) {
                                                         })];
                                                 case 2:
                                                     error_1 = _a.sent();
-                                                    if (!(error_1 !== undefined)) return [3 /*break*/, 4];
-                                                    return [4 /*yield*/, (onSendError_1 === null || onSendError_1 === void 0 ? void 0 : onSendError_1(error_1))];
+                                                    if (!(error_1 !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
+                                                    return [4 /*yield*/, onSendError_1(error_1)];
                                                 case 3:
                                                     _a.sent();
                                                     _a.label = 4;
@@ -231,7 +221,23 @@ function createRequestListener(_a) {
                                 case 3: return [2 /*return*/];
                             }
                         });
-                    }); });
+                    }); };
+                    if (onOpen_1 !== undefined) {
+                        socket_1.on('open', function () {
+                            var generator = onOpen_1();
+                            return sendMessages_1(generator);
+                        });
+                    }
+                    if (onClose !== undefined) {
+                        socket_1.on('close', onClose);
+                    }
+                    if (onError !== undefined) {
+                        socket_1.on('error', onError);
+                    }
+                    socket_1.on('message', function (data) {
+                        var generator = onMessage_1(data);
+                        return sendMessages_1(generator);
+                    });
                     _d.label = 11;
                 case 11: return [3 /*break*/, 13];
                 case 12:

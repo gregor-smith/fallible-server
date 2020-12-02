@@ -93,17 +93,7 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                 });
                 const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
                 const { onOpen, onClose, onError, onMessage, onSendError } = response.body;
-                if (onOpen !== undefined) {
-                    socket.on('open', onOpen);
-                }
-                if (onClose !== undefined) {
-                    socket.on('close', onClose);
-                }
-                if (onError !== undefined) {
-                    socket.on('error', onError);
-                }
-                socket.on('message', async (data) => {
-                    const generator = onMessage(data);
+                const sendMessages = async (generator) => {
                     while (true) {
                         const result = await generator.next();
                         if (result.done) {
@@ -113,10 +103,26 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                             return;
                         }
                         const error = await new Promise(resolve => socket.send(result.value, resolve));
-                        if (error !== undefined) {
-                            await onSendError?.(error);
+                        if (error !== undefined && onSendError !== undefined) {
+                            await onSendError(error);
                         }
                     }
+                };
+                if (onOpen !== undefined) {
+                    socket.on('open', () => {
+                        const generator = onOpen();
+                        return sendMessages(generator);
+                    });
+                }
+                if (onClose !== undefined) {
+                    socket.on('close', onClose);
+                }
+                if (onError !== undefined) {
+                    socket.on('error', onError);
+                }
+                socket.on('message', data => {
+                    const generator = onMessage(data);
+                    return sendMessages(generator);
                 });
             }
         }

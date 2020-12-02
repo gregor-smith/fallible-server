@@ -20,7 +20,7 @@ export declare type Cookie = {
 };
 export declare type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> = Generator<TYield, TReturn, TNext> | AsyncGenerator<TYield, TReturn, TNext>;
 export declare type WebsocketResponse = {
-    onOpen?: () => Awaitable<void>;
+    onOpen?: () => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;
     onClose?: (code: number, reason: string) => Awaitable<void>;
     onError?: (error: Error) => Awaitable<void>;
     onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;

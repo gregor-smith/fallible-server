@@ -41,17 +41,12 @@ export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unkn
 
 
 export type WebsocketResponse = {
-    onOpen?: () => Awaitable<void>
+    onOpen?: () => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
     onClose?: (code: number, reason: string) => Awaitable<void>
     onError?: (error: Error) => Awaitable<void>
     onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
     onSendError?: (error: Error) => Awaitable<void>
 }
-
-
-// export type WebsocketHandler = (
-//     next: () => Promise<Result<Data, Error>>
-// ) => AsyncGenerator<string | Buffer, void, Result<void, Error>
 
 
 export type Response = {

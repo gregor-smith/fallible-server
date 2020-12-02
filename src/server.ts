@@ -8,7 +8,8 @@ import type {
     ErrorHandler,
     MessageHandler,
     Response,
-    ResponseHandler
+    ResponseHandler,
+    WebsocketResponse
 } from './types'
 import { CloseWebSocket, cookieHeader } from './utils'
 
@@ -136,18 +137,7 @@ export function createRequestListener<State, Errors>({
 
                 const { onOpen, onClose, onError, onMessage, onSendError } = response.body
 
-                if (onOpen !== undefined) {
-                    socket.on('open', onOpen)
-                }
-                if (onClose !== undefined) {
-                    socket.on('close', onClose)
-                }
-                if (onError !== undefined) {
-                    socket.on('error', onError)
-                }
-
-                socket.on('message', async data => {
-                    const generator = onMessage(data)
+                const sendMessages = async (generator: ReturnType<WebsocketResponse['onMessage']>) => {
                     while (true) {
                         const result = await generator.next()
                         if (result.done) {
@@ -159,10 +149,28 @@ export function createRequestListener<State, Errors>({
                         const error = await new Promise<Error | undefined>(resolve =>
                             socket.send(result.value, resolve)
                         )
-                        if (error !== undefined) {
-                            await onSendError?.(error)
+                        if (error !== undefined && onSendError !== undefined) {
+                            await onSendError(error)
                         }
                     }
+                }
+
+                if (onOpen !== undefined) {
+                    socket.on('open', () => {
+                        const generator = onOpen()
+                        return sendMessages(generator)
+                    })
+                }
+                if (onClose !== undefined) {
+                    socket.on('close', onClose)
+                }
+                if (onError !== undefined) {
+                    socket.on('error', onError)
+                }
+
+                socket.on('message', data => {
+                    const generator = onMessage(data)
+                    return sendMessages(generator)
                 })
             }
         }
