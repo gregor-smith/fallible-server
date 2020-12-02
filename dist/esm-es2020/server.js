@@ -108,12 +108,6 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                         }
                     }
                 };
-                if (onOpen !== undefined) {
-                    socket.on('open', () => {
-                        const generator = onOpen();
-                        return sendMessages(generator);
-                    });
-                }
                 if (onClose !== undefined) {
                     socket.on('close', onClose);
                 }
@@ -124,6 +118,12 @@ export function createRequestListener({ messageHandler, responseHandler = defaul
                     const generator = onMessage(data);
                     return sendMessages(generator);
                 });
+                // the 'open' even is never fired in this case, so just call
+                // onOpen immediately
+                if (onOpen !== undefined) {
+                    const generator = onOpen();
+                    await sendMessages(generator);
+                }
             }
         }
         // no body

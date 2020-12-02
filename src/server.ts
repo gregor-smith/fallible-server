@@ -155,12 +155,6 @@ export function createRequestListener<State, Errors>({
                     }
                 }
 
-                if (onOpen !== undefined) {
-                    socket.on('open', () => {
-                        const generator = onOpen()
-                        return sendMessages(generator)
-                    })
-                }
                 if (onClose !== undefined) {
                     socket.on('close', onClose)
                 }
@@ -172,6 +166,13 @@ export function createRequestListener<State, Errors>({
                     const generator = onMessage(data)
                     return sendMessages(generator)
                 })
+
+                // the 'open' even is never fired in this case, so just call
+                // onOpen immediately
+                if (onOpen !== undefined) {
+                    const generator = onOpen()
+                    await sendMessages(generator)
+                }
             }
         }
         // no body
