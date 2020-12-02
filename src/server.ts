@@ -1,6 +1,6 @@
 import type { RequestListener, ServerResponse  } from 'http'
 
-import WebSocket, { Data, Server as WebSocketServer } from 'ws'
+import WebSocket, { Server as WebSocketServer } from 'ws'
 import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
 
 import type {
@@ -134,7 +134,7 @@ export function createRequestListener<State, Errors>({
                     )
                 )
 
-                const { onOpen, onClose, onError, onMessage } = response.body
+                const { onOpen, onClose, onError, onMessage, onSendError } = response.body
 
                 if (onOpen !== undefined) {
                     socket.on('open', onOpen)
@@ -148,29 +148,19 @@ export function createRequestListener<State, Errors>({
 
                 socket.on('message', async data => {
                     const generator = onMessage(data)
-                    let last: Result<void, Error> = ok()
                     while (true) {
-                        // for some reason, this 'result' variable declaration
-                        // and the 'err' declaration on line 164 cannot be
-                        // inferred so long as the assignment on line 173 is
-                        // present, and need to be typed manually.
-                        const result: IteratorResult<Data, void | typeof CloseWebSocket> = await generator.next(last)
+                        const result = await generator.next()
                         if (result.done) {
                             if (result.value === CloseWebSocket) {
                                 socket.close(1000)
                             }
                             return
                         }
-                        const err: Error | undefined = await new Promise(resolve =>
+                        const error = await new Promise<Error | undefined>(resolve =>
                             socket.send(result.value, resolve)
                         )
-                        if (err === undefined) {
-                            if (!last.ok) {
-                                last = ok()
-                            }
-                        }
-                        else {
-                            last = error(err)
+                        if (error !== undefined) {
+                            await onSendError?.(error)
                         }
                     }
                 })

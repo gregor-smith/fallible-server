@@ -44,7 +44,8 @@ export type WebsocketResponse = {
     onOpen?: () => Awaitable<void>
     onClose?: (code: number, reason: string) => Awaitable<void>
     onError?: (error: Error) => Awaitable<void>
-    onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, Result<void, Error>>
+    onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
+    onSendError?: (error: Error) => Awaitable<void>
 }
 
 
