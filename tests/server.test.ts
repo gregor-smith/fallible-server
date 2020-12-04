@@ -11,8 +11,8 @@ import {
     defaultErrorHandler,
     defaultResponseHandler
 } from '../src/server'
-import type { Cleanup, Cookie, MessageHandler, MessageHandlerResult } from '../src/types'
-import { cookieHeader } from '../src/utils'
+import type { Response, Cleanup, Cookie, MessageHandler, MessageHandlerResult } from '../src/types'
+import { CloseWebSocket, cookieHeader } from '../src/utils'
 
 
 describe('defaultErrorHandler', () => {
@@ -77,7 +77,7 @@ describe('createRequestListener', () => {
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(messageHandlerMock).toHaveBeenCalledWith(dummyIncomingMessage, {})
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledWith(testState)
+        expect(responseHandlerMock).toHaveBeenCalledWith<any>(testState)
     })
 
     test('cleanup returned by messageHandler called if responseHandler succeeds', async () => {
@@ -129,7 +129,7 @@ describe('createRequestListener', () => {
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).not.toHaveBeenCalled()
         expect(errorHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledWith(testError)
+        expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
     })
 
     test('responseHandler error propagates to errorHandler', async () => {
@@ -147,7 +147,7 @@ describe('createRequestListener', () => {
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledWith(testError)
+        expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
     })
 
     test('cleanup error propagates to errorHandler', async () => {
@@ -165,10 +165,18 @@ describe('createRequestListener', () => {
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
         expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledWith(testError)
+        expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
     })
 
-    test('cookies, headers and status code passed to response', async () => {
+    test.each<Response['body']>([
+        undefined,
+        'test body',
+        Buffer.from('test body', 'utf-8'),
+        { pipe: () => {} } as any,
+        { onMessage: () => CloseWebSocket }
+    ])('cookies, headers and status code passed to response', async body => {
+        expect.assertions(6)
+
         const cookies: Record<string, Cookie> = {
             'test-cookie': {
                 value: 'test-value'
@@ -195,23 +203,28 @@ describe('createRequestListener', () => {
                 ok({
                     status,
                     cookies,
-                    headers
+                    headers,
+                    body
                 })
             )
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
-        const expectedHeaders: [ string, string ][]  = []
-        for (const [ name, cookie ] of Object.entries(cookies)) {
-            expectedHeaders.push([ 'Set-Cookie', cookieHeader(name, cookie) ])
-        }
-        for (const [ name, header ] of Object.entries(headers)) {
-            expectedHeaders.push([ name, header ])
-        }
-
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledTimes(1)
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-        expect(serverResponseMock.setHeader.mock.calls).toEqual(expectedHeaders)
+
+        for (const [ name, cookie ] of Object.entries(cookies)) {
+            expect(serverResponseMock.setHeader).toHaveBeenCalledWith(
+                'Set-Cookie',
+                cookieHeader(name, cookie)
+            )
+        }
+        for (const [ name, header ] of Object.entries(headers)) {
+            expect(serverResponseMock.setHeader).toHaveBeenCalledWith(
+                name,
+                header
+            )
+        }
     })
 
     describe('string response body', () => {
@@ -430,6 +443,10 @@ describe('createRequestListener', () => {
         const { status, body } = defaultErrorHandler()
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
         expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+    })
+
+    describe('websocket body', () => {
+        test.todo('')
     })
 })
 

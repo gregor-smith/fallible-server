@@ -1,5 +1,8 @@
+/// <reference types="node" />
+import type { ReadStream } from 'fs';
 import { Result } from 'fallible';
 import { FormidableFile } from 'formidable';
+import { FileSystemError } from 'fallible-fs';
 import type { MessageHandler } from './types';
 export declare type ParseAuthorisationBearerError = 'HeaderMissing' | 'HeaderInvalid';
 export declare type ParseAuthorisationBearerState = {
@@ -24,8 +27,9 @@ export declare type ParseJSONBodyState = {
 export declare type ParseJSONBodyOptions = {
     sizeLimit?: number;
     encoding?: string;
+    parser?: (json: string) => unknown;
 };
-export declare function parseJSONBody<State, Error>({ sizeLimit, encoding }?: ParseJSONBodyOptions): MessageHandler<State, ParseJSONBodyState, Error>;
+export declare function parseJSONBody<State, Error>({ sizeLimit, encoding, parser }?: ParseJSONBodyOptions): MessageHandler<State, ParseJSONBodyState, Error>;
 export declare type ParseMultipartBodyError = {
     tag: 'FilesTooLarge';
 } | {
@@ -49,3 +53,26 @@ export declare type ParseMultipartBodyOptions = {
     fieldsSizeLimit?: number;
 };
 export declare function parseMultipartBody<State, Error>({ encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartBodyOptions): MessageHandler<State, ParseMultipartBodyState, Error>;
+export declare type SendFileOptions = {
+    maxAge?: number;
+    immutable?: boolean;
+};
+export declare type OpenedFile = {
+    stream: ReadStream;
+    headers: {
+        'Content-Length'?: number;
+        'Content-Type'?: string;
+        'Cache-Control'?: string;
+    };
+};
+export declare type SendFileExistingState = {
+    sendFile: {
+        path: string;
+        contentLength?: number;
+        contentType?: string;
+    };
+};
+export declare type SendFileState = {
+    file: Result<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>;
+};
+export declare function sendFile<State extends SendFileExistingState, Error>({ maxAge, immutable }: SendFileOptions): MessageHandler<State, SendFileState, Error>;

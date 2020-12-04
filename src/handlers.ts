@@ -1,7 +1,10 @@
-import { error, ok, Result } from 'fallible'
+import type { ReadStream } from 'fs'
+import { asyncFallible, error, ok, Result } from 'fallible'
 import { Formidable, FormidableFile } from 'formidable'
 import rawBody from 'raw-body'
 import { parse as secureJSONParse } from 'secure-json-parse'
+import { createReadStream, FileSystemError, stat } from 'fallible-fs'
+import { contentType as lookupContentType } from 'mime-types'
 
 import type { MessageHandler } from './types'
 import { getMessageHeader } from './utils'
@@ -77,14 +80,16 @@ function hasTypeField(value: unknown): value is { type: string } {
 
 export type ParseJSONBodyOptions = {
     sizeLimit?: number
-    encoding?: string
+    encoding?: string,
+    parser?: (json: string) => unknown
 }
 
 
 export function parseJSONBody<State, Error>(
     {
         sizeLimit,
-        encoding = 'utf-8'
+        encoding = 'utf-8',
+        parser = secureJSONParse
     }: ParseJSONBodyOptions = {}
 ): MessageHandler<State, ParseJSONBodyState, Error> {
     return async (message, state) => {
@@ -110,7 +115,7 @@ export function parseJSONBody<State, Error>(
 
         let json: unknown
         try {
-            json = secureJSONParse(body)
+            json = parser(body)
         }
         catch {
             return ok({
@@ -213,4 +218,74 @@ export function parseMultipartBody<State, Error>(
             }
         })
     }
+}
+
+
+export type SendFileOptions = {
+    maxAge?: number
+    immutable?: boolean
+}
+
+
+export type OpenedFile = {
+    stream: ReadStream
+    headers: {
+        'Content-Length'?: number
+        'Content-Type'?: string
+        'Cache-Control'?: string
+    }
+}
+
+
+export type SendFileExistingState = {
+    sendFile: {
+        path: string
+        contentLength?: number
+        contentType?: string
+    }
+}
+
+
+export type SendFileState = {
+    file: Result<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>
+}
+
+
+export function sendFile<State extends SendFileExistingState, Error>(
+    { maxAge, immutable = false }: SendFileOptions
+): MessageHandler<State, SendFileState, Error> {
+    return async (_, state) =>
+        ok({
+            state: {
+                ...state,
+                file: await asyncFallible<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>(async propagate => {
+                    const stats = propagate(await stat(state.sendFile.path))
+                    if (stats.isDirectory()) {
+                        return error({ tag: 'IsADirectory' })
+                    }
+                    const stream = propagate(await createReadStream(state.sendFile.path))
+
+                    const directives: string[] =[]
+                    if (maxAge !== undefined) {
+                        directives.push(`max-age=${maxAge}`)
+                    }
+                    if (immutable) {
+                        directives.push('immutable')
+                    }
+
+                    return ok({
+                        stream,
+                        headers: {
+                            'Content-Length': state.sendFile.contentLength ?? stats.size,
+                            'Content-Type': state.sendFile.contentType
+                                ?? (lookupContentType(state.sendFile.path)
+                                || undefined),
+                            'Cache-Control': directives.length === 0
+                                ? undefined
+                                : directives.join(',')
+                        }
+                    })
+                })
+            }
+        })
 }

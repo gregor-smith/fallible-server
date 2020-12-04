@@ -1,7 +1,9 @@
-import { error, ok } from 'fallible';
+import { asyncFallible, error, ok } from 'fallible';
 import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
 import { parse as secureJSONParse } from 'secure-json-parse';
+import { createReadStream, stat } from 'fallible-fs';
+import { contentType as lookupContentType } from 'mime-types';
 import { getMessageHeader } from './utils';
 export function parseAuthorisationBearer() {
     return (message, state) => {
@@ -38,7 +40,7 @@ function hasTypeField(value) {
         && 'type' in value
         && typeof value.type === 'string';
 }
-export function parseJSONBody({ sizeLimit, encoding = 'utf-8' } = {}) {
+export function parseJSONBody({ sizeLimit, encoding = 'utf-8', parser = secureJSONParse } = {}) {
     return async (message, state) => {
         let body;
         try {
@@ -59,7 +61,7 @@ export function parseJSONBody({ sizeLimit, encoding = 'utf-8' } = {}) {
         }
         let json;
         try {
-            json = secureJSONParse(body);
+            json = parser(body);
         }
         catch {
             return ok({
@@ -115,5 +117,38 @@ export function parseMultipartBody({ encoding = 'utf-8', saveDirectory, keepFile
             }
         });
     };
+}
+export function sendFile({ maxAge, immutable = false }) {
+    return async (_, state) => ok({
+        state: {
+            ...state,
+            file: await asyncFallible(async (propagate) => {
+                const stats = propagate(await stat(state.sendFile.path));
+                if (stats.isDirectory()) {
+                    return error({ tag: 'IsADirectory' });
+                }
+                const stream = propagate(await createReadStream(state.sendFile.path));
+                const directives = [];
+                if (maxAge !== undefined) {
+                    directives.push(`max-age=${maxAge}`);
+                }
+                if (immutable) {
+                    directives.push('immutable');
+                }
+                return ok({
+                    stream,
+                    headers: {
+                        'Content-Length': state.sendFile.contentLength ?? stats.size,
+                        'Content-Type': state.sendFile.contentType
+                            ?? (lookupContentType(state.sendFile.path)
+                                || undefined),
+                        'Cache-Control': directives.length === 0
+                            ? undefined
+                            : directives.join(',')
+                    }
+                });
+            })
+        }
+    });
 }
 //# sourceMappingURL=handlers.js.map
