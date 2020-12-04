@@ -3,7 +3,6 @@ import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { createReadStream, stat } from 'fallible-fs';
-import { contentType as lookupContentType } from 'mime-types';
 import { getMessageHeader } from './utils';
 export function parseAuthorisationBearer() {
     return (message, state) => {
@@ -118,37 +117,25 @@ export function parseMultipartBody({ encoding = 'utf-8', saveDirectory, keepFile
         });
     };
 }
-export function sendFile({ maxAge, immutable = false }) {
-    return async (_, state) => ok({
-        state: {
-            ...state,
-            file: await asyncFallible(async (propagate) => {
-                const stats = propagate(await stat(state.sendFile.path));
-                if (stats.isDirectory()) {
-                    return error({ tag: 'IsADirectory' });
-                }
-                const stream = propagate(await createReadStream(state.sendFile.path));
-                const directives = [];
-                if (maxAge !== undefined) {
-                    directives.push(`max-age=${maxAge}`);
-                }
-                if (immutable) {
-                    directives.push('immutable');
-                }
-                return ok({
-                    stream,
-                    headers: {
-                        'Content-Length': state.sendFile.contentLength ?? stats.size,
-                        'Content-Type': state.sendFile.contentType
-                            ?? (lookupContentType(state.sendFile.path)
-                                || undefined),
-                        'Cache-Control': directives.length === 0
-                            ? undefined
-                            : directives.join(',')
-                    }
-                });
-            })
-        }
-    });
+export function sendFile() {
+    return async (_, state) => {
+        const file = await asyncFallible(async (propagate) => {
+            const stats = propagate(await stat(state.sendFile.path));
+            if (stats.isDirectory()) {
+                return error({ tag: 'IsADirectory' });
+            }
+            const stream = propagate(await createReadStream(state.sendFile.path));
+            return ok({
+                stream,
+                contentLength: stats.size
+            });
+        });
+        return ok({
+            state: {
+                ...state,
+                sendFile: { ...state.sendFile, file }
+            }
+        });
+    };
 }
 //# sourceMappingURL=handlers.js.map

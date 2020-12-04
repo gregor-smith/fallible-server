@@ -7,7 +7,6 @@ var formidable_1 = require("formidable");
 var raw_body_1 = tslib_1.__importDefault(require("raw-body"));
 var secure_json_parse_1 = require("secure-json-parse");
 var fallible_fs_1 = require("fallible-fs");
-var mime_types_1 = require("mime-types");
 var utils_1 = require("./utils");
 function parseAuthorisationBearer() {
     return function (message, state) {
@@ -130,60 +129,41 @@ function parseMultipartBody(_a) {
     }); };
 }
 exports.parseMultipartBody = parseMultipartBody;
-function sendFile(_a) {
+function sendFile() {
     var _this = this;
-    var maxAge = _a.maxAge, _b = _a.immutable, immutable = _b === void 0 ? false : _b;
     return function (_, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var _a, _b;
-        var _c, _d;
+        var file;
         var _this = this;
-        return tslib_1.__generator(this, function (_e) {
-            switch (_e.label) {
-                case 0:
-                    _a = fallible_1.ok;
-                    _c = {};
-                    _b = [tslib_1.__assign({}, state)];
-                    _d = {};
-                    return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                            var stats, _a, stream, _b, directives;
-                            var _c, _d;
-                            return tslib_1.__generator(this, function (_e) {
-                                switch (_e.label) {
-                                    case 0:
-                                        _a = propagate;
-                                        return [4 /*yield*/, fallible_fs_1.stat(state.sendFile.path)];
-                                    case 1:
-                                        stats = _a.apply(void 0, [_e.sent()]);
-                                        if (stats.isDirectory()) {
-                                            return [2 /*return*/, fallible_1.error({ tag: 'IsADirectory' })];
-                                        }
-                                        _b = propagate;
-                                        return [4 /*yield*/, fallible_fs_1.createReadStream(state.sendFile.path)];
-                                    case 2:
-                                        stream = _b.apply(void 0, [_e.sent()]);
-                                        directives = [];
-                                        if (maxAge !== undefined) {
-                                            directives.push("max-age=" + maxAge);
-                                        }
-                                        if (immutable) {
-                                            directives.push('immutable');
-                                        }
-                                        return [2 /*return*/, fallible_1.ok({
-                                                stream: stream,
-                                                headers: {
-                                                    'Content-Length': (_c = state.sendFile.contentLength) !== null && _c !== void 0 ? _c : stats.size,
-                                                    'Content-Type': (_d = state.sendFile.contentType) !== null && _d !== void 0 ? _d : (mime_types_1.contentType(state.sendFile.path)
-                                                        || undefined),
-                                                    'Cache-Control': directives.length === 0
-                                                        ? undefined
-                                                        : directives.join(',')
-                                                }
-                                            })];
-                                }
-                            });
-                        }); })];
-                case 1: return [2 /*return*/, _a.apply(void 0, [(_c.state = tslib_1.__assign.apply(void 0, _b.concat([(_d.file = _e.sent(), _d)])),
-                            _c)])];
+        return tslib_1.__generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+                        var stats, _a, stream, _b;
+                        return tslib_1.__generator(this, function (_c) {
+                            switch (_c.label) {
+                                case 0:
+                                    _a = propagate;
+                                    return [4 /*yield*/, fallible_fs_1.stat(state.sendFile.path)];
+                                case 1:
+                                    stats = _a.apply(void 0, [_c.sent()]);
+                                    if (stats.isDirectory()) {
+                                        return [2 /*return*/, fallible_1.error({ tag: 'IsADirectory' })];
+                                    }
+                                    _b = propagate;
+                                    return [4 /*yield*/, fallible_fs_1.createReadStream(state.sendFile.path)];
+                                case 2:
+                                    stream = _b.apply(void 0, [_c.sent()]);
+                                    return [2 /*return*/, fallible_1.ok({
+                                            stream: stream,
+                                            contentLength: stats.size
+                                        })];
+                            }
+                        });
+                    }); })];
+                case 1:
+                    file = _a.sent();
+                    return [2 /*return*/, fallible_1.ok({
+                            state: tslib_1.__assign(tslib_1.__assign({}, state), { sendFile: tslib_1.__assign(tslib_1.__assign({}, state.sendFile), { file: file }) })
+                        })];
             }
         });
     }); };

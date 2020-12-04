@@ -53,26 +53,18 @@ export declare type ParseMultipartBodyOptions = {
     fieldsSizeLimit?: number;
 };
 export declare function parseMultipartBody<State, Error>({ encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartBodyOptions): MessageHandler<State, ParseMultipartBodyState, Error>;
-export declare type SendFileOptions = {
-    maxAge?: number;
-    immutable?: boolean;
-};
 export declare type OpenedFile = {
     stream: ReadStream;
-    headers: {
-        'Content-Length'?: number;
-        'Content-Type'?: string;
-        'Cache-Control'?: string;
-    };
+    contentLength: number;
 };
 export declare type SendFileExistingState = {
     sendFile: {
         path: string;
-        contentLength?: number;
-        contentType?: string;
     };
 };
 export declare type SendFileState = {
-    file: Result<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>;
+    sendFile: {
+        file: Result<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>;
+    };
 };
-export declare function sendFile<State extends SendFileExistingState, Error>({ maxAge, immutable }: SendFileOptions): MessageHandler<State, SendFileState, Error>;
+export declare function sendFile<State extends SendFileExistingState, Error>(): MessageHandler<State, SendFileState, Error>;
