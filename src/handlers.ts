@@ -200,10 +200,6 @@ export function parseMultipartBody<State, Error>(
                         )
                         return
                     }
-                    resolve(
-                        error({ tag: 'OtherError', error: exception })
-                    )
-                    return
                 }
                 resolve(
                     error({ tag: 'OtherError', error: exception })
@@ -245,6 +241,9 @@ export function sendFile<State extends SendFileExistingState, Error>(): MessageH
     return async (_, state) => {
         const file = await asyncFallible<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>(async propagate => {
             const stats = propagate(await stat(state.sendFile.path))
+            // this check is necessary because createReadStream fires the ready
+            // event before the error event when trying to open a directory
+            // see https://github.com/nodejs/node/issues/31583
             if (stats.isDirectory()) {
                 return error({ tag: 'IsADirectory' })
             }

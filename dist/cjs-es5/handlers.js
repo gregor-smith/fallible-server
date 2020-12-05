@@ -113,8 +113,6 @@ function parseMultipartBody(_a) {
                                         resolve(fallible_1.error({ tag: 'FilesTooLarge' }));
                                         return;
                                     }
-                                    resolve(fallible_1.error({ tag: 'OtherError', error: exception }));
-                                    return;
                                 }
                                 resolve(fallible_1.error({ tag: 'OtherError', error: exception }));
                             });
@@ -145,6 +143,9 @@ function sendFile() {
                                     return [4 /*yield*/, fallible_fs_1.stat(state.sendFile.path)];
                                 case 1:
                                     stats = _a.apply(void 0, [_c.sent()]);
+                                    // this check is necessary because createReadStream fires the ready
+                                    // event before the error event when trying to open a directory
+                                    // see https://github.com/nodejs/node/issues/31583
                                     if (stats.isDirectory()) {
                                         return [2 /*return*/, fallible_1.error({ tag: 'IsADirectory' })];
                                     }

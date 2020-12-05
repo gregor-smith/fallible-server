@@ -103,8 +103,6 @@ export function parseMultipartBody({ encoding = 'utf-8', saveDirectory, keepFile
                         resolve(error({ tag: 'FilesTooLarge' }));
                         return;
                     }
-                    resolve(error({ tag: 'OtherError', error: exception }));
-                    return;
                 }
                 resolve(error({ tag: 'OtherError', error: exception }));
             });
@@ -121,6 +119,9 @@ export function sendFile() {
     return async (_, state) => {
         const file = await asyncFallible(async (propagate) => {
             const stats = propagate(await stat(state.sendFile.path));
+            // this check is necessary because createReadStream fires the ready
+            // event before the error event when trying to open a directory
+            // see https://github.com/nodejs/node/issues/31583
             if (stats.isDirectory()) {
                 return error({ tag: 'IsADirectory' });
             }
