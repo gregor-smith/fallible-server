@@ -6,13 +6,3 @@ Object {
   "status": 500,
 }
 `;
-
-exports[`defaultResponseHandler returns success 1`] = `
-Object {
-  "ok": true,
-  "value": Object {
-    "body": "",
-    "status": 200,
-  },
-}
-`;

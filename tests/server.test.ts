@@ -8,24 +8,21 @@ import { error, Ok, ok } from 'fallible'
 import {
     composeMessageHandlers,
     createRequestListener,
-    defaultErrorHandler,
-    defaultResponseHandler
+    defaultErrorHandler
 } from '../src/server'
-import type { Response, Cleanup, Cookie, MessageHandler, MessageHandlerResult } from '../src/types'
-import { CloseWebSocket, cookieHeader } from '../src/utils'
+import type {
+    Response,
+    Cleanup,
+    Cookie,
+    MessageHandler,
+    MessageHandlerResult
+} from '../src/types'
+import { cookieHeader } from '../src/utils'
 
 
 describe('defaultErrorHandler', () => {
     test('returns internal server error', () => {
         const result = defaultErrorHandler()
-        expect(result).toMatchSnapshot()
-    })
-})
-
-
-describe('defaultResponseHandler', () => {
-    test('returns success', () => {
-        const result = defaultResponseHandler()
         expect(result).toMatchSnapshot()
     })
 })
@@ -48,67 +45,43 @@ describe('createRequestListener', () => {
 
     const serverResponseMock: ServerResponse & ServerResponseMock = new ServerResponseMock() as any
 
-    const testState = { tag: 'state' } as const
+    const testResponse: Response = { body: 'test response' }
     const testError = { tag: 'error' } as const
 
-    type TestState = typeof testState
     type TestError = typeof testError
 
-    type TestMessageHandler = MessageHandler<{}, TestState, TestError>
+    type TestMessageHandler = MessageHandler<void, Response, TestError>
 
     function createMessageHandlerMock(
         cleanup?: Cleanup<TestError>
     ): jest.MockedFunction<TestMessageHandler> {
-        return jest.fn((..._) => ok({ state: testState, cleanup }))
+        return jest.fn((..._) => ok({ state: testResponse, cleanup }))
     }
 
     afterEach(jest.resetAllMocks)
 
-    test('messageHandler and responseHandler params called', async () => {
+    test('messageHandler param called', async () => {
         const messageHandlerMock = createMessageHandlerMock()
-        const responseHandlerMock = jest.fn(defaultResponseHandler)
 
         const listener = createRequestListener({
-            messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock
+            messageHandler: messageHandlerMock
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(messageHandlerMock).toHaveBeenCalledWith(dummyIncomingMessage, {})
-        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledWith<any>(testState)
+        expect(messageHandlerMock).toHaveBeenCalledWith(dummyIncomingMessage)
     })
 
-    test('cleanup returned by messageHandler called if responseHandler succeeds', async () => {
+    test('cleanup returned by messageHandler called succeeds', async () => {
         const cleanupMock = jest.fn()
         const messageHandlerMock = createMessageHandlerMock(cleanupMock)
-        const responseHandlerMock = jest.fn(defaultResponseHandler)
 
         const listener = createRequestListener({
-            messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock
+            messageHandler: messageHandlerMock
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
-        expect(cleanupMock).toHaveBeenCalledTimes(1)
-    })
-
-    test('cleanup still called even if responseHandler fails', async () => {
-        const cleanupMock = jest.fn()
-        const messageHandlerMock = createMessageHandlerMock(cleanupMock)
-        const responseHandlerMock = jest.fn(() => error(testError))
-
-        const listener = createRequestListener({
-            messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(cleanupMock).toHaveBeenCalledTimes(1)
     })
 
@@ -116,54 +89,30 @@ describe('createRequestListener', () => {
         const messageHandlerMock: jest.MockedFunction<TestMessageHandler> = jest.fn(
             (..._) => error(testError)
         )
-        const responseHandlerMock = jest.fn(defaultResponseHandler)
         const errorHandlerMock = jest.fn(defaultErrorHandler)
 
         const listener = createRequestListener({
             messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock,
             errorHandler: errorHandlerMock
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).not.toHaveBeenCalled()
-        expect(errorHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
-    })
-
-    test('responseHandler error propagates to errorHandler', async () => {
-        const messageHandlerMock = createMessageHandlerMock()
-        const responseHandlerMock = jest.fn(() => error(testError))
-        const errorHandlerMock = jest.fn(defaultErrorHandler)
-
-        const listener = createRequestListener({
-            messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock,
-            errorHandler: errorHandlerMock
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
     })
 
     test('cleanup error propagates to errorHandler', async () => {
         const messageHandlerMock = createMessageHandlerMock(() => error(testError))
-        const responseHandlerMock = jest.fn(defaultResponseHandler)
         const errorHandlerMock = jest.fn(defaultErrorHandler)
 
         const listener = createRequestListener({
             messageHandler: messageHandlerMock,
-            responseHandler: responseHandlerMock,
             errorHandler: errorHandlerMock
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
         expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(responseHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledTimes(1)
         expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
     })
@@ -173,7 +122,7 @@ describe('createRequestListener', () => {
         'test body',
         Buffer.from('test body', 'utf-8'),
         { pipe: () => {} } as any,
-        { onMessage: () => CloseWebSocket }
+        // { onMessage: () => CloseWebSocket }
     ])('cookies, headers and status code passed to response', async body => {
         expect.assertions(6)
 
@@ -198,15 +147,14 @@ describe('createRequestListener', () => {
         const status = 123
 
         const listener = createRequestListener({
-            messageHandler: () => ok({ state: {} }),
-            responseHandler: jest.fn(() =>
-                ok({
+            messageHandler: () => ok({
+                state: {
+                    body,
                     status,
-                    cookies,
                     headers,
-                    body
-                })
-            )
+                    cookies
+                }
+            })
         })
         await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -234,8 +182,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -251,8 +198,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -275,8 +221,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -292,8 +237,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -317,8 +261,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => true)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -334,8 +277,7 @@ describe('createRequestListener', () => {
             serverResponseMock.hasHeader.mockImplementation(() => false)
 
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({ body })
+                messageHandler: () => ok({ state: { body } })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -353,8 +295,7 @@ describe('createRequestListener', () => {
     describe('no response body', () => {
         test('response ended with no body', async () => {
             const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => ok({})
+                messageHandler: () => ok({ state: {} })
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
@@ -387,17 +328,6 @@ describe('createRequestListener', () => {
             expect(serverResponseMock.end).toHaveBeenCalledWith(body)
         })
 
-        test('during response handler', async () => {
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} }),
-                responseHandler: () => { throw 'test' }
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
-        })
-
         test('during message handler cleanup', async () => {
             const listener = createRequestListener({
                 messageHandler: () => ok({
@@ -423,17 +353,6 @@ describe('createRequestListener', () => {
         })
     })
 
-    test('default response handler used when none given as parameter', async () => {
-        const listener = createRequestListener({
-            messageHandler: () => ok({ state: {} })
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        const { value: { status, body } } = defaultResponseHandler()
-        expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
-    })
-
     test('default error handler used when none given as parameter', async () => {
         const listener = createRequestListener({
             messageHandler: error
@@ -445,9 +364,8 @@ describe('createRequestListener', () => {
         expect(serverResponseMock.end).toHaveBeenCalledWith(body)
     })
 
-    describe('websocket body', () => {
-        test.todo('')
-    })
+    // describe('websocket body', () => {
+    // })
 })
 
 
@@ -455,9 +373,9 @@ describe('composeMessageHandlers', () => {
     test('handlers called in order with message and each successive state', async () => {
         expect.assertions(7)
 
-        const a: MessageHandler<{}, { a: true }, void> = (message, state) => {
+        const a: MessageHandler<void, { a: true }, void> = (message, state) => {
             expect(message).toBe(dummyIncomingMessage)
-            expect(state).toEqual({})
+            expect(state).toBeUndefined()
             return ok({
                 state: { a: true }
             })
@@ -467,15 +385,15 @@ describe('composeMessageHandlers', () => {
             expect(message).toBe(dummyIncomingMessage)
             expect(state).toEqual({ a: true })
             return ok({
-                state: { ...state, b: true }
+                state: { b: true }
             })
         }
 
-        const c: MessageHandler<{ a: true, b: true }, { c: true }, void> = (message, state) => {
+        const c: MessageHandler<{ b: true }, { c: true }, void> = (message, state) => {
             expect(message).toBe(dummyIncomingMessage)
-            expect(state).toEqual({ a: true, b: true })
+            expect(state).toEqual({ b: true })
             return ok({
-                state: { ...state, c: true }
+                state: { c: true }
             })
         }
 
@@ -483,57 +401,57 @@ describe('composeMessageHandlers', () => {
             [ a, b, c ],
             errors => errors[0]
         )
-        const result = await composed(dummyIncomingMessage, {})
+        const result = await composed(dummyIncomingMessage)
 
         expect(result).toEqual(
             ok({
-                state: { a: true, b: true, c: true }
+                state: { c: true }
             })
         )
     })
 
     test('cleanup returned if at least one handler had cleanup', async () => {
-        const a: MessageHandler<{}, {}, void> = (_, state) =>
+        const a: MessageHandler<void, void, void> = (_, state) =>
             ok({ state })
-        const b: MessageHandler<{}, {}, void> = (_, state) =>
+        const b: MessageHandler<void, void, void> = (_, state) =>
             ok({ state, cleanup: ok })
-        const c: MessageHandler<{}, {}, void> = (_, state) =>
+        const c: MessageHandler<void, void, void> = (_, state) =>
             ok({ state })
 
         const composed = composeMessageHandlers(
             [ a, b, c ],
             errors => errors[0]
         )
-        const result = await composed(dummyIncomingMessage, {})
+        const result = await composed(dummyIncomingMessage)
         expect(result.ok).toBeTrue()
-        const { cleanup } = result.value as MessageHandlerResult<{}, void>
+        const { cleanup } = result.value as MessageHandlerResult<void, void>
         expect(cleanup).not.toBeUndefined()
     })
 
     test('cleanup calls handler cleanups in reverse order', async () => {
         const aCleanup = jest.fn<Ok<void>, []>(ok)
-        const a: MessageHandler<{}, {}, void> = (_, state) =>
+        const a: MessageHandler<void, void, void> = (_, state) =>
             ok({ state, cleanup: aCleanup })
 
         const bCleanup = jest.fn<Ok<void>, []>(ok)
-        const b: MessageHandler<{}, {}, void> = (_, state) =>
+        const b: MessageHandler<void, void, void> = (_, state) =>
             ok({ state, cleanup: bCleanup })
 
-        const c: MessageHandler<{}, {}, void> = (_, state) =>
+        const c: MessageHandler<void, void, void> = (_, state) =>
             ok({ state })
 
         const dCleanup = jest.fn<Ok<void>, []>(ok)
-        const d: MessageHandler<{}, {}, void> = (_, state) =>
+        const d: MessageHandler<void, void, void> = (_, state) =>
             ok({ state, cleanup: dCleanup })
 
         const composed = composeMessageHandlers(
             [ a, b, c, d ],
             errors => errors[0]
         )
-        const handlerResult = await composed(dummyIncomingMessage, {})
+        const handlerResult = await composed(dummyIncomingMessage)
 
         expect(handlerResult.ok).toBeTrue()
-        const { cleanup } = handlerResult.value as MessageHandlerResult<{}, void>
+        const { cleanup } = handlerResult.value as MessageHandlerResult<void, void>
         expect(cleanup).not.toBeUndefined()
 
         const cleanupResult = await cleanup!()
@@ -549,24 +467,24 @@ describe('composeMessageHandlers', () => {
         const testError = 'test'
 
         const aCleanup = jest.fn<Ok<void>, []>(ok)
-        const a: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+        const a: MessageHandler<void, void, typeof testError> = (_, state) =>
             ok({ state, cleanup: aCleanup })
 
         const bCleanup = jest.fn<Ok<void>, []>(ok)
-        const b: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+        const b: MessageHandler<void, void, typeof testError> = (_, state) =>
             ok({ state, cleanup: bCleanup })
 
-        const c: MessageHandler<{}, {}, typeof testError> = () => error(testError)
+        const c: MessageHandler<void, void, typeof testError> = () => error(testError)
 
         const dCleanup = jest.fn()
-        const d: MessageHandler<{}, {}, typeof testError> = (_, state) =>
+        const d: MessageHandler<void, void, typeof testError> = (_, state) =>
             ok({ state, cleanup: dCleanup })
 
         const composed = composeMessageHandlers(
             [ a, b, c, d ],
             errors => errors[0]
         )
-        const result = await composed(dummyIncomingMessage, {})
+        const result = await composed(dummyIncomingMessage)
 
         expect(result).toEqual(error(testError))
         expect(aCleanup).toHaveBeenCalled()
@@ -581,19 +499,19 @@ describe('composeMessageHandlers', () => {
         type TestError = 'AError' | 'BError' | 'DError' | 'ComposedError'
 
         const aCleanup = jest.fn(() => error<TestError>('AError'))
-        const a: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const a: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: aCleanup })
 
         const bCleanup = jest.fn(() => error<TestError>('BError'))
-        const b: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const b: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: bCleanup })
 
         const cCleanup = jest.fn<Ok<void>, []>(ok)
-        const c: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const c: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: cCleanup })
 
         const dCleanup = jest.fn(() => error<TestError>('DError'))
-        const d: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const d: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: dCleanup })
 
         const composed = composeMessageHandlers(
@@ -604,9 +522,9 @@ describe('composeMessageHandlers', () => {
             }
         )
 
-        const handlerResult = await composed(dummyIncomingMessage, {})
+        const handlerResult = await composed(dummyIncomingMessage)
         expect(handlerResult.ok).toBeTrue()
-        const { cleanup } = handlerResult.value as MessageHandlerResult<{}, TestError>
+        const { cleanup } = handlerResult.value as MessageHandlerResult<void, TestError>
         expect(cleanup).not.toBeUndefined()
 
         const cleanupResult = await cleanup!()
@@ -627,18 +545,18 @@ describe('composeMessageHandlers', () => {
         type TestError = 'AError' | 'CError' | 'DError' | 'ComposedError'
 
         const aCleanup = jest.fn(() => error<TestError>('AError'))
-        const a: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const a: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: aCleanup })
 
         const bCleanup = jest.fn<Ok<void>, []>(ok)
-        const b: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const b: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: bCleanup })
 
         const cCleanup = jest.fn(() => error<TestError>('CError'))
-        const c: MessageHandler<{}, {}, TestError> = (_, state) =>
+        const c: MessageHandler<void, void, TestError> = (_, state) =>
             ok({ state, cleanup: cCleanup })
 
-        const d: MessageHandler<{}, {}, TestError> = () => error('DError')
+        const d: MessageHandler<void, void, TestError> = () => error('DError')
 
         const composed = composeMessageHandlers(
             [ a, b, c, d ],
@@ -648,7 +566,7 @@ describe('composeMessageHandlers', () => {
             }
         )
 
-        const handlerResult = await composed(dummyIncomingMessage, {})
+        const handlerResult = await composed(dummyIncomingMessage)
         expect(handlerResult).toEqual(error<TestError>('ComposedError'))
         expect(aCleanup).toHaveBeenCalled()
         expect(bCleanup).toHaveBeenCalled()

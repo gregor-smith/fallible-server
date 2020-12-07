@@ -69,12 +69,7 @@ export type MessageHandlerResult<State, Errors> = {
 export type MessageHandler<ExistingState, NewState, Errors> = (
     message: IncomingMessage,
     state: Readonly<ExistingState>
-) => Awaitable<Result<MessageHandlerResult<ExistingState & NewState, Errors>, Errors>>
-
-
-export type ResponseHandler<State, Errors> = (
-    state: Readonly<State>
-) => Awaitable<Result<Response, Errors>>
+) => Awaitable<Result<MessageHandlerResult<NewState, Errors>, Errors>>
 
 
 export type ErrorHandler<Errors> = (

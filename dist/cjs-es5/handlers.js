@@ -10,15 +10,15 @@ var fallible_fs_1 = require("fallible-fs");
 var utils_1 = require("./utils");
 function parseAuthorisationBearer() {
     return function (message, state) {
-        var _a;
+        var _a, _b;
         var authorisationToken;
         var header = utils_1.getMessageHeader(message, 'Authorization');
         if (header === undefined) {
             authorisationToken = fallible_1.error('HeaderMissing');
         }
         else {
-            var token = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1];
-            authorisationToken = token === undefined
+            var token = (_b = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim();
+            authorisationToken = token === undefined || token.length === 0
                 ? fallible_1.error('HeaderInvalid')
                 : fallible_1.ok(token);
         }
@@ -61,9 +61,11 @@ function parseJSONBody(_a) {
                 case 2:
                     exception_1 = _a.sent();
                     return [2 /*return*/, fallible_1.ok({
-                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: fallible_1.error(hasTypeField(exception_1) && exception_1.type === 'entity.too.large'
-                                    ? { tag: 'TooLarge' }
-                                    : { tag: 'OtherError', error: exception_1 }) })
+                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: {
+                                    json: fallible_1.error(hasTypeField(exception_1) && exception_1.type === 'entity.too.large'
+                                        ? { tag: 'TooLarge' }
+                                        : { tag: 'OtherError', error: exception_1 })
+                                } })
                         })];
                 case 3:
                     try {
@@ -71,11 +73,15 @@ function parseJSONBody(_a) {
                     }
                     catch (_b) {
                         return [2 /*return*/, fallible_1.ok({
-                                state: tslib_1.__assign(tslib_1.__assign({}, state), { body: fallible_1.error({ tag: 'InvalidSyntax' }) })
+                                state: tslib_1.__assign(tslib_1.__assign({}, state), { body: {
+                                        json: fallible_1.error({ tag: 'InvalidSyntax' })
+                                    } })
                             })];
                     }
                     return [2 /*return*/, fallible_1.ok({
-                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: fallible_1.ok(json) })
+                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: {
+                                    json: fallible_1.ok(json)
+                                } })
                         })];
             }
         });
@@ -120,7 +126,9 @@ function parseMultipartBody(_a) {
                 case 1:
                     body = _a.sent();
                     return [2 /*return*/, fallible_1.ok({
-                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: body })
+                            state: tslib_1.__assign(tslib_1.__assign({}, state), { body: {
+                                    multipart: body
+                                } })
                         })];
             }
         });

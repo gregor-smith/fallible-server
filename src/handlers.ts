@@ -27,8 +27,10 @@ export function parseAuthorisationBearer<State, Error>(): MessageHandler<State, 
             authorisationToken = error('HeaderMissing')
         }
         else {
-            const token = header.match(/^Bearer (.+)/)?.[1]
-            authorisationToken = token === undefined
+            const token = header.match(/^Bearer (.+)/)
+                ?.[1]
+                ?.trim()
+            authorisationToken = token === undefined || token.length === 0
                 ? error('HeaderInvalid')
                 : ok(token)
         }
@@ -65,7 +67,9 @@ export type ParseJSONBodyError =
 
 
 export type ParseJSONBodyState = {
-    body: Result<unknown, ParseJSONBodyError>
+    body: {
+        json: Result<unknown, ParseJSONBodyError>
+    }
 }
 
 
@@ -103,11 +107,13 @@ export function parseJSONBody<State, Error>(
             return ok({
                 state: {
                     ...state,
-                    body: error(
-                        hasTypeField(exception) && exception.type === 'entity.too.large'
-                            ? { tag: 'TooLarge' }
-                            : { tag: 'OtherError', error: exception }
-                    )
+                    body: {
+                        json: error(
+                            hasTypeField(exception) && exception.type === 'entity.too.large'
+                                ? { tag: 'TooLarge' }
+                                : { tag: 'OtherError', error: exception }
+                        )
+                    }
                 }
             })
         }
@@ -120,7 +126,9 @@ export function parseJSONBody<State, Error>(
             return ok({
                 state: {
                     ...state,
-                    body: error({ tag: 'InvalidSyntax' })
+                    body: {
+                        json: error({ tag: 'InvalidSyntax' })
+                    }
                 }
             })
         }
@@ -128,7 +136,9 @@ export function parseJSONBody<State, Error>(
         return ok({
             state: {
                 ...state,
-                body: ok(json)
+                body: {
+                    json: ok(json)
+                }
             }
         })
     }
@@ -148,7 +158,9 @@ export type ParsedMultipartBody = {
 
 
 export type ParseMultipartBodyState = {
-    body: Result<ParsedMultipartBody, ParseMultipartBodyError>
+    body: {
+        multipart: Result<ParsedMultipartBody, ParseMultipartBodyError>
+    }
 }
 
 
@@ -179,7 +191,7 @@ export function parseMultipartBody<State, Error>(
             maxFieldsSize: fieldsSizeLimit,
             maxFileSize: fileSizeLimit
         })
-        const body = await new Promise<ParseMultipartBodyState['body']>(resolve => {
+        const body = await new Promise<ParseMultipartBodyState['body']['multipart']>(resolve => {
             form.parse(message, (exception, fields, files) => {
                 if (exception === null || exception === undefined) {
                     resolve(
@@ -209,7 +221,9 @@ export function parseMultipartBody<State, Error>(
         return ok({
             state: {
                 ...state,
-                body
+                body: {
+                    multipart: body
+                }
             }
         })
     }

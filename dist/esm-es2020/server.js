@@ -7,12 +7,6 @@ export function defaultErrorHandler() {
         body: 'Internal server error'
     };
 }
-export function defaultResponseHandler() {
-    return ok({
-        status: 200,
-        body: ''
-    });
-}
 function setHeaders(response, { cookies, headers }) {
     if (cookies !== undefined) {
         for (const [name, cookie] of Object.entries(cookies)) {
@@ -26,17 +20,16 @@ function setHeaders(response, { cookies, headers }) {
         }
     }
 }
-export function createRequestListener({ messageHandler, responseHandler = defaultResponseHandler, errorHandler = defaultErrorHandler }) {
+export function createRequestListener({ messageHandler, errorHandler = defaultErrorHandler }) {
     return async (req, res) => {
         let response;
         try {
             const result = await asyncFallible(async (propagate) => {
-                const { state, cleanup } = propagate(await messageHandler(req, {}));
-                const response = await responseHandler(state);
+                const { state, cleanup } = propagate(await messageHandler(req));
                 if (cleanup !== undefined) {
                     propagate(await cleanup());
                 }
-                return response;
+                return ok(state);
             });
             response = result.ok
                 ? result.value

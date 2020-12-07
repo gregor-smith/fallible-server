@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.composeMessageHandlers = exports.createRequestListener = exports.defaultResponseHandler = exports.defaultErrorHandler = void 0;
+exports.composeMessageHandlers = exports.createRequestListener = exports.defaultErrorHandler = void 0;
 var tslib_1 = require("tslib");
 var ws_1 = require("ws");
 var fallible_1 = require("fallible");
@@ -12,13 +12,6 @@ function defaultErrorHandler() {
     };
 }
 exports.defaultErrorHandler = defaultErrorHandler;
-function defaultResponseHandler() {
-    return fallible_1.ok({
-        status: 200,
-        body: ''
-    });
-}
-exports.defaultResponseHandler = defaultResponseHandler;
 function setHeaders(response, _a) {
     var e_1, _b, e_2, _c;
     var cookies = _a.cookies, headers = _a.headers;
@@ -56,7 +49,7 @@ function setHeaders(response, _a) {
 }
 function createRequestListener(_a) {
     var _this = this;
-    var messageHandler = _a.messageHandler, _b = _a.responseHandler, responseHandler = _b === void 0 ? defaultResponseHandler : _b, _c = _a.errorHandler, errorHandler = _c === void 0 ? defaultErrorHandler : _c;
+    var messageHandler = _a.messageHandler, _b = _a.errorHandler, errorHandler = _b === void 0 ? defaultErrorHandler : _b;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
         var response, result, _a, exception_1, wss_1, socket_1, _b, onOpen, onClose, onError, onMessage_1, onSendError_1, sendMessages_1, generator;
         var _this = this;
@@ -66,24 +59,21 @@ function createRequestListener(_a) {
                 case 0:
                     _d.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                            var _a, state, cleanup, _b, response, _c;
+                            var _a, state, cleanup, _b, _c;
                             return tslib_1.__generator(this, function (_d) {
                                 switch (_d.label) {
                                     case 0:
                                         _b = propagate;
-                                        return [4 /*yield*/, messageHandler(req, {})];
+                                        return [4 /*yield*/, messageHandler(req)];
                                     case 1:
                                         _a = _b.apply(void 0, [_d.sent()]), state = _a.state, cleanup = _a.cleanup;
-                                        return [4 /*yield*/, responseHandler(state)];
-                                    case 2:
-                                        response = _d.sent();
-                                        if (!(cleanup !== undefined)) return [3 /*break*/, 4];
+                                        if (!(cleanup !== undefined)) return [3 /*break*/, 3];
                                         _c = propagate;
                                         return [4 /*yield*/, cleanup()];
-                                    case 3:
+                                    case 2:
                                         _c.apply(void 0, [_d.sent()]);
-                                        _d.label = 4;
-                                    case 4: return [2 /*return*/, response];
+                                        _d.label = 3;
+                                    case 3: return [2 /*return*/, fallible_1.ok(state)];
                                 }
                             });
                         }); })];

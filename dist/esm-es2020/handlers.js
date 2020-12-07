@@ -12,8 +12,9 @@ export function parseAuthorisationBearer() {
             authorisationToken = error('HeaderMissing');
         }
         else {
-            const token = header.match(/^Bearer (.+)/)?.[1];
-            authorisationToken = token === undefined
+            const token = header.match(/^Bearer (.+)/)?.[1]
+                ?.trim();
+            authorisationToken = token === undefined || token.length === 0
                 ? error('HeaderInvalid')
                 : ok(token);
         }
@@ -52,9 +53,11 @@ export function parseJSONBody({ sizeLimit, encoding = 'utf-8', parser = secureJS
             return ok({
                 state: {
                     ...state,
-                    body: error(hasTypeField(exception) && exception.type === 'entity.too.large'
-                        ? { tag: 'TooLarge' }
-                        : { tag: 'OtherError', error: exception })
+                    body: {
+                        json: error(hasTypeField(exception) && exception.type === 'entity.too.large'
+                            ? { tag: 'TooLarge' }
+                            : { tag: 'OtherError', error: exception })
+                    }
                 }
             });
         }
@@ -66,14 +69,18 @@ export function parseJSONBody({ sizeLimit, encoding = 'utf-8', parser = secureJS
             return ok({
                 state: {
                     ...state,
-                    body: error({ tag: 'InvalidSyntax' })
+                    body: {
+                        json: error({ tag: 'InvalidSyntax' })
+                    }
                 }
             });
         }
         return ok({
             state: {
                 ...state,
-                body: ok(json)
+                body: {
+                    json: ok(json)
+                }
             }
         });
     };
@@ -110,7 +117,9 @@ export function parseMultipartBody({ encoding = 'utf-8', saveDirectory, keepFile
         return ok({
             state: {
                 ...state,
-                body
+                body: {
+                    multipart: body
+                }
             }
         });
     };

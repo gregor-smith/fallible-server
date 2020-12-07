@@ -37,6 +37,5 @@ export declare type MessageHandlerResult<State, Errors> = {
     state: State;
     cleanup?: Cleanup<Errors>;
 };
-export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<ExistingState & NewState, Errors>, Errors>>;
-export declare type ResponseHandler<State, Errors> = (state: Readonly<State>) => Awaitable<Result<Response, Errors>>;
+export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<NewState, Errors>, Errors>>;
 export declare type ErrorHandler<Errors> = (error: Readonly<Errors>) => Awaitable<Response>;

@@ -22,7 +22,9 @@ export declare type ParseJSONBodyError = {
     error: unknown;
 };
 export declare type ParseJSONBodyState = {
-    body: Result<unknown, ParseJSONBodyError>;
+    body: {
+        json: Result<unknown, ParseJSONBodyError>;
+    };
 };
 export declare type ParseJSONBodyOptions = {
     sizeLimit?: number;
@@ -43,7 +45,9 @@ export declare type ParsedMultipartBody = {
     files: Record<string, FormidableFile>;
 };
 export declare type ParseMultipartBodyState = {
-    body: Result<ParsedMultipartBody, ParseMultipartBodyError>;
+    body: {
+        multipart: Result<ParsedMultipartBody, ParseMultipartBodyError>;
+    };
 };
 export declare type ParseMultipartBodyOptions = {
     encoding?: string;

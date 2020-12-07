@@ -1,91 +1,89 @@
 /// <reference types="node" />
 import type { RequestListener } from 'http';
 import { Awaitable } from 'fallible';
-import type { ErrorHandler, MessageHandler, ResponseHandler } from './types';
+import type { ErrorHandler, MessageHandler, Response } from './types';
 export declare function defaultErrorHandler(): {
     status: number;
     body: string;
 };
-export declare function defaultResponseHandler(): import("fallible").Ok<{
-    status: number;
-    body: string;
-}>;
-export declare type CreateRequestListenerArguments<State, Errors> = {
-    messageHandler: MessageHandler<{}, State, Errors>;
-    responseHandler?: ResponseHandler<State, Errors>;
+export declare type CreateRequestListenerArguments<Errors> = {
+    messageHandler: MessageHandler<void, Response, Errors>;
     errorHandler?: ErrorHandler<Errors>;
 };
 export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Promise<ReturnType<RequestListener>>;
-export declare function createRequestListener<State, Errors>({ messageHandler, responseHandler, errorHandler }: CreateRequestListenerArguments<State, Errors>): AwaitableRequestListener;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2>>) => Awaitable<Errors1 | Errors2>): MessageHandler<ExistingState, NewState1 & NewState2, Errors1 | Errors2>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3>>) => Awaitable<Errors1 | Errors2 | Errors3>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3, Errors1 | Errors2 | Errors3>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4, Errors1 | Errors2 | Errors3 | Errors4>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5, NewState6, Errors6>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5, NewState6, Errors6, NewState7, Errors7>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5, NewState6, Errors6, NewState7, Errors7, NewState8, Errors8>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5, NewState6, Errors6, NewState7, Errors7, NewState8, Errors8, NewState9, Errors9>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8, NewState9, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>;
-export declare function composeMessageHandlers<ExistingState, NewState1, Errors1, NewState2, Errors2, NewState3, Errors3, NewState4, Errors4, NewState5, Errors5, NewState6, Errors6, NewState7, Errors7, NewState8, Errors8, NewState9, Errors9, NewState10, Errors10>(handlers: [
-    MessageHandler<ExistingState, NewState1, Errors1>,
-    MessageHandler<ExistingState & NewState1, NewState2, Errors1 | Errors2>,
-    MessageHandler<ExistingState & NewState1 & NewState2, NewState3, Errors1 | Errors2 | Errors3>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3, NewState4, Errors1 | Errors2 | Errors3 | Errors4>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4, NewState5, Errors1 | Errors2 | Errors3 | Errors4 | Errors5>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5, NewState6, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6, NewState7, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7, NewState8, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8, NewState9, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9>,
-    MessageHandler<ExistingState & NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9, NewState10, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>
-], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>>) => Awaitable<Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>): MessageHandler<ExistingState, NewState1 & NewState2 & NewState3 & NewState4 & NewState5 & NewState6 & NewState7 & NewState8 & NewState9 & NewState10, Errors1 | Errors2 | Errors3 | Errors4 | Errors5 | Errors6 | Errors7 | Errors8 | Errors9 | Errors10>;
+export declare function createRequestListener<Errors>({ messageHandler, errorHandler }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener;
+export declare function composeMessageHandlers<State1, Error1, State2>(handlers: [
+    MessageHandler<State1, State2, Error1>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1>>) => Awaitable<Error1>): MessageHandler<State1, State2, Error1>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2>>) => Awaitable<Error1 | Error2>): MessageHandler<State1, State3, Error1 | Error2>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3>>) => Awaitable<Error1 | Error2 | Error3>): MessageHandler<State1, State4, Error1 | Error2 | Error3>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4>>) => Awaitable<Error1 | Error2 | Error3 | Error4>): MessageHandler<State1, State5, Error1 | Error2 | Error3 | Error4>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5>): MessageHandler<State1, State6, Error1 | Error2 | Error3 | Error4 | Error5>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6, Error6, State7>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+    MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6>): MessageHandler<State1, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6, Error6, State7, Error7, State8>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+    MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
+    MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>): MessageHandler<State1, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6, Error6, State7, Error7, State8, Error8, State9>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+    MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
+    MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
+    MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>): MessageHandler<State1, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6, Error6, State7, Error7, State8, Error8, State9, Error9, State10>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+    MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
+    MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
+    MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
+    MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>): MessageHandler<State1, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>;
+export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3, Error3, State4, Error4, State5, Error5, State6, Error6, State7, Error7, State8, Error8, State9, Error9, State10, Error10, State11>(handlers: [
+    MessageHandler<State1, State2, Error1>,
+    MessageHandler<State2, State3, Error1 | Error2>,
+    MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+    MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+    MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+    MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
+    MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
+    MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
+    MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>,
+    MessageHandler<State10, State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>
+], composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>): MessageHandler<State1, State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>;
