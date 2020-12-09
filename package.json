@@ -25,7 +25,7 @@
     "@types/ws": "^7.4.0",
     "fallible": "link:./../fallible",
     "fallible-fs": "link:./../fallible-fs",
-    "formidable": "^2.0.0-canary.20200504.1",
+    "formidable": "link:./../formidable",
     "path-to-regexp": "^6.2.0",
     "raw-body": "^2.4.1",
     "secure-json-parse": "^2.1.0",
