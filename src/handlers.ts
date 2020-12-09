@@ -19,7 +19,7 @@ export type ParseAuthorisationBearerState = {
 }
 
 
-export function parseAuthorisationBearer<State, Error>(): MessageHandler<State, ParseAuthorisationBearerState, Error> {
+export function parseAuthorisationBearer<State extends {}, Error>(): MessageHandler<State, State & ParseAuthorisationBearerState, Error> {
     return (message, state) => {
         let authorisationToken: ParseAuthorisationBearerState['authorisationToken']
         const header = getMessageHeader(message, 'Authorization')
@@ -49,7 +49,7 @@ export type GetWebSocketState = {
 }
 
 
-export function getIsWebSocket<State, Error>(): MessageHandler<State, GetWebSocketState, Error> {
+export function getIsWebSocket<State extends {}, Error>(): MessageHandler<State, State & GetWebSocketState, Error> {
     return (message, state) =>
         ok({
             state: {
@@ -88,13 +88,13 @@ export type ParseJSONBodyOptions = {
 }
 
 
-export function parseJSONBody<State, Error>(
+export function parseJSONBody<State extends {}, Error>(
     {
         sizeLimit,
         encoding = 'utf-8',
         parser = secureJSONParse
     }: ParseJSONBodyOptions = {}
-): MessageHandler<State, ParseJSONBodyState, Error> {
+): MessageHandler<State, State & ParseJSONBodyState, Error> {
     return async (message, state) => {
         let body: string
         try {
@@ -173,7 +173,7 @@ export type ParseMultipartBodyOptions = {
 }
 
 
-export function parseMultipartBody<State, Error>(
+export function parseMultipartBody<State extends {}, Error>(
     {
         encoding = 'utf-8',
         saveDirectory,
@@ -181,7 +181,7 @@ export function parseMultipartBody<State, Error>(
         fileSizeLimit,
         fieldsSizeLimit
     }: ParseMultipartBodyOptions = {}
-): MessageHandler<State, ParseMultipartBodyState, Error> {
+): MessageHandler<State, State & ParseMultipartBodyState, Error> {
     return async (message, state) => {
         const form = new Formidable({
             enabledPlugins: [ 'multipart' ],
@@ -251,7 +251,7 @@ export type SendFileState = {
 }
 
 
-export function sendFile<State extends SendFileExistingState, Error>(): MessageHandler<State, SendFileState, Error> {
+export function sendFile<State extends SendFileExistingState, Error>(): MessageHandler<State, State & SendFileState, Error> {
     return async (_, state) => {
         const file = await asyncFallible<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>(async propagate => {
             const stats = propagate(await stat(state.sendFile.path))

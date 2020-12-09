@@ -8,11 +8,11 @@ export declare type ParseAuthorisationBearerError = 'HeaderMissing' | 'HeaderInv
 export declare type ParseAuthorisationBearerState = {
     authorisationToken: Result<string, ParseAuthorisationBearerError>;
 };
-export declare function parseAuthorisationBearer<State, Error>(): MessageHandler<State, ParseAuthorisationBearerState, Error>;
+export declare function parseAuthorisationBearer<State extends {}, Error>(): MessageHandler<State, State & ParseAuthorisationBearerState, Error>;
 export declare type GetWebSocketState = {
     isWebSocket: boolean;
 };
-export declare function getIsWebSocket<State, Error>(): MessageHandler<State, GetWebSocketState, Error>;
+export declare function getIsWebSocket<State extends {}, Error>(): MessageHandler<State, State & GetWebSocketState, Error>;
 export declare type ParseJSONBodyError = {
     tag: 'InvalidSyntax';
 } | {
@@ -31,7 +31,7 @@ export declare type ParseJSONBodyOptions = {
     encoding?: string;
     parser?: (json: string) => unknown;
 };
-export declare function parseJSONBody<State, Error>({ sizeLimit, encoding, parser }?: ParseJSONBodyOptions): MessageHandler<State, ParseJSONBodyState, Error>;
+export declare function parseJSONBody<State extends {}, Error>({ sizeLimit, encoding, parser }?: ParseJSONBodyOptions): MessageHandler<State, State & ParseJSONBodyState, Error>;
 export declare type ParseMultipartBodyError = {
     tag: 'FilesTooLarge';
 } | {
@@ -56,7 +56,7 @@ export declare type ParseMultipartBodyOptions = {
     fileSizeLimit?: number;
     fieldsSizeLimit?: number;
 };
-export declare function parseMultipartBody<State, Error>({ encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartBodyOptions): MessageHandler<State, ParseMultipartBodyState, Error>;
+export declare function parseMultipartBody<State extends {}, Error>({ encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartBodyOptions): MessageHandler<State, State & ParseMultipartBodyState, Error>;
 export declare type OpenedFile = {
     stream: ReadStream;
     contentLength: number;
@@ -71,4 +71,4 @@ export declare type SendFileState = {
         file: Result<OpenedFile, FileSystemError | Omit<FileSystemError, 'exception'>>;
     };
 };
-export declare function sendFile<State extends SendFileExistingState, Error>(): MessageHandler<State, SendFileState, Error>;
+export declare function sendFile<State extends SendFileExistingState, Error>(): MessageHandler<State, State & SendFileState, Error>;
