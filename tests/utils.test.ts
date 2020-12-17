@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'http'
 import Keygrip from 'keygrip'
 
-import { Cookie, ParsedContentType } from '../src/types'
+import type { Cookie, ParsedContentType } from '../src/types'
 import {
     cookieHeader,
     signedCookieHeader,
@@ -12,7 +12,6 @@ import {
     getMessageURL,
     parseMessageContentLength,
     parseMessageContentType,
-    // parseURLPath,
     parseURLHash,
     parseURLQueryString,
     parseSignedMessageCookie,

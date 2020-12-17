@@ -131,8 +131,8 @@ function parseURLPath(url) {
     var segments = [];
     var matches = url.matchAll(/(?<=\/)[^\/\?#]+/g);
     try {
-        for (var matches_2 = tslib_1.__values(matches), matches_2_1 = matches_2.next(); !matches_2_1.done; matches_2_1 = matches_2.next()) {
-            var _b = tslib_1.__read(matches_2_1.value, 1), segment = _b[0];
+        for (var _b = tslib_1.__values(matches), _c = _b.next(); !_c.done; _c = _b.next()) {
+            var _d = tslib_1.__read(_c.value, 1), segment = _d[0];
             segment = decodeURIComponent(segment);
             segments.push(segment);
         }
@@ -140,7 +140,7 @@ function parseURLPath(url) {
     catch (e_2_1) { e_2 = { error: e_2_1 }; }
     finally {
         try {
-            if (matches_2_1 && !matches_2_1.done && (_a = matches_2.return)) _a.call(matches_2);
+            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
         }
         finally { if (e_2) throw e_2.error; }
     }

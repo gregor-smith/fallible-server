@@ -58,19 +58,19 @@ export type Response = {
 }
 
 
-export type Cleanup<Errors> = () => Awaitable<Result<void, Errors>>
+export type Cleanup = (response?: Readonly<Response>) => Awaitable<void>
 
 
-export type MessageHandlerResult<State, Errors> = {
+export type MessageHandlerResult<State> = {
     state: State
-    cleanup?: Cleanup<Errors>
+    cleanup?: Cleanup
 }
 
 
 export type MessageHandler<ExistingState, NewState, Errors> = (
     message: IncomingMessage,
     state: Readonly<ExistingState>
-) => Awaitable<Result<MessageHandlerResult<NewState, Errors>, Errors>>
+) => Awaitable<Result<MessageHandlerResult<NewState>, Errors>>
 
 
 export type ErrorHandler<Errors> = (

@@ -171,7 +171,7 @@ export function parseURLHash(url: string): string {
 export function parseURLPath(url: string): string[] {
     const segments: string[] = []
     const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g)
-    for (let [ segment ] of matches) {
+    for (let [ segment ] of matches as Iterable<[ string ]>) {
         segment = decodeURIComponent(segment)
         segments.push(segment)
     }
@@ -196,7 +196,7 @@ export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'
         }
     }
 
-    const [ , type, , characterSet ] = match
+    const [ , type, , characterSet ] = match as [ unknown, string, unknown, string ]
     return {
         type: type.toLowerCase(),
         characterSet: characterSet.toLowerCase()

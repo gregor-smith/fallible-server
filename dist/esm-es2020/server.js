@@ -1,5 +1,5 @@
 import { Server as WebSocketServer } from 'ws';
-import { asyncFallible, ok, error } from 'fallible';
+import { asyncFallible, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './utils';
 export function defaultErrorHandler() {
     return {
@@ -27,7 +27,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             const result = await asyncFallible(async (propagate) => {
                 const { state, cleanup } = propagate(await messageHandler(req));
                 if (cleanup !== undefined) {
-                    propagate(await cleanup());
+                    await cleanup(state);
                 }
                 return ok(state);
             });
@@ -126,30 +126,21 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
         }
     };
 }
-async function composeCleanups(cleanups, composeErrors) {
-    const errors = [];
-    for (let index = cleanups.length - 1; index >= 0; index--) {
-        const result = await cleanups[index]();
-        if (!result.ok) {
-            errors.push(result.value);
+function composedCleanups(cleanups) {
+    return async (response) => {
+        for (let index = cleanups.length - 1; index >= 0; index--) {
+            await cleanups[index](response);
         }
-    }
-    if (errors.length !== 0) {
-        const composed = await composeErrors(errors);
-        return error(composed);
-    }
-    return ok();
+    };
 }
-export function composeMessageHandlers(handlers, composeCleanupErrors) {
+export function composeMessageHandlers(handlers) {
     return async (message, state) => {
         const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(message, state);
             if (!result.ok) {
-                return asyncFallible(async (propagate) => {
-                    propagate(await composeCleanups(cleanups, composeCleanupErrors));
-                    return result;
-                });
+                await composedCleanups(cleanups)();
+                return result;
             }
             state = result.value.state;
             if (result.value.cleanup !== undefined) {
@@ -160,7 +151,7 @@ export function composeMessageHandlers(handlers, composeCleanupErrors) {
             state,
             cleanup: cleanups.length === 0
                 ? undefined
-                : () => composeCleanups(cleanups, composeCleanupErrors)
+                : composedCleanups(cleanups)
         });
     };
 }

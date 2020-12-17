@@ -32,10 +32,10 @@ export declare type Response = {
     status?: number;
     body?: string | Buffer | Readable | WebsocketResponse;
 };
-export declare type Cleanup<Errors> = () => Awaitable<Result<void, Errors>>;
-export declare type MessageHandlerResult<State, Errors> = {
+export declare type Cleanup = (response?: Readonly<Response>) => Awaitable<void>;
+export declare type MessageHandlerResult<State> = {
     state: State;
-    cleanup?: Cleanup<Errors>;
+    cleanup?: Cleanup;
 };
-export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<NewState, Errors>, Errors>>;
+export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<NewState>, Errors>>;
 export declare type ErrorHandler<Errors> = (error: Readonly<Errors>) => Awaitable<Response>;

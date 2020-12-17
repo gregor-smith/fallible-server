@@ -59,20 +59,19 @@ function createRequestListener(_a) {
                 case 0:
                     _d.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                            var _a, state, cleanup, _b, _c;
-                            return tslib_1.__generator(this, function (_d) {
-                                switch (_d.label) {
+                            var _a, state, cleanup, _b;
+                            return tslib_1.__generator(this, function (_c) {
+                                switch (_c.label) {
                                     case 0:
                                         _b = propagate;
                                         return [4 /*yield*/, messageHandler(req)];
                                     case 1:
-                                        _a = _b.apply(void 0, [_d.sent()]), state = _a.state, cleanup = _a.cleanup;
+                                        _a = _b.apply(void 0, [_c.sent()]), state = _a.state, cleanup = _a.cleanup;
                                         if (!(cleanup !== undefined)) return [3 /*break*/, 3];
-                                        _c = propagate;
-                                        return [4 /*yield*/, cleanup()];
+                                        return [4 /*yield*/, cleanup(state)];
                                     case 2:
-                                        _c.apply(void 0, [_d.sent()]);
-                                        _d.label = 3;
+                                        _c.sent();
+                                        _c.label = 3;
                                     case 3: return [2 /*return*/, fallible_1.ok(state)];
                                 }
                             });
@@ -173,7 +172,7 @@ function createRequestListener(_a) {
                             switch (_a.label) {
                                 case 0:
                                     _loop_1 = function () {
-                                        var result, error_1;
+                                        var result, error;
                                         return tslib_1.__generator(this, function (_a) {
                                             switch (_a.label) {
                                                 case 0: return [4 /*yield*/, generator.next()];
@@ -189,9 +188,9 @@ function createRequestListener(_a) {
                                                             return socket_1.send(result.value, resolve);
                                                         })];
                                                 case 2:
-                                                    error_1 = _a.sent();
-                                                    if (!(error_1 !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
-                                                    return [4 /*yield*/, onSendError_1(result.value, error_1)];
+                                                    error = _a.sent();
+                                                    if (!(error !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
+                                                    return [4 /*yield*/, onSendError_1(result.value, error)];
                                                 case 3:
                                                     _a.sent();
                                                     _a.label = 4;
@@ -239,111 +238,79 @@ function createRequestListener(_a) {
     }); };
 }
 exports.createRequestListener = createRequestListener;
-function composeCleanups(cleanups, composeErrors) {
-    return tslib_1.__awaiter(this, void 0, void 0, function () {
-        var errors, index, result, composed;
+function composedCleanups(cleanups) {
+    var _this = this;
+    return function (response) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+        var index;
         return tslib_1.__generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    errors = [];
                     index = cleanups.length - 1;
                     _a.label = 1;
                 case 1:
                     if (!(index >= 0)) return [3 /*break*/, 4];
-                    return [4 /*yield*/, cleanups[index]()];
+                    return [4 /*yield*/, cleanups[index](response)];
                 case 2:
-                    result = _a.sent();
-                    if (!result.ok) {
-                        errors.push(result.value);
-                    }
+                    _a.sent();
                     _a.label = 3;
                 case 3:
                     index--;
                     return [3 /*break*/, 1];
-                case 4:
-                    if (!(errors.length !== 0)) return [3 /*break*/, 6];
-                    return [4 /*yield*/, composeErrors(errors)];
-                case 5:
-                    composed = _a.sent();
-                    return [2 /*return*/, fallible_1.error(composed)];
-                case 6: return [2 /*return*/, fallible_1.ok()];
+                case 4: return [2 /*return*/];
             }
         });
-    });
+    }); };
 }
-function composeMessageHandlers(handlers, composeCleanupErrors) {
+function composeMessageHandlers(handlers) {
     var _this = this;
     return function (message, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var cleanups, _loop_2, handlers_1, handlers_1_1, handler, state_2, e_5_1;
+        var cleanups, handlers_1, handlers_1_1, handler, result, e_5_1;
         var e_5, _a;
-        var _this = this;
         return tslib_1.__generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
                     cleanups = [];
-                    _loop_2 = function (handler) {
-                        var result;
-                        return tslib_1.__generator(this, function (_a) {
-                            switch (_a.label) {
-                                case 0: return [4 /*yield*/, handler(message, state)];
-                                case 1:
-                                    result = _a.sent();
-                                    if (!result.ok) {
-                                        return [2 /*return*/, { value: fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-                                                    var _a;
-                                                    return tslib_1.__generator(this, function (_b) {
-                                                        switch (_b.label) {
-                                                            case 0:
-                                                                _a = propagate;
-                                                                return [4 /*yield*/, composeCleanups(cleanups, composeCleanupErrors)];
-                                                            case 1:
-                                                                _a.apply(void 0, [_b.sent()]);
-                                                                return [2 /*return*/, result];
-                                                        }
-                                                    });
-                                                }); }) }];
-                                    }
-                                    state = result.value.state;
-                                    if (result.value.cleanup !== undefined) {
-                                        cleanups.push(result.value.cleanup);
-                                    }
-                                    return [2 /*return*/];
-                            }
-                        });
-                    };
                     _b.label = 1;
                 case 1:
-                    _b.trys.push([1, 6, 7, 8]);
+                    _b.trys.push([1, 8, 9, 10]);
                     handlers_1 = tslib_1.__values(handlers), handlers_1_1 = handlers_1.next();
                     _b.label = 2;
                 case 2:
-                    if (!!handlers_1_1.done) return [3 /*break*/, 5];
+                    if (!!handlers_1_1.done) return [3 /*break*/, 7];
                     handler = handlers_1_1.value;
-                    return [5 /*yield**/, _loop_2(handler)];
+                    return [4 /*yield*/, handler(message, state)];
                 case 3:
-                    state_2 = _b.sent();
-                    if (typeof state_2 === "object")
-                        return [2 /*return*/, state_2.value];
-                    _b.label = 4;
+                    result = _b.sent();
+                    if (!!result.ok) return [3 /*break*/, 5];
+                    return [4 /*yield*/, composedCleanups(cleanups)()];
                 case 4:
+                    _b.sent();
+                    return [2 /*return*/, result];
+                case 5:
+                    state = result.value.state;
+                    if (result.value.cleanup !== undefined) {
+                        cleanups.push(result.value.cleanup);
+                    }
+                    _b.label = 6;
+                case 6:
                     handlers_1_1 = handlers_1.next();
                     return [3 /*break*/, 2];
-                case 5: return [3 /*break*/, 8];
-                case 6:
+                case 7: return [3 /*break*/, 10];
+                case 8:
                     e_5_1 = _b.sent();
                     e_5 = { error: e_5_1 };
-                    return [3 /*break*/, 8];
-                case 7:
+                    return [3 /*break*/, 10];
+                case 9:
                     try {
                         if (handlers_1_1 && !handlers_1_1.done && (_a = handlers_1.return)) _a.call(handlers_1);
                     }
                     finally { if (e_5) throw e_5.error; }
                     return [7 /*endfinally*/];
-                case 8: return [2 /*return*/, fallible_1.ok({
+                case 10: return [2 /*return*/, fallible_1.ok({
                         state: state,
                         cleanup: cleanups.length === 0
                             ? undefined
-                            : function () { return composeCleanups(cleanups, composeCleanupErrors); }
+                            : composedCleanups(cleanups)
                     })];
             }
         });

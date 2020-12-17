@@ -1,7 +1,7 @@
 import type { RequestListener, ServerResponse  } from 'http'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
-import { Result, Awaitable, asyncFallible, ok, error } from 'fallible'
+import { asyncFallible, ok } from 'fallible'
 
 import type {
     Cleanup,
@@ -55,7 +55,7 @@ export function createRequestListener<Errors>({
             const result = await asyncFallible<Response, Errors>(async propagate => {
                 const { state, cleanup } = propagate(await messageHandler(req))
                 if (cleanup !== undefined) {
-                    propagate(await cleanup())
+                    await cleanup(state)
                 }
                 return ok(state)
             })
@@ -172,22 +172,12 @@ export function createRequestListener<Errors>({
 }
 
 
-async function composeCleanups<Errors>(
-    cleanups: ReadonlyArray<Cleanup<Errors>>,
-    composeErrors: (errors: ReadonlyArray<Readonly<Errors>>) => Awaitable<Errors>
-): Promise<Result<void, Errors>> {
-    const errors: Errors[] = []
-    for (let index = cleanups.length - 1; index >= 0; index--) {
-        const result = await cleanups[index]()
-        if (!result.ok) {
-            errors.push(result.value)
+function composedCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup {
+    return async response => {
+        for (let index = cleanups.length - 1; index >= 0; index--) {
+            await cleanups[index]!(response)
         }
     }
-    if (errors.length !== 0) {
-        const composed = await composeErrors(errors)
-        return error(composed)
-    }
-    return ok()
 }
 
 
@@ -199,10 +189,7 @@ export function composeMessageHandlers<
 >(
     handlers: [
         MessageHandler<State1, State2, Error1>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1>>
-    ) => Awaitable<Error1>
+    ]
 ): MessageHandler<
     State1,
     State2,
@@ -216,10 +203,7 @@ export function composeMessageHandlers<
     handlers: [
         MessageHandler<State1, State2, Error1>,
         MessageHandler<State2, State3, Error1 | Error2>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2>>
-    ) => Awaitable<Error1 | Error2>
+    ]
 ): MessageHandler<
     State1,
     State3,
@@ -235,10 +219,7 @@ export function composeMessageHandlers<
         MessageHandler<State1, State2, Error1>,
         MessageHandler<State2, State3, Error1 | Error2>,
         MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3>>
-    ) => Awaitable<Error1 | Error2 | Error3>
+    ]
 ): MessageHandler<
     State1,
     State4,
@@ -256,10 +237,7 @@ export function composeMessageHandlers<
         MessageHandler<State2, State3, Error1 | Error2>,
         MessageHandler<State3, State4, Error1 | Error2 | Error3>,
         MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4>
+    ]
 ): MessageHandler<
     State1,
     State5,
@@ -279,10 +257,7 @@ export function composeMessageHandlers<
         MessageHandler<State3, State4, Error1 | Error2 | Error3>,
         MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
         MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5>
+    ]
 ): MessageHandler<
     State1,
     State6,
@@ -304,10 +279,7 @@ export function composeMessageHandlers<
         MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
         MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
         MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6>
+    ]
 ): MessageHandler<
     State1,
     State7,
@@ -331,10 +303,7 @@ export function composeMessageHandlers<
         MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
         MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
         MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>
+    ]
 ): MessageHandler<
     State1,
     State8,
@@ -360,10 +329,7 @@ export function composeMessageHandlers<
         MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
         MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
         MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>
+    ]
 ): MessageHandler<
     State1,
     State9,
@@ -391,10 +357,7 @@ export function composeMessageHandlers<
         MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
         MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
         MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>
+    ]
 ): MessageHandler<
     State1,
     State10,
@@ -424,29 +387,23 @@ export function composeMessageHandlers<
         MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
         MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>,
         MessageHandler<State10, State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>,
-    ],
-    composeCleanupErrors: (
-        errors: ReadonlyArray<Readonly<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>
-    ) => Awaitable<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>
+    ]
 ): MessageHandler<
     State1,
     State11,
     Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10
 >
 export function composeMessageHandlers<State, Error>(
-    handlers: ReadonlyArray<MessageHandler<any, any, Error>>,
-    composeCleanupErrors: (errors: ReadonlyArray<Readonly<Error>>) => Awaitable<Error>
+    handlers: ReadonlyArray<MessageHandler<any, any, Error>>
 ): MessageHandler<State, any, Error> {
     return async (message, state) => {
-        const cleanups: Cleanup<Error>[] = []
+        const cleanups: Cleanup[] = []
 
         for (const handler of handlers) {
             const result = await handler(message, state)
             if (!result.ok) {
-                return asyncFallible(async propagate => {
-                    propagate(await composeCleanups(cleanups, composeCleanupErrors))
-                    return result
-                })
+                await composedCleanups(cleanups)()
+                return result
             }
             state = result.value.state
             if (result.value.cleanup !== undefined) {
@@ -458,7 +415,7 @@ export function composeMessageHandlers<State, Error>(
             state,
             cleanup: cleanups.length === 0
                 ? undefined
-                : () => composeCleanups(cleanups, composeCleanupErrors)
+                : composedCleanups(cleanups)
         })
     }
 }
