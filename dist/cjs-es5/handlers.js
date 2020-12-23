@@ -39,8 +39,7 @@ exports.getIsWebSocket = getIsWebSocket;
 function hasTypeField(value) {
     return typeof value === 'object'
         && value !== null
-        && 'type' in value
-        && typeof value.type === 'string';
+        && 'type' in value;
 }
 function parseJSONBody(_a) {
     var _this = this;

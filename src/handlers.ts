@@ -74,11 +74,10 @@ export type ParseJSONBodyState = {
 }
 
 
-function hasTypeField(value: unknown): value is { type: string } {
+function hasTypeField(value: unknown): value is { type: unknown } {
     return typeof value === 'object'
         && value !== null
         && 'type' in value
-        && typeof (value as { type: unknown }).type === 'string'
 }
 
 

@@ -1,7 +1,7 @@
 import type { RequestListener, ServerResponse  } from 'http'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
-import { asyncFallible, ok } from 'fallible'
+import { ok } from 'fallible'
 
 import type {
     Cleanup,
@@ -52,18 +52,18 @@ export function createRequestListener<Errors>({
     return async (req, res) => {
         let response: Readonly<Response>
         try {
-            const result = await asyncFallible<Response, Errors>(async propagate => {
-                const { state, cleanup } = propagate(await messageHandler(req))
-                if (cleanup !== undefined) {
-                    await cleanup(state)
+            const result = await messageHandler(req)
+            if (result.ok) {
+                response = result.value.state
+                if (result.value.cleanup !== undefined) {
+                    await result.value.cleanup()
                 }
-                return ok(state)
-            })
-            response = result.ok
-                ? result.value
-                : await errorHandler(result.value)
+            }
+            else {
+                response = await errorHandler(result.value)
+            }
         }
-        catch (exception: unknown) {
+        catch {
             response = defaultErrorHandler()
         }
 
@@ -185,29 +185,17 @@ function composedCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup {
 // see generateTypings.py in the root of the project
 export function composeMessageHandlers<
     State1, Error1,
-    State2
->(
-    handlers: [
-        MessageHandler<State1, State2, Error1>,
-    ]
-): MessageHandler<
-    State1,
-    State2,
-    Error1
->
-export function composeMessageHandlers<
-    State1, Error1,
     State2, Error2,
     State3
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
     ]
 ): MessageHandler<
     State1,
     State3,
-    Error1 | Error2
+    Exclude<Error1 | Error2, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -216,14 +204,14 @@ export function composeMessageHandlers<
     State4
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
     ]
 ): MessageHandler<
     State1,
     State4,
-    Error1 | Error2 | Error3
+    Exclude<Error1 | Error2 | Error3, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -233,15 +221,15 @@ export function composeMessageHandlers<
     State5
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
     ]
 ): MessageHandler<
     State1,
     State5,
-    Error1 | Error2 | Error3 | Error4
+    Exclude<Error1 | Error2 | Error3 | Error4, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -252,16 +240,16 @@ export function composeMessageHandlers<
     State6
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
     ]
 ): MessageHandler<
     State1,
     State6,
-    Error1 | Error2 | Error3 | Error4 | Error5
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -273,17 +261,17 @@ export function composeMessageHandlers<
     State7
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-        MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
     ]
 ): MessageHandler<
     State1,
     State7,
-    Error1 | Error2 | Error3 | Error4 | Error5 | Error6
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -296,18 +284,18 @@ export function composeMessageHandlers<
     State8
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-        MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
-        MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
+        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
     ]
 ): MessageHandler<
     State1,
     State8,
-    Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -321,19 +309,19 @@ export function composeMessageHandlers<
     State9
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-        MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
-        MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
-        MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
+        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
+        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
     ]
 ): MessageHandler<
     State1,
     State9,
-    Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -348,20 +336,20 @@ export function composeMessageHandlers<
     State10
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-        MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
-        MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
-        MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
-        MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
+        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
+        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
+        MessageHandler<State9, State10, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>>,
     ]
 ): MessageHandler<
     State1,
     State10,
-    Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>
 >
 export function composeMessageHandlers<
     State1, Error1,
@@ -377,21 +365,21 @@ export function composeMessageHandlers<
     State11
 >(
     handlers: [
-        MessageHandler<State1, State2, Error1>,
-        MessageHandler<State2, State3, Error1 | Error2>,
-        MessageHandler<State3, State4, Error1 | Error2 | Error3>,
-        MessageHandler<State4, State5, Error1 | Error2 | Error3 | Error4>,
-        MessageHandler<State5, State6, Error1 | Error2 | Error3 | Error4 | Error5>,
-        MessageHandler<State6, State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>,
-        MessageHandler<State7, State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>,
-        MessageHandler<State8, State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>,
-        MessageHandler<State9, State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>,
-        MessageHandler<State10, State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>,
+        MessageHandler<State1, State2, Exclude<Error1, never>>,
+        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
+        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
+        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
+        MessageHandler<State9, State10, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>>,
+        MessageHandler<State10, State11, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>>,
     ]
 ): MessageHandler<
     State1,
     State11,
-    Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10
+    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>
 >
 export function composeMessageHandlers<State, Error>(
     handlers: ReadonlyArray<MessageHandler<any, any, Error>>

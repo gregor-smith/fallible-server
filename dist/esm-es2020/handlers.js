@@ -37,8 +37,7 @@ export function getIsWebSocket() {
 function hasTypeField(value) {
     return typeof value === 'object'
         && value !== null
-        && 'type' in value
-        && typeof value.type === 'string';
+        && 'type' in value;
 }
 export function parseJSONBody({ sizeLimit, encoding = 'utf-8', parser = secureJSONParse } = {}) {
     return async (message, state) => {

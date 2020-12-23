@@ -1,5 +1,5 @@
 import { Server as WebSocketServer } from 'ws';
-import { asyncFallible, ok } from 'fallible';
+import { ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './utils';
 export function defaultErrorHandler() {
     return {
@@ -24,18 +24,18 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
     return async (req, res) => {
         let response;
         try {
-            const result = await asyncFallible(async (propagate) => {
-                const { state, cleanup } = propagate(await messageHandler(req));
-                if (cleanup !== undefined) {
-                    await cleanup(state);
+            const result = await messageHandler(req);
+            if (result.ok) {
+                response = result.value.state;
+                if (result.value.cleanup !== undefined) {
+                    await result.value.cleanup();
                 }
-                return ok(state);
-            });
-            response = result.ok
-                ? result.value
-                : await errorHandler(result.value);
+            }
+            else {
+                response = await errorHandler(result.value);
+            }
         }
-        catch (exception) {
+        catch {
             response = defaultErrorHandler();
         }
         res.statusCode = response.status ?? 200;
