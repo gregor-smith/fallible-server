@@ -7,58 +7,6 @@ import { parse as secureJSONParse } from 'secure-json-parse'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 
 import type { MessageHandler } from './types'
-import { getMessageHeader } from './utils'
-
-
-export type ParseAuthorisationBearerError =
-    | 'HeaderMissing'
-    | 'HeaderInvalid'
-
-
-export type ParseAuthorisationBearerState = {
-    authorisationToken: Result<string, ParseAuthorisationBearerError>
-}
-
-
-export function parseAuthorisationBearer<State extends {}, Error>(): MessageHandler<State, State & ParseAuthorisationBearerState, Error> {
-    return (message, state) => {
-        let authorisationToken: ParseAuthorisationBearerState['authorisationToken']
-        const header = getMessageHeader(message, 'Authorization')
-        if (header === undefined) {
-            authorisationToken = error('HeaderMissing')
-        }
-        else {
-            const token = header.match(/^Bearer (.+)/)
-                ?.[1]
-                ?.trim()
-            authorisationToken = token === undefined || token.length === 0
-                ? error('HeaderInvalid')
-                : ok(token)
-        }
-        return ok({
-            state: {
-                ...state,
-                authorisationToken
-            }
-        })
-    }
-}
-
-
-export type GetWebSocketState = {
-    isWebSocket: boolean
-}
-
-
-export function getIsWebSocket<State extends {}, Error>(): MessageHandler<State, State & GetWebSocketState, Error> {
-    return (message, state) =>
-        ok({
-            state: {
-                ...state,
-                isWebSocket: getMessageHeader(message, 'upgrade') === 'websocket'
-            }
-        })
-}
 
 
 export type ParseJSONBodyError =

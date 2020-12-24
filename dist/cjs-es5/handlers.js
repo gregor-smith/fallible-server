@@ -1,41 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendFile = exports.parseMultipartBody = exports.parseJSONBody = exports.getIsWebSocket = exports.parseAuthorisationBearer = void 0;
+exports.sendFile = exports.parseMultipartBody = exports.parseJSONBody = void 0;
 var tslib_1 = require("tslib");
 var fallible_1 = require("fallible");
 var formidable_1 = require("formidable");
 var raw_body_1 = tslib_1.__importDefault(require("raw-body"));
 var secure_json_parse_1 = require("secure-json-parse");
 var fallible_fs_1 = require("fallible-fs");
-var utils_1 = require("./utils");
-function parseAuthorisationBearer() {
-    return function (message, state) {
-        var _a, _b;
-        var authorisationToken;
-        var header = utils_1.getMessageHeader(message, 'Authorization');
-        if (header === undefined) {
-            authorisationToken = fallible_1.error('HeaderMissing');
-        }
-        else {
-            var token = (_b = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim();
-            authorisationToken = token === undefined || token.length === 0
-                ? fallible_1.error('HeaderInvalid')
-                : fallible_1.ok(token);
-        }
-        return fallible_1.ok({
-            state: tslib_1.__assign(tslib_1.__assign({}, state), { authorisationToken: authorisationToken })
-        });
-    };
-}
-exports.parseAuthorisationBearer = parseAuthorisationBearer;
-function getIsWebSocket() {
-    return function (message, state) {
-        return fallible_1.ok({
-            state: tslib_1.__assign(tslib_1.__assign({}, state), { isWebSocket: utils_1.getMessageHeader(message, 'upgrade') === 'websocket' })
-        });
-    };
-}
-exports.getIsWebSocket = getIsWebSocket;
 function hasTypeField(value) {
     return typeof value === 'object'
         && value !== null

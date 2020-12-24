@@ -1,4 +1,6 @@
 import type { IncomingHttpHeaders } from 'http'
+
+import { ok, error } from 'fallible'
 import Keygrip from 'keygrip'
 
 import type { Cookie, ParsedContentType } from '../src/types'
@@ -18,7 +20,10 @@ import {
     parseURLPath,
     parseCookieHeader,
     parseContentTypeHeader,
-    parseContentLengthHeader
+    parseContentLengthHeader,
+    parseAuthorizationHeaderBearer,
+    parseMessageAuthorizationHeaderBearer,
+    messageIsWebSocketRequest
 } from '../src/utils'
 
 
@@ -515,5 +520,100 @@ describe('parseMessageContentLength', () => {
             headers: { 'content-length': header }
         })
         expect(result).toBe(Number(header))
+    })
+})
+
+
+describe('parseAuthorizationHeaderBearer', () => {
+    test.each([
+        '',
+        ' ',
+        'test',
+        'Bearer',
+        'Bearer ',
+        'Bearer  ',
+        '  Bearer',
+        '  Bearer ',
+        '  Bearer  ',
+        'bearer',
+        'bearer ',
+        'bearer  ',
+        '  bearer',
+        '  bearer ',
+        '  bearer  ',
+        'bearer test'
+    ])('returns undefined when header invalid', header => {
+        const result = parseAuthorizationHeaderBearer(header)
+        expect(result).toBeUndefined()
+    })
+
+    test.each([
+        'Bearer test',
+        'Bearer  test '
+    ])('returns trimmed header', header => {
+        const result = parseAuthorizationHeaderBearer(header)
+        expect(result).toBe('test')
+    })
+})
+
+
+describe('parseMessageAuthorizationHeaderBearer', () => {
+    test('returns missing when header missing', () => {
+        const result = parseMessageAuthorizationHeaderBearer({ headers: {} })
+        expect(result).toEqual(error('Missing'))
+    })
+
+    test.each([
+        '',
+        ' ',
+        'test',
+        'Bearer',
+        'Bearer ',
+        'Bearer  ',
+        '  Bearer',
+        '  Bearer ',
+        '  Bearer  ',
+        'bearer',
+        'bearer ',
+        'bearer  ',
+        '  bearer',
+        '  bearer ',
+        '  bearer  ',
+        'bearer test'
+    ])('returns invalid when header invalid', header => {
+        const result = parseMessageAuthorizationHeaderBearer({
+            headers: { authorization: header }
+        })
+        expect(result).toEqual(error('Invalid'))
+    })
+
+    test.each([
+        'Bearer test',
+        'Bearer  test '
+    ])('returns trimmed header', header => {
+        const result = parseMessageAuthorizationHeaderBearer({
+            headers: { authorization: header }
+        })
+        expect(result).toEqual(ok('test'))
+    })
+})
+
+
+describe('messageIsWebSocketRequest', () => {
+    test('returns true when upgrade header is websocket', () => {
+        const result = messageIsWebSocketRequest({
+            headers: { upgrade: 'websocket' }
+        })
+        expect(result).toBe(true)
+    })
+
+    test.each([
+        'test',
+        undefined
+    ])('returns false when upgrade header missing or non-websocket', header => {
+        const result = messageIsWebSocketRequest({
+            headers: { upgrade: header }
+        })
+        expect(result).toBe(false)
     })
 })

@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
+import { error, ok, Result } from 'fallible'
 
 import type { Cookie, Method, ParsedContentType } from './types'
 
@@ -236,4 +237,39 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
         return
     }
     return parseContentLengthHeader(header)
+}
+
+
+export function parseAuthorizationHeaderBearer(header: string): string | undefined {
+    const token = header.match(/^Bearer (.+)/)
+        ?.[1]
+        ?.trim()
+    if (token === undefined || token.length === 0) {
+        return
+    }
+    return token
+}
+
+
+export type ParseMessageAuthorisationBearerError =
+    | 'Missing'
+    | 'Invalid'
+
+
+export function parseMessageAuthorizationHeaderBearer(
+    message: Pick<IncomingMessage, 'headers'>
+): Result<string, ParseMessageAuthorisationBearerError> {
+    const header = getMessageHeader(message, 'authorization')
+    if (header === undefined) {
+        return error('Missing')
+    }
+    const token = parseAuthorizationHeaderBearer(header)
+    return token === undefined
+        ? error('Invalid')
+        : ok(token)
+}
+
+
+export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
+    return getMessageHeader(message, 'upgrade') === 'websocket'
 }

@@ -4,15 +4,6 @@ import { Result } from 'fallible';
 import { FormidableFile } from 'formidable';
 import { FileSystemError } from 'fallible-fs';
 import type { MessageHandler } from './types';
-export declare type ParseAuthorisationBearerError = 'HeaderMissing' | 'HeaderInvalid';
-export declare type ParseAuthorisationBearerState = {
-    authorisationToken: Result<string, ParseAuthorisationBearerError>;
-};
-export declare function parseAuthorisationBearer<State extends {}, Error>(): MessageHandler<State, State & ParseAuthorisationBearerState, Error>;
-export declare type GetWebSocketState = {
-    isWebSocket: boolean;
-};
-export declare function getIsWebSocket<State extends {}, Error>(): MessageHandler<State, State & GetWebSocketState, Error>;
 export declare type ParseJSONBodyError = {
     tag: 'InvalidSyntax';
 } | {

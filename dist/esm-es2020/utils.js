@@ -1,3 +1,4 @@
+import { error, ok } from 'fallible';
 export const CloseWebSocket = Symbol();
 export function parseCookieHeader(header, name) {
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -156,5 +157,26 @@ export function parseMessageContentLength(message) {
         return;
     }
     return parseContentLengthHeader(header);
+}
+export function parseAuthorizationHeaderBearer(header) {
+    const token = header.match(/^Bearer (.+)/)?.[1]
+        ?.trim();
+    if (token === undefined || token.length === 0) {
+        return;
+    }
+    return token;
+}
+export function parseMessageAuthorizationHeaderBearer(message) {
+    const header = getMessageHeader(message, 'authorization');
+    if (header === undefined) {
+        return error('Missing');
+    }
+    const token = parseAuthorizationHeaderBearer(header);
+    return token === undefined
+        ? error('Invalid')
+        : ok(token);
+}
+export function messageIsWebSocketRequest(message) {
+    return getMessageHeader(message, 'upgrade') === 'websocket';
 }
 //# sourceMappingURL=utils.js.map

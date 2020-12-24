@@ -3,37 +3,6 @@ import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { createReadStream, stat } from 'fallible-fs';
-import { getMessageHeader } from './utils';
-export function parseAuthorisationBearer() {
-    return (message, state) => {
-        let authorisationToken;
-        const header = getMessageHeader(message, 'Authorization');
-        if (header === undefined) {
-            authorisationToken = error('HeaderMissing');
-        }
-        else {
-            const token = header.match(/^Bearer (.+)/)?.[1]
-                ?.trim();
-            authorisationToken = token === undefined || token.length === 0
-                ? error('HeaderInvalid')
-                : ok(token);
-        }
-        return ok({
-            state: {
-                ...state,
-                authorisationToken
-            }
-        });
-    };
-}
-export function getIsWebSocket() {
-    return (message, state) => ok({
-        state: {
-            ...state,
-            isWebSocket: getMessageHeader(message, 'upgrade') === 'websocket'
-        }
-    });
-}
 function hasTypeField(value) {
     return typeof value === 'object'
         && value !== null

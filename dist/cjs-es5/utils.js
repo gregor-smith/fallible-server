@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
+exports.messageIsWebSocketRequest = exports.parseMessageAuthorizationHeaderBearer = exports.parseAuthorizationHeaderBearer = exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
 var tslib_1 = require("tslib");
+var fallible_1 = require("fallible");
 exports.CloseWebSocket = Symbol();
 function parseCookieHeader(header, name) {
     var _a;
@@ -201,4 +202,28 @@ function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 exports.parseMessageContentLength = parseMessageContentLength;
+function parseAuthorizationHeaderBearer(header) {
+    var _a, _b;
+    var token = (_b = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim();
+    if (token === undefined || token.length === 0) {
+        return;
+    }
+    return token;
+}
+exports.parseAuthorizationHeaderBearer = parseAuthorizationHeaderBearer;
+function parseMessageAuthorizationHeaderBearer(message) {
+    var header = getMessageHeader(message, 'authorization');
+    if (header === undefined) {
+        return fallible_1.error('Missing');
+    }
+    var token = parseAuthorizationHeaderBearer(header);
+    return token === undefined
+        ? fallible_1.error('Invalid')
+        : fallible_1.ok(token);
+}
+exports.parseMessageAuthorizationHeaderBearer = parseMessageAuthorizationHeaderBearer;
+function messageIsWebSocketRequest(message) {
+    return getMessageHeader(message, 'upgrade') === 'websocket';
+}
+exports.messageIsWebSocketRequest = messageIsWebSocketRequest;
 //# sourceMappingURL=utils.js.map

@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
+import { Result } from 'fallible';
 import type { Cookie, Method, ParsedContentType } from './types';
 export declare const CloseWebSocket: unique symbol;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
@@ -27,3 +28,7 @@ export declare function parseContentTypeHeader(header: string): ParsedContentTyp
 export declare function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined;
 export declare function parseContentLengthHeader(header: string): number | undefined;
 export declare function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined;
+export declare function parseAuthorizationHeaderBearer(header: string): string | undefined;
+export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
+export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;
+export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean;
