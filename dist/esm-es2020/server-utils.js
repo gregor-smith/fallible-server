@@ -10,7 +10,7 @@ function hasTypeField(value) {
         && value !== null
         && 'type' in value;
 }
-export async function parseJSONStream(stream, { sizeLimit, encoding = 'utf-8', parser = parseJSONString } = {}) {
+export async function parseJSONStream(stream, { sizeLimit, encoding = 'utf-8' } = {}) {
     let body;
     try {
         body = await rawBody(stream, {
@@ -23,7 +23,7 @@ export async function parseJSONStream(stream, { sizeLimit, encoding = 'utf-8', p
             ? { tag: 'TooLarge' }
             : { tag: 'OtherError', error: exception });
     }
-    const result = parser(body);
+    const result = parseJSONString(body);
     return result.ok
         ? result
         : error({ tag: 'InvalidSyntax' });
@@ -57,10 +57,7 @@ export function parseMultipartStream(stream, { encoding = 'utf-8', saveDirectory
         });
     });
 }
-export function openFile(directory, filename) {
-    const path = filename === undefined
-        ? directory
-        : joinPath(directory, sanitiseFilename(filename));
+export function openFile(path, encoding) {
     return asyncFallible(async (propagate) => {
         const stats = propagate(await stat(path));
         // this check is necessary because createReadStream fires the ready
@@ -69,11 +66,12 @@ export function openFile(directory, filename) {
         if (stats.isDirectory()) {
             return error({ tag: 'IsADirectory' });
         }
-        const stream = propagate(await createReadStream(path));
-        return ok({
-            stream,
-            length: stats.size
-        });
+        const stream = propagate(await createReadStream(path, encoding));
+        return ok({ stream, stats });
     });
+}
+export function openSanitisedFile(directory, filename, encoding) {
+    const path = joinPath(directory, sanitiseFilename(filename));
+    return openFile(path, encoding);
 }
 //# sourceMappingURL=server-utils.js.map

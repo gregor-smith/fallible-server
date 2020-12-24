@@ -1,5 +1,5 @@
 import { join as joinPath } from 'path'
-import type { ReadStream } from 'fs'
+import type { ReadStream, Stats } from 'fs'
 import type { Readable } from 'stream'
 
 import { asyncFallible, error, ok, Result } from 'fallible'
@@ -19,8 +19,7 @@ export type ParseJSONStreamError =
 
 export type ParseJSONStreamArguments = {
     sizeLimit?: number
-    encoding?: string
-    parser?: (json: string) => Result<unknown, void>
+    encoding?: BufferEncoding
 }
 
 
@@ -35,8 +34,7 @@ export async function parseJSONStream(
     stream: Readable,
     {
         sizeLimit,
-        encoding = 'utf-8',
-        parser = parseJSONString
+        encoding = 'utf-8'
     }: ParseJSONStreamArguments = {}
 ): Promise<Result<unknown, ParseJSONStreamError>> {
     let body: string
@@ -54,7 +52,7 @@ export async function parseJSONStream(
         )
     }
 
-    const result = parser(body)
+    const result = parseJSONString(body)
     return result.ok
         ? result
         : error({ tag: 'InvalidSyntax' })
@@ -74,7 +72,7 @@ export type ParsedMultipartStream = {
 
 
 export type ParseMultipartStreamArguments = {
-    encoding?: string
+    encoding?: BufferEncoding
     saveDirectory?: string
     keepFileExtensions?: boolean
     fileSizeLimit?: number
@@ -132,7 +130,7 @@ export function parseMultipartStream(
 
 export type OpenedFile = {
     stream: ReadStream
-    length: number
+    stats: Stats
 }
 
 
@@ -144,13 +142,7 @@ export type OpenFileError =
     }
 
 
-export function openFile(path: string): Promise<Result<OpenedFile, OpenFileError>>
-export function openFile(directory: string, filename: string): Promise<Result<OpenedFile, OpenFileError>>
-export function openFile(directory: string, filename?: string) {
-    const path = filename === undefined
-        ? directory
-        : joinPath(directory, sanitiseFilename(filename))
-
+export function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>> {
     return asyncFallible<OpenedFile, OpenFileError>(async propagate => {
         const stats = propagate(await stat(path))
         // this check is necessary because createReadStream fires the ready
@@ -159,11 +151,18 @@ export function openFile(directory: string, filename?: string) {
         if (stats.isDirectory()) {
             return error({ tag: 'IsADirectory' })
         }
-        const stream = propagate(await createReadStream(path))
+        const stream = propagate(await createReadStream(path, encoding))
 
-        return ok({
-            stream,
-            length: stats.size
-        })
+        return ok({ stream, stats })
     })
+}
+
+
+export function openSanitisedFile(
+    directory: string,
+    filename: string,
+    encoding?: BufferEncoding
+): Promise<Result<OpenedFile, OpenFileError>> {
+    const path = joinPath(directory, sanitiseFilename(filename))
+    return openFile(path, encoding)
 }

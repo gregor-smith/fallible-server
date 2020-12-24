@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.openFile = exports.parseMultipartStream = exports.parseJSONStream = void 0;
+exports.openSanitisedFile = exports.openFile = exports.parseMultipartStream = exports.parseJSONStream = void 0;
 var tslib_1 = require("tslib");
 var path_1 = require("path");
 var fallible_1 = require("fallible");
@@ -15,27 +15,27 @@ function hasTypeField(value) {
         && 'type' in value;
 }
 function parseJSONStream(stream, _a) {
-    var _b = _a === void 0 ? {} : _a, sizeLimit = _b.sizeLimit, _c = _b.encoding, encoding = _c === void 0 ? 'utf-8' : _c, _d = _b.parser, parser = _d === void 0 ? general_utils_1.parseJSONString : _d;
+    var _b = _a === void 0 ? {} : _a, sizeLimit = _b.sizeLimit, _c = _b.encoding, encoding = _c === void 0 ? 'utf-8' : _c;
     return tslib_1.__awaiter(this, void 0, void 0, function () {
         var body, exception_1, result;
-        return tslib_1.__generator(this, function (_e) {
-            switch (_e.label) {
+        return tslib_1.__generator(this, function (_d) {
+            switch (_d.label) {
                 case 0:
-                    _e.trys.push([0, 2, , 3]);
+                    _d.trys.push([0, 2, , 3]);
                     return [4 /*yield*/, raw_body_1.default(stream, {
                             encoding: encoding,
                             limit: sizeLimit
                         })];
                 case 1:
-                    body = _e.sent();
+                    body = _d.sent();
                     return [3 /*break*/, 3];
                 case 2:
-                    exception_1 = _e.sent();
+                    exception_1 = _d.sent();
                     return [2 /*return*/, fallible_1.error(hasTypeField(exception_1) && exception_1.type === 'entity.too.large'
                             ? { tag: 'TooLarge' }
                             : { tag: 'OtherError', error: exception_1 })];
                 case 3:
-                    result = parser(body);
+                    result = general_utils_1.parseJSONString(body);
                     return [2 /*return*/, result.ok
                             ? result
                             : fallible_1.error({ tag: 'InvalidSyntax' })];
@@ -75,11 +75,8 @@ function parseMultipartStream(stream, _a) {
     });
 }
 exports.parseMultipartStream = parseMultipartStream;
-function openFile(directory, filename) {
+function openFile(path, encoding) {
     var _this = this;
-    var path = filename === undefined
-        ? directory
-        : path_1.join(directory, sanitize_filename_1.default(filename));
     return fallible_1.asyncFallible(function (propagate) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
         var stats, _a, stream, _b;
         return tslib_1.__generator(this, function (_c) {
@@ -96,16 +93,18 @@ function openFile(directory, filename) {
                         return [2 /*return*/, fallible_1.error({ tag: 'IsADirectory' })];
                     }
                     _b = propagate;
-                    return [4 /*yield*/, fallible_fs_1.createReadStream(path)];
+                    return [4 /*yield*/, fallible_fs_1.createReadStream(path, encoding)];
                 case 2:
                     stream = _b.apply(void 0, [_c.sent()]);
-                    return [2 /*return*/, fallible_1.ok({
-                            stream: stream,
-                            length: stats.size
-                        })];
+                    return [2 /*return*/, fallible_1.ok({ stream: stream, stats: stats })];
             }
         });
     }); });
 }
 exports.openFile = openFile;
+function openSanitisedFile(directory, filename, encoding) {
+    var path = path_1.join(directory, sanitize_filename_1.default(filename));
+    return openFile(path, encoding);
+}
+exports.openSanitisedFile = openSanitisedFile;
 //# sourceMappingURL=server-utils.js.map

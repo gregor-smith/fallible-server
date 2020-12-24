@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import type { ReadStream } from 'fs';
+import type { ReadStream, Stats } from 'fs';
 import type { Readable } from 'stream';
 import { Result } from 'fallible';
 import { FormidableFile } from 'formidable';
@@ -14,10 +14,9 @@ export declare type ParseJSONStreamError = {
 };
 export declare type ParseJSONStreamArguments = {
     sizeLimit?: number;
-    encoding?: string;
-    parser?: (json: string) => Result<unknown, void>;
+    encoding?: BufferEncoding;
 };
-export declare function parseJSONStream(stream: Readable, { sizeLimit, encoding, parser }?: ParseJSONStreamArguments): Promise<Result<unknown, ParseJSONStreamError>>;
+export declare function parseJSONStream(stream: Readable, { sizeLimit, encoding }?: ParseJSONStreamArguments): Promise<Result<unknown, ParseJSONStreamError>>;
 export declare type ParseMultipartStreamError = {
     tag: 'FilesTooLarge';
 } | {
@@ -31,7 +30,7 @@ export declare type ParsedMultipartStream = {
     files: Record<string, FormidableFile>;
 };
 export declare type ParseMultipartStreamArguments = {
-    encoding?: string;
+    encoding?: BufferEncoding;
     saveDirectory?: string;
     keepFileExtensions?: boolean;
     fileSizeLimit?: number;
@@ -40,11 +39,11 @@ export declare type ParseMultipartStreamArguments = {
 export declare function parseMultipartStream(stream: Readable, { encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartStreamArguments): Promise<Result<ParsedMultipartStream, ParseMultipartStreamError>>;
 export declare type OpenedFile = {
     stream: ReadStream;
-    length: number;
+    stats: Stats;
 };
 export declare type OpenFileError = FileSystemError | {
     tag: 'IsADirectory';
     exception?: FileSystemError;
 };
-export declare function openFile(path: string): Promise<Result<OpenedFile, OpenFileError>>;
-export declare function openFile(directory: string, filename: string): Promise<Result<OpenedFile, OpenFileError>>;
+export declare function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;
+export declare function openSanitisedFile(directory: string, filename: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;
