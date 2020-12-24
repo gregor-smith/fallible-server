@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
 import type { Cookie, Method, ParsedContentType } from './types';
 export declare const CloseWebSocket: unique symbol;
+export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export declare function parseSignedMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string, keys: Pick<Keygrip, 'verify'>): string | undefined;
 export declare function cookieHeader(name: string, { value, path, maxAge, domain, sameSite, secure, httpOnly }: Readonly<Cookie>): string;
@@ -22,5 +23,7 @@ export declare function parseURLQueryString(url: string, { skipEmptyValues, skip
 }): Partial<Record<string, string>>;
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string[];
+export declare function parseContentTypeHeader(header: string): ParsedContentType | undefined;
 export declare function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined;
+export declare function parseContentLengthHeader(header: string): number | undefined;
 export declare function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined;

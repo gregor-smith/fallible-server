@@ -15,8 +15,31 @@ import {
     parseURLHash,
     parseURLQueryString,
     parseSignedMessageCookie,
-    parseURLPath
+    parseURLPath,
+    parseCookieHeader,
+    parseContentTypeHeader,
+    parseContentLengthHeader
 } from '../src/utils'
+
+
+describe('parseCookieHeader', () => {
+    test.each([
+        'test',
+        'test=value',
+        'test=value; test2=value2; test3=value3'
+    ])('returns undefined when name missing from header', header => {
+        const result = parseCookieHeader(header, 'test4')
+        expect(result).toBeUndefined()
+    })
+
+    test.each([
+        [ 'test=value; test2=value2; test3=value3', 'value2' ],
+        [ 'test2=value', 'value' ]
+    ])('returns cookie value', (header, value) => {
+        const result = parseCookieHeader(header, 'test2')
+        expect(result).toBe(value)
+    })
+})
 
 
 describe('parseMessageCookie', () => {
@@ -275,49 +298,6 @@ describe('getMessageURL', () => {
 })
 
 
-// function getTestURLs() {
-//     type ParsedURL = {
-//         path: string[]
-//         query: Partial<Record<string, string>>
-//         hash: string
-//     }
-
-//     type PathTuple = [ string, ParsedURL['path'] ]
-//     const paths: PathTuple[]  = [
-//         [ '/', [] ],
-//         [ '//', [] ],
-//         [ '/aaa/bbb/ccc', [ 'aaa', 'bbb', 'ccc' ] ],
-//         [ '/aaa/bbb/ccc/', [ 'aaa', 'bbb', 'ccc' ] ],
-//         [ '/aaa//bbb///ccc', [ 'aaa', 'bbb', 'ccc' ] ],
-//         [ '/aaa//bbb///ccc//', [ 'aaa', 'bbb', 'ccc' ] ],
-//         [ '/aaa%20bbb', [ 'aaa bbb' ] ],
-//         [ '/%20aaa%20/', [ ' aaa ' ] ],
-//     ]
-
-//     type QueryTuple = [ string, ParsedURL['query'] ]
-//     const queries: QueryTuple[] = [
-//         [ '', {} ],
-//         [ '?ddd=eee', { ddd: 'eee' } ],
-//         [ '?ddd=eee&fff=ggg', { ddd: 'eee', fff: 'ggg' } ],
-//         [ '?ddd&eee=fff', { eee: 'fff' } ],
-//         [ '?ddd=eee&ddd=fff', { ddd: 'fff' } ],
-//         [ '?ddd[]=eee&ddd[]=fff', { 'ddd[]': 'fff' } ],
-//         [ '?ddd%20eee=fff%20ggg', { 'ddd eee': 'fff ggg' } ],
-//         [ '?%20ddd%20=%20fff%20', { ' ddd ': ' fff ' } ],
-//     ]
-
-//     type HashTuple = [ string, ParsedURL['hash'] ]
-//     const hashes: HashTuple[] = [
-//         [ '', '' ],
-//         [ '#hhh', 'hhh' ],
-//         [ '#hhh%20iii', 'hhh iii' ],
-//         [ '#%20hhh%20', ' hhh ' ]
-//     ]
-
-//     return cartesian(paths, queries, hashes) as [ PathTuple, QueryTuple, HashTuple ][]
-// }
-
-
 describe('parseURLQueryString', () => {
     const shared: [ string, Record<string, string> ][] = [
         [ '/', {} ],
@@ -441,6 +421,33 @@ describe('parseURLPath', () => {
 })
 
 
+describe('parseContentTypeHeader', () => {
+    test.each([
+        '',
+        ' '
+    ])('returns undefined when header empty', header => {
+        const result = parseContentTypeHeader(header)
+        expect(result).toBeUndefined()
+    })
+
+    test.each<[ string, ParsedContentType ]>([
+        [ 'test/type', { type: 'test/type' } ],
+        [ 'Test/Type', { type: 'test/type' } ],
+        [ ' test/type ', { type: 'test/type' } ],
+        [ 'test/type;charset=utf-8', { type: 'test/type', characterSet: 'utf-8' } ],
+        [ 'Test/Type;Charset=UTF-8', { type: 'test/type', characterSet: 'utf-8' } ],
+        [ ' test/type ; charset = utf-8 ', { type: 'test/type', characterSet: 'utf-8' } ],
+        [ 'test/type;charset="utf-8"', { type: 'test/type', characterSet: 'utf-8' } ],
+        [ 'Test/Type;Charset="UTF-8"', { type: 'test/type', characterSet: 'utf-8' } ],
+        [ ' test/type ; charset = "utf-8" ', { type: 'test/type', characterSet: 'utf-8' } ],
+    ])('returns parsed mheader', (header, contentType) => {
+        const result = parseContentTypeHeader(header)
+        expect(result?.type).toBe(contentType.type)
+        expect(result?.characterSet).toBe(contentType.characterSet)
+    })
+})
+
+
 describe('parseMessageContentType', () => {
     test('returns undefined when no content-type header', () => {
         const result = parseMessageContentType({ headers: {} })
@@ -473,6 +480,19 @@ describe('parseMessageContentType', () => {
         })
         expect(result?.type).toBe(contentType.type)
         expect(result?.characterSet).toBe(contentType.characterSet)
+    })
+})
+
+
+describe('parseContentLengthHeader', () => {
+    test.each([ '', ' ', 'test', '1.1' ])('returns undefined when header not an integer', header => {
+        const result = parseContentLengthHeader(header)
+        expect(result).toBeUndefined()
+    })
+
+    test.each([ '1', ' 2 ' ])('returns parsed integer', header => {
+        const result = parseContentLengthHeader(header)
+        expect(result).toBe(Number(header))
     })
 })
 

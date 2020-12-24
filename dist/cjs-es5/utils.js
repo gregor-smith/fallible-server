@@ -1,11 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseMessageContentLength = exports.parseMessageContentType = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.CloseWebSocket = void 0;
+exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
 var tslib_1 = require("tslib");
 exports.CloseWebSocket = Symbol();
+function parseCookieHeader(header, name) {
+    var _a;
+    return (_a = header.match("(?:^|; )" + name + "=([^;]*)")) === null || _a === void 0 ? void 0 : _a[1];
+}
+exports.parseCookieHeader = parseCookieHeader;
 function parseMessageCookie(message, name) {
-    var _a, _b;
-    return (_b = (_a = message.headers.cookie) === null || _a === void 0 ? void 0 : _a.match("(?:^|; )" + name + "=([^;]*)")) === null || _b === void 0 ? void 0 : _b[1];
+    if (message.headers.cookie === undefined) {
+        return;
+    }
+    return parseCookieHeader(message.headers.cookie, name);
 }
 exports.parseMessageCookie = parseMessageCookie;
 function joinCookieValue(name, value) {
@@ -147,19 +154,15 @@ function parseURLPath(url) {
     return segments;
 }
 exports.parseURLPath = parseURLPath;
-function parseMessageContentType(message) {
-    var contentType = message.headers['content-type'];
-    if (contentType === undefined) {
-        return;
-    }
-    var match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
+function parseContentTypeHeader(header) {
+    var match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
     if (match === null) {
-        contentType = contentType.trim();
-        if (contentType.length === 0) {
+        header = header.trim();
+        if (header.length === 0) {
             return;
         }
         return {
-            type: contentType.toLowerCase()
+            type: header.toLowerCase()
         };
     }
     var _a = tslib_1.__read(match, 4), type = _a[1], characterSet = _a[3];
@@ -168,12 +171,19 @@ function parseMessageContentType(message) {
         characterSet: characterSet.toLowerCase()
     };
 }
+exports.parseContentTypeHeader = parseContentTypeHeader;
+function parseMessageContentType(message) {
+    var contentType = message.headers['content-type'];
+    if (contentType === undefined) {
+        return;
+    }
+    return parseContentTypeHeader(contentType);
+}
 exports.parseMessageContentType = parseMessageContentType;
-function parseMessageContentLength(message) {
-    var header = message.headers['content-length'];
+function parseContentLengthHeader(header) {
     // today i learnt passing an all whitespace string to Number gives you 0
     // to what end?
-    if (!(header === null || header === void 0 ? void 0 : header.match(/[0-9]/))) {
+    if (!header.match(/[0-9]/)) {
         return;
     }
     var length = Number(header);
@@ -181,6 +191,14 @@ function parseMessageContentLength(message) {
         return;
     }
     return length;
+}
+exports.parseContentLengthHeader = parseContentLengthHeader;
+function parseMessageContentLength(message) {
+    var header = message.headers['content-length'];
+    if (header === undefined) {
+        return;
+    }
+    return parseContentLengthHeader(header);
 }
 exports.parseMessageContentLength = parseMessageContentLength;
 //# sourceMappingURL=utils.js.map

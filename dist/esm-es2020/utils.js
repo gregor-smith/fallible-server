@@ -1,6 +1,12 @@
 export const CloseWebSocket = Symbol();
+export function parseCookieHeader(header, name) {
+    return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
+}
 export function parseMessageCookie(message, name) {
-    return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1];
+    if (message.headers.cookie === undefined) {
+        return;
+    }
+    return parseCookieHeader(message.headers.cookie, name);
 }
 function joinCookieValue(name, value) {
     return `${name}=${value}`;
@@ -108,19 +114,15 @@ export function parseURLPath(url) {
     }
     return segments;
 }
-export function parseMessageContentType(message) {
-    let contentType = message.headers['content-type'];
-    if (contentType === undefined) {
-        return;
-    }
-    const match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
+export function parseContentTypeHeader(header) {
+    const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
     if (match === null) {
-        contentType = contentType.trim();
-        if (contentType.length === 0) {
+        header = header.trim();
+        if (header.length === 0) {
             return;
         }
         return {
-            type: contentType.toLowerCase()
+            type: header.toLowerCase()
         };
     }
     const [, type, , characterSet] = match;
@@ -129,11 +131,17 @@ export function parseMessageContentType(message) {
         characterSet: characterSet.toLowerCase()
     };
 }
-export function parseMessageContentLength(message) {
-    const header = message.headers['content-length'];
+export function parseMessageContentType(message) {
+    let contentType = message.headers['content-type'];
+    if (contentType === undefined) {
+        return;
+    }
+    return parseContentTypeHeader(contentType);
+}
+export function parseContentLengthHeader(header) {
     // today i learnt passing an all whitespace string to Number gives you 0
     // to what end?
-    if (!header?.match(/[0-9]/)) {
+    if (!header.match(/[0-9]/)) {
         return;
     }
     const length = Number(header);
@@ -141,5 +149,12 @@ export function parseMessageContentLength(message) {
         return;
     }
     return length;
+}
+export function parseMessageContentLength(message) {
+    const header = message.headers['content-length'];
+    if (header === undefined) {
+        return;
+    }
+    return parseContentLengthHeader(header);
 }
 //# sourceMappingURL=utils.js.map

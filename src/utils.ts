@@ -8,11 +8,19 @@ import type { Cookie, Method, ParsedContentType } from './types'
 export const CloseWebSocket = Symbol()
 
 
+export function parseCookieHeader(header: string, name: string): string | undefined {
+    return header.match(`(?:^|; )${name}=([^;]*)`)?.[1]
+}
+
+
 export function parseMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string
 ): string | undefined {
-    return message.headers.cookie?.match(`(?:^|; )${name}=([^;]*)`)?.[1]
+    if (message.headers.cookie === undefined) {
+        return
+    }
+    return parseCookieHeader(message.headers.cookie, name)
 }
 
 
@@ -179,20 +187,15 @@ export function parseURLPath(url: string): string[] {
 }
 
 
-export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined {
-    let contentType = message.headers['content-type']
-    if (contentType === undefined) {
-        return
-    }
-
-    const match = contentType.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i)
+export function parseContentTypeHeader(header: string): ParsedContentType | undefined {
+    const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i)
     if (match === null) {
-        contentType = contentType.trim()
-        if (contentType.length === 0) {
+        header = header.trim()
+        if (header.length === 0) {
             return
         }
         return {
-            type: contentType.toLowerCase()
+            type: header.toLowerCase()
         }
     }
 
@@ -204,11 +207,19 @@ export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'
 }
 
 
-export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined {
-    const header = message.headers['content-length']
+export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined {
+    let contentType = message.headers['content-type']
+    if (contentType === undefined) {
+        return
+    }
+    return parseContentTypeHeader(contentType)
+}
+
+
+export function parseContentLengthHeader(header: string): number | undefined {
     // today i learnt passing an all whitespace string to Number gives you 0
     // to what end?
-    if (!header?.match(/[0-9]/)) {
+    if (!header.match(/[0-9]/)) {
         return
     }
     const length = Number(header)
@@ -216,4 +227,13 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
         return
     }
     return length
+}
+
+
+export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined {
+    const header = message.headers['content-length']
+    if (header === undefined) {
+        return
+    }
+    return parseContentLengthHeader(header)
 }
