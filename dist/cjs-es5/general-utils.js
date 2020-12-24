@@ -1,8 +1,12 @@
 "use strict";
+// this file should have no runtime dependencies on node-only modules as some
+// utils within are useful on both server and client. exclusively server-only
+// utils should go in server-utils
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.messageIsWebSocketRequest = exports.parseMessageAuthorizationHeaderBearer = exports.parseAuthorizationHeaderBearer = exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
+exports.parseJSONString = exports.messageIsWebSocketRequest = exports.parseMessageAuthorizationHeaderBearer = exports.parseAuthorizationHeaderBearer = exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
 var tslib_1 = require("tslib");
 var fallible_1 = require("fallible");
+var secure_json_parse_1 = require("secure-json-parse");
 exports.CloseWebSocket = Symbol();
 function parseCookieHeader(header, name) {
     var _a;
@@ -226,4 +230,15 @@ function messageIsWebSocketRequest(message) {
     return getMessageHeader(message, 'upgrade') === 'websocket';
 }
 exports.messageIsWebSocketRequest = messageIsWebSocketRequest;
-//# sourceMappingURL=utils.js.map
+function parseJSONString(string) {
+    var json;
+    try {
+        json = secure_json_parse_1.parse(string);
+    }
+    catch (_a) {
+        return fallible_1.error();
+    }
+    return fallible_1.ok(json);
+}
+exports.parseJSONString = parseJSONString;
+//# sourceMappingURL=general-utils.js.map

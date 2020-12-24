@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'http'
 import type { Data } from 'ws'
 import type { Awaitable, Result } from 'fallible'
 
-import type { CloseWebSocket } from './utils'
+import type { CloseWebSocket } from './general-utils'
 
 
 export type ParsedContentType = {

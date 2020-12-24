@@ -1,6 +1,6 @@
 import { Server as WebSocketServer } from 'ws';
 import { ok } from 'fallible';
-import { CloseWebSocket, cookieHeader } from './utils';
+import { CloseWebSocket, cookieHeader } from './general-utils';
 export function defaultErrorHandler() {
     return {
         status: 500,

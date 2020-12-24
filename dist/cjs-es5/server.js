@@ -4,7 +4,7 @@ exports.composeMessageHandlers = exports.createRequestListener = exports.default
 var tslib_1 = require("tslib");
 var ws_1 = require("ws");
 var fallible_1 = require("fallible");
-var utils_1 = require("./utils");
+var general_utils_1 = require("./general-utils");
 function defaultErrorHandler() {
     return {
         status: 500,
@@ -19,7 +19,7 @@ function setHeaders(response, _a) {
         try {
             for (var _d = tslib_1.__values(Object.entries(cookies)), _e = _d.next(); !_e.done; _e = _d.next()) {
                 var _f = tslib_1.__read(_e.value, 2), name = _f[0], cookie = _f[1];
-                var header = utils_1.cookieHeader(name, cookie);
+                var header = general_utils_1.cookieHeader(name, cookie);
                 response.setHeader('Set-Cookie', header);
             }
         }
@@ -118,7 +118,7 @@ function createRequestListener(_a) {
                             try {
                                 for (var _c = tslib_1.__values(Object.entries(response.cookies)), _d = _c.next(); !_d.done; _d = _c.next()) {
                                     var _e = tslib_1.__read(_d.value, 2), name = _e[0], cookie = _e[1];
-                                    var header = utils_1.cookieHeader(name, cookie);
+                                    var header = general_utils_1.cookieHeader(name, cookie);
                                     headers.push("Set-Cookie: " + header);
                                 }
                             }
@@ -165,7 +165,7 @@ function createRequestListener(_a) {
                                                 case 1:
                                                     result = _a.sent();
                                                     if (result.done) {
-                                                        if (result.value === utils_1.CloseWebSocket) {
+                                                        if (result.value === general_utils_1.CloseWebSocket) {
                                                             socket_1.close(1000);
                                                         }
                                                         return [2 /*return*/, { value: void 0 }];

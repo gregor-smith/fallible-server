@@ -1,7 +1,12 @@
+// this file should have no runtime dependencies on node-only modules as some
+// utils within are useful on both server and client. exclusively server-only
+// utils should go in server-utils
+
 import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
+import { parse as secureJSONParse } from 'secure-json-parse'
 
 import type { Cookie, Method, ParsedContentType } from './types'
 
@@ -272,4 +277,16 @@ export function parseMessageAuthorizationHeaderBearer(
 
 export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
     return getMessageHeader(message, 'upgrade') === 'websocket'
+}
+
+
+export function parseJSONString<T = unknown>(string: string): Result<T, void> {
+    let json: T
+    try {
+        json = secureJSONParse(string)
+    }
+    catch {
+        return error()
+    }
+    return ok(json)
 }

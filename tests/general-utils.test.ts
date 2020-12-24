@@ -24,7 +24,7 @@ import {
     parseAuthorizationHeaderBearer,
     parseMessageAuthorizationHeaderBearer,
     messageIsWebSocketRequest
-} from '../src/utils'
+} from '../src/general-utils'
 
 
 describe('parseCookieHeader', () => {

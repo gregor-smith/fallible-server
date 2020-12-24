@@ -32,3 +32,4 @@ export declare function parseAuthorizationHeaderBearer(header: string): string |
 export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
 export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;
 export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean;
+export declare function parseJSONString<T = unknown>(string: string): Result<T, void>;

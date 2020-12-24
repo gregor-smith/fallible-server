@@ -1,4 +1,8 @@
+// this file should have no runtime dependencies on node-only modules as some
+// utils within are useful on both server and client. exclusively server-only
+// utils should go in server-utils
 import { error, ok } from 'fallible';
+import { parse as secureJSONParse } from 'secure-json-parse';
 export const CloseWebSocket = Symbol();
 export function parseCookieHeader(header, name) {
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
@@ -179,4 +183,14 @@ export function parseMessageAuthorizationHeaderBearer(message) {
 export function messageIsWebSocketRequest(message) {
     return getMessageHeader(message, 'upgrade') === 'websocket';
 }
-//# sourceMappingURL=utils.js.map
+export function parseJSONString(string) {
+    let json;
+    try {
+        json = secureJSONParse(string);
+    }
+    catch {
+        return error();
+    }
+    return ok(json);
+}
+//# sourceMappingURL=general-utils.js.map

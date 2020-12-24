@@ -10,7 +10,7 @@ import type {
     Response,
     WebsocketResponse
 } from './types'
-import { CloseWebSocket, cookieHeader } from './utils'
+import { CloseWebSocket, cookieHeader } from './general-utils'
 
 
 export function defaultErrorHandler() {

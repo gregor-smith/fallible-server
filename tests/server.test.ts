@@ -17,7 +17,7 @@ import type {
     MessageHandler,
     MessageHandlerResult
 } from '../src/types'
-import { cookieHeader } from '../src/utils'
+import { cookieHeader } from '../src/general-utils'
 
 
 describe('defaultErrorHandler', () => {
