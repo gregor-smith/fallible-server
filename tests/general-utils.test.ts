@@ -23,7 +23,8 @@ import {
     parseContentLengthHeader,
     parseAuthorizationHeaderBearer,
     parseMessageAuthorizationHeaderBearer,
-    messageIsWebSocketRequest
+    messageIsWebSocketRequest,
+    parseJSONString
 } from '../src/general-utils'
 
 
@@ -615,5 +616,22 @@ describe('messageIsWebSocketRequest', () => {
             headers: { upgrade: header }
         })
         expect(result).toBe(false)
+    })
+})
+
+
+describe('parseJSONString', () => {
+    test.each([
+        '{',
+        '{"constructor": {}}',
+        '{"__proto__": {}}',
+    ])('returns error for invalid or malicious json string', json => {
+        const result = parseJSONString(json)
+        expect(result).toEqual(error())
+    })
+
+    test('parses json string', () => {
+        const result = parseJSONString('{"test":true}')
+        expect(result).toEqual(ok({ test: true }))
     })
 })
