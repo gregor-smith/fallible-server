@@ -1,9 +1,10 @@
-import type { RequestListener, ServerResponse  } from 'http'
+import type { ServerResponse } from 'http'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { ok } from 'fallible'
 
 import type {
+    AwaitableRequestListener,
     Cleanup,
     ErrorHandler,
     MessageHandler,
@@ -42,9 +43,6 @@ export type CreateRequestListenerArguments<Errors> = {
 }
 
 
-export type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Promise<ReturnType<RequestListener>>
-
-
 export function createRequestListener<Errors>({
     messageHandler,
     errorHandler = defaultErrorHandler
@@ -56,7 +54,7 @@ export function createRequestListener<Errors>({
             if (result.ok) {
                 response = result.value.state
                 if (result.value.cleanup !== undefined) {
-                    await result.value.cleanup()
+                    await result.value.cleanup(response)
                 }
             }
             else {

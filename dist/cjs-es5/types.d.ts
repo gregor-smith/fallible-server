@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import type { Readable } from 'stream';
-import type { IncomingMessage } from 'http';
+import type { IncomingMessage, RequestListener } from 'http';
 import type { Data } from 'ws';
 import type { Awaitable, Result } from 'fallible';
 import type { CloseWebSocket } from './general-utils';
@@ -18,6 +18,7 @@ export declare type Cookie = {
     httpOnly?: boolean;
     sameSite?: 'strict' | 'lax' | 'none';
 };
+export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Awaitable<ReturnType<RequestListener>>;
 export declare type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> = Generator<TYield, TReturn, TNext> | AsyncGenerator<TYield, TReturn, TNext>;
 export declare type WebsocketResponse = {
     onOpen?: () => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;

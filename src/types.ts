@@ -1,5 +1,5 @@
 import type { Readable } from 'stream'
-import type { IncomingMessage } from 'http'
+import type { IncomingMessage, RequestListener } from 'http'
 
 import type { Data } from 'ws'
 import type { Awaitable, Result } from 'fallible'
@@ -34,6 +34,10 @@ export type Cookie = {
     httpOnly?: boolean
     sameSite?: 'strict' | 'lax' | 'none'
 }
+
+
+export type AwaitableRequestListener = (..._: Parameters<RequestListener>) =>
+    Awaitable<ReturnType<RequestListener>>
 
 
 export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> =

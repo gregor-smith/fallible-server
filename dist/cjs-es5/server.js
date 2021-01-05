@@ -64,7 +64,7 @@ function createRequestListener(_a) {
                     if (!result.ok) return [3 /*break*/, 4];
                     response = result.value.state;
                     if (!(result.value.cleanup !== undefined)) return [3 /*break*/, 3];
-                    return [4 /*yield*/, result.value.cleanup()];
+                    return [4 /*yield*/, result.value.cleanup(response)];
                 case 2:
                     _d.sent();
                     _d.label = 3;

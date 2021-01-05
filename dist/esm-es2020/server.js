@@ -28,7 +28,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             if (result.ok) {
                 response = result.value.state;
                 if (result.value.cleanup !== undefined) {
-                    await result.value.cleanup();
+                    await result.value.cleanup(response);
                 }
             }
             else {
