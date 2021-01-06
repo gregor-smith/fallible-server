@@ -45,11 +45,14 @@ export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unkn
     | AsyncGenerator<TYield, TReturn, TNext>
 
 
+export type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
+
+
 export type WebsocketResponse = {
-    onOpen?: () => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
+    onOpen?: () => WebsocketGenerator
     onClose?: (code: number, reason: string) => Awaitable<void>
     onError?: (error: Error) => Awaitable<void>
-    onMessage: (message: Data) => AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
+    onMessage: (message: Data) => WebsocketGenerator
     onSendError?: (message: Data, error: Error) => Awaitable<void>
 }
 

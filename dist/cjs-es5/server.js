@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.composeMessageHandlers = exports.createRequestListener = exports.defaultErrorHandler = void 0;
+exports.fallthroughMessageHandler = exports.composeMessageHandlers = exports.createRequestListener = exports.defaultErrorHandler = void 0;
 var tslib_1 = require("tslib");
 var ws_1 = require("ws");
 var fallible_1 = require("fallible");
@@ -158,7 +158,7 @@ function createRequestListener(_a) {
                             switch (_a.label) {
                                 case 0:
                                     _loop_1 = function () {
-                                        var result, error;
+                                        var result, error_1;
                                         return tslib_1.__generator(this, function (_a) {
                                             switch (_a.label) {
                                                 case 0: return [4 /*yield*/, generator.next()];
@@ -174,9 +174,9 @@ function createRequestListener(_a) {
                                                             return socket_1.send(result.value, resolve);
                                                         })];
                                                 case 2:
-                                                    error = _a.sent();
-                                                    if (!(error !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
-                                                    return [4 /*yield*/, onSendError_1(result.value, error)];
+                                                    error_1 = _a.sent();
+                                                    if (!(error_1 !== undefined && onSendError_1 !== undefined)) return [3 /*break*/, 4];
+                                                    return [4 /*yield*/, onSendError_1(result.value, error_1)];
                                                 case 3:
                                                     _a.sent();
                                                     _a.label = 4;
@@ -303,4 +303,45 @@ function composeMessageHandlers(handlers) {
     }); };
 }
 exports.composeMessageHandlers = composeMessageHandlers;
+function fallthroughMessageHandler(handlers, isNext, noMatch) {
+    var _this = this;
+    return function (message, state) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+        var handlers_2, handlers_2_1, handler, result, e_6_1;
+        var e_6, _a;
+        return tslib_1.__generator(this, function (_b) {
+            switch (_b.label) {
+                case 0:
+                    _b.trys.push([0, 5, 6, 7]);
+                    handlers_2 = tslib_1.__values(handlers), handlers_2_1 = handlers_2.next();
+                    _b.label = 1;
+                case 1:
+                    if (!!handlers_2_1.done) return [3 /*break*/, 4];
+                    handler = handlers_2_1.value;
+                    return [4 /*yield*/, handler(message, state)];
+                case 2:
+                    result = _b.sent();
+                    if (result.ok || !isNext(result.value)) {
+                        return [2 /*return*/, result];
+                    }
+                    _b.label = 3;
+                case 3:
+                    handlers_2_1 = handlers_2.next();
+                    return [3 /*break*/, 1];
+                case 4: return [3 /*break*/, 7];
+                case 5:
+                    e_6_1 = _b.sent();
+                    e_6 = { error: e_6_1 };
+                    return [3 /*break*/, 7];
+                case 6:
+                    try {
+                        if (handlers_2_1 && !handlers_2_1.done && (_a = handlers_2.return)) _a.call(handlers_2);
+                    }
+                    finally { if (e_6) throw e_6.error; }
+                    return [7 /*endfinally*/];
+                case 7: return [2 /*return*/, fallible_1.error(noMatch())];
+            }
+        });
+    }); };
+}
+exports.fallthroughMessageHandler = fallthroughMessageHandler;
 //# sourceMappingURL=server.js.map

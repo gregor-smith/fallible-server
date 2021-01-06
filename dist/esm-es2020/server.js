@@ -1,5 +1,5 @@
 import { Server as WebSocketServer } from 'ws';
-import { ok } from 'fallible';
+import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils';
 export function defaultErrorHandler() {
     return {
@@ -153,6 +153,17 @@ export function composeMessageHandlers(handlers) {
                 ? undefined
                 : composedCleanups(cleanups)
         });
+    };
+}
+export function fallthroughMessageHandler(handlers, isNext, noMatch) {
+    return async (message, state) => {
+        for (const handler of handlers) {
+            const result = await handler(message, state);
+            if (result.ok || !isNext(result.value)) {
+                return result;
+            }
+        }
+        return error(noMatch());
     };
 }
 //# sourceMappingURL=server.js.map

@@ -1,13 +1,14 @@
 import type { ServerResponse } from 'http'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
-import { ok } from 'fallible'
+import { error, ok, Result } from 'fallible'
 
 import type {
     AwaitableRequestListener,
     Cleanup,
     ErrorHandler,
     MessageHandler,
+    MessageHandlerResult,
     Response,
     WebsocketResponse
 } from './types'
@@ -403,5 +404,22 @@ export function composeMessageHandlers<State, Error>(
                 ? undefined
                 : composedCleanups(cleanups)
         })
+    }
+}
+
+
+export function fallthroughMessageHandler<ExistingState, NewState, Error, Next>(
+    handlers: ReadonlyArray<MessageHandler<ExistingState, NewState, Error | Next>>,
+    isNext: (error: Readonly<Error | Next>) => error is Next,
+    noMatch: () => Error
+): MessageHandler<ExistingState, NewState, Error> {
+    return async (message, state) => {
+        for (const handler of handlers) {
+            const result = await handler(message, state)
+            if (result.ok || !isNext(result.value)) {
+                return result as Result<MessageHandlerResult<NewState>, Error>
+            }
+        }
+        return error(noMatch())
     }
 }
