@@ -29,16 +29,16 @@ function cookieSignatureName(name) {
 function parseSignedMessageCookie(message, name, keys) {
     var value = parseMessageCookie(message, name);
     if (value === undefined) {
-        return;
+        return fallible_1.error('ValueCookieMissing');
     }
     var signature = parseMessageCookie(message, cookieSignatureName(name));
     if (signature === undefined) {
-        return;
+        return fallible_1.error('SignatureCookieMissing');
     }
     if (!keys.verify(joinCookieValue(name, value), signature)) {
-        return;
+        return fallible_1.error('SignatureInvalid');
     }
-    return value;
+    return fallible_1.ok(value);
 }
 exports.parseSignedMessageCookie = parseSignedMessageCookie;
 function cookieHeader(name, _a) {

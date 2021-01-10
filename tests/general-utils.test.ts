@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders } from 'http'
 
-import { ok, error } from 'fallible'
+import { ok, error, Error, Ok } from 'fallible'
 import Keygrip from 'keygrip'
 
 import type { Cookie, ParsedContentType } from '../src/types'
@@ -24,7 +24,8 @@ import {
     parseAuthorizationHeaderBearer,
     parseMessageAuthorizationHeaderBearer,
     messageIsWebSocketRequest,
-    parseJSONString
+    parseJSONString,
+    ParseSignedMessageCookieError
 } from '../src/general-utils'
 
 
@@ -74,51 +75,58 @@ describe('parseMessageCookie', () => {
 
 
 describe('parseSignedMessageCookie', () => {
-    test('returns undefined when cookie header missing', () => {
+    test('returns ValueCookieMissing when cookie header missing', () => {
         const result = parseSignedMessageCookie(
             { headers: {} },
             'test',
             new Keygrip([ 'test key' ])
         )
-        expect(result).toBeUndefined()
-    })
-
-    test.each([
-        'test',
-        'test=value',
-        'test=value; test2=value2; test3=value3'
-    ])('returns undefined when signature name missing from cookie header', header => {
-        const result = parseSignedMessageCookie(
-            { headers: { cookie: header } },
-            'test',
-            new Keygrip([ 'test key' ])
+        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
+            error('ValueCookieMissing')
         )
-        expect(result).toBeUndefined()
     })
 
     test.each([
         'test',
         'test=value',
         'test=value; test2=value2; test3=value3'
-    ])('returns undefined when name missing from cookie header', header => {
+    ])('returns ValueCookieMissing when name missing from cookie header', header => {
         const result = parseSignedMessageCookie(
             { headers: { cookie: header } },
             'test4',
             new Keygrip([ 'test key' ])
         )
-        expect(result).toBeUndefined()
+        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
+            error('ValueCookieMissing')
+        )
+    })
+
+    test.each([
+        'test=value',
+        'test=value; test2=value2; test3=value3'
+    ])('returns SignatureCookieMissing when signature name missing from cookie header', header => {
+        const result = parseSignedMessageCookie(
+            { headers: { cookie: header } },
+            'test',
+            new Keygrip([ 'test key' ])
+        )
+        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
+            error('SignatureCookieMissing')
+        )
     })
 
     test.each([
         [ 'test=value; test.sig=ItukCx0lb6-dY71Zps-69Gkz5XE', 'test' ],
         [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2' ]
-    ])('returns undefined when signature does not match', (header, name) => {
+    ])('returns SignatureInvalid when signature does not match', (header, name) => {
         const result = parseSignedMessageCookie(
             { headers: { cookie: header } },
             name,
             new Keygrip([ 'invalid key' ])
         )
-        expect(result).toBeUndefined()
+        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
+            error('SignatureInvalid')
+        )
     })
 
     test.each([
@@ -130,7 +138,7 @@ describe('parseSignedMessageCookie', () => {
             name,
             new Keygrip([ key ])
         )
-        expect(result).toBe(value)
+        expect(result).toEqual<Ok<string>>(ok(value))
     })
 })
 

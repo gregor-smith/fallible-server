@@ -80,4 +80,4 @@ export declare function composeMessageHandlers<State1, Error1, State2, Error2, S
     MessageHandler<State9, State10, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>>,
     MessageHandler<State10, State11, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>>
 ]): MessageHandler<State1, State11, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>>;
-export declare function fallthroughMessageHandler<ExistingState, NewState, Error, Next>(handlers: ReadonlyArray<MessageHandler<ExistingState, NewState, Error | Next>>, isNext: (error: Error | Next) => error is Next, noMatch: () => Error): MessageHandler<ExistingState, NewState, Error>;
+export declare function fallthroughMessageHandler<ExistingState, NewState, Error, Next>(handlers: ReadonlyArray<MessageHandler<ExistingState, NewState, Error | Next>>, isNext: (error: Readonly<Error | Next>) => error is Next, noMatch: () => Error): MessageHandler<ExistingState, NewState, Error>;

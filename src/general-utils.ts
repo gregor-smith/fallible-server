@@ -40,23 +40,29 @@ function cookieSignatureName(name: string): string {
 }
 
 
+export type ParseSignedMessageCookieError =
+    | 'ValueCookieMissing'
+    | 'SignatureCookieMissing'
+    | 'SignatureInvalid'
+
+
 export function parseSignedMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string,
     keys: Pick<Keygrip, 'verify'>
-): string | undefined {
+): Result<string, ParseSignedMessageCookieError> {
     const value = parseMessageCookie(message, name)
     if (value === undefined) {
-        return
+        return error('ValueCookieMissing')
     }
     const signature = parseMessageCookie(message, cookieSignatureName(name))
     if (signature === undefined) {
-        return
+        return error('SignatureCookieMissing')
     }
     if (!keys.verify(joinCookieValue(name, value), signature)) {
-        return
+        return error('SignatureInvalid')
     }
-    return value
+    return ok(value)
 }
 
 
