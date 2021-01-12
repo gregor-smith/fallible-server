@@ -5,7 +5,8 @@ import { error, ok } from 'fallible';
 import { parse as secureJSONParse } from 'secure-json-parse';
 export const CloseWebSocket = Symbol();
 export function parseCookieHeader(header, name) {
-    return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
+    var _a;
+    return (_a = header.match(`(?:^|; )${name}=([^;]*)`)) === null || _a === void 0 ? void 0 : _a[1];
 }
 export function parseMessageCookie(message, name) {
     if (message.headers.cookie === undefined) {
@@ -68,19 +69,19 @@ export function getMessageHeader(message, name) {
         : header;
 }
 export function getMessageIP(message, useXForwardedFor = false) {
+    var _a, _b, _c, _d, _e;
     if (!useXForwardedFor) {
-        return message.connection.remoteAddress ?? message.socket.remoteAddress;
+        return (_a = message.connection.remoteAddress) !== null && _a !== void 0 ? _a : message.socket.remoteAddress;
     }
-    return getMessageHeader(message, 'x-forwarded-for')
-        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1]
-        ?? message.connection.remoteAddress
-        ?? message.socket.remoteAddress;
+    return (_e = (_d = (_c = (_b = getMessageHeader(message, 'x-forwarded-for')) === null || _b === void 0 ? void 0 : _b.match(/^\s*([^\s]+)\s*(?:,|$)/)) === null || _c === void 0 ? void 0 : _c[1]) !== null && _d !== void 0 ? _d : message.connection.remoteAddress) !== null && _e !== void 0 ? _e : message.socket.remoteAddress;
 }
 export function getMessageMethod(message) {
-    return message.method?.toUpperCase() ?? 'GET';
+    var _a, _b;
+    return (_b = (_a = message.method) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== null && _b !== void 0 ? _b : 'GET';
 }
 export function getMessageURL(message) {
-    return message.url ?? '/';
+    var _a;
+    return (_a = message.url) !== null && _a !== void 0 ? _a : '/';
 }
 export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingValues = true } = {}) {
     const query = {};
@@ -105,7 +106,8 @@ export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingVa
     return query;
 }
 export function parseURLHash(url) {
-    const match = url.match(/#(.+)/)?.[1];
+    var _a;
+    const match = (_a = url.match(/#(.+)/)) === null || _a === void 0 ? void 0 : _a[1];
     return match === undefined
         ? ''
         : decodeURIComponent(match);
@@ -163,8 +165,8 @@ export function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 export function parseAuthorizationHeaderBearer(header) {
-    const token = header.match(/^Bearer (.+)/)?.[1]
-        ?.trim();
+    var _a, _b;
+    const token = (_b = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim();
     if (token === undefined || token.length === 0) {
         return;
     }

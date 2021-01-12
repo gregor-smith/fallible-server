@@ -2,7 +2,7 @@
   "name": "fallible-server",
   "version": "0.1.0",
   "main": "dist/cjs-es5/index.js",
-  "module": "dist/esm-es2020/index.js",
+  "module": "dist/esm-es2019/index.js",
   "types": "dist/cjs-es5/index.d.ts",
   "repository": {
     "type": "git",

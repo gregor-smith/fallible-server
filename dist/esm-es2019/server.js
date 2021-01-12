@@ -22,6 +22,7 @@ function setHeaders(response, { cookies, headers }) {
 }
 export function createRequestListener({ messageHandler, errorHandler = defaultErrorHandler }) {
     return async (req, res) => {
+        var _a;
         let response;
         try {
             const result = await messageHandler(req);
@@ -38,7 +39,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
         catch {
             response = defaultErrorHandler();
         }
-        res.statusCode = response.status ?? 200;
+        res.statusCode = (_a = response.status) !== null && _a !== void 0 ? _a : 200;
         if (typeof response.body === 'string') {
             setHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
