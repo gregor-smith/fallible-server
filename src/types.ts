@@ -25,8 +25,11 @@ export type Method =
     | 'CONNECT'
 
 
+export type Formattable = string | number | boolean | bigint
+
+
 export type Cookie = {
-    value: string
+    value: Formattable
     maxAge?: number
     path?: string
     domain?: string
@@ -59,7 +62,7 @@ export type WebsocketResponse = {
 
 export type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
-    headers?: Readonly<Record<string, string | number | boolean>>
+    headers?: Readonly<Record<string, Formattable>>
     status?: number
     body?: string | Buffer | Readable | WebsocketResponse
 }

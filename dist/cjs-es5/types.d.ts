@@ -9,8 +9,9 @@ export declare type ParsedContentType = {
     characterSet?: string;
 };
 export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
+export declare type Formattable = string | number | boolean | bigint;
 export declare type Cookie = {
-    value: string;
+    value: Formattable;
     maxAge?: number;
     path?: string;
     domain?: string;
@@ -30,7 +31,7 @@ export declare type WebsocketResponse = {
 };
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
-    headers?: Readonly<Record<string, string | number | boolean>>;
+    headers?: Readonly<Record<string, Formattable>>;
     status?: number;
     body?: string | Buffer | Readable | WebsocketResponse;
 };

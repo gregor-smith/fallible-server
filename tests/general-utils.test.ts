@@ -25,7 +25,8 @@ import {
     parseMessageAuthorizationHeaderBearer,
     messageIsWebSocketRequest,
     parseJSONString,
-    ParseSignedMessageCookieError
+    ParseSignedMessageCookieError,
+    signatureCookieName
 } from '../src/general-utils'
 
 
@@ -70,6 +71,14 @@ describe('parseMessageCookie', () => {
     ])('returns cookie value', (header, value) => {
         const result = parseMessageCookie({ headers: { cookie: header } }, 'test2')
         expect(result).toBe(value)
+    })
+})
+
+
+describe('signatureCookieName', () => {
+    test.each([ 'test', 'test2', true, 1, 1.23, BigInt(1) ])('appends signature suffix', name => {
+        const result = signatureCookieName(name)
+        expect(result).toBe(`${name}.sig`)
     })
 })
 

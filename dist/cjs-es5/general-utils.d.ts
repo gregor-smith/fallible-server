@@ -2,13 +2,14 @@
 import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type { Cookie, Method, ParsedContentType } from './types';
+import type { Cookie, Formattable, Method, ParsedContentType } from './types';
 export declare const CloseWebSocket: unique symbol;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
+export declare function signatureCookieName<T extends Formattable>(name: T): `${T}.sig`;
 export declare type ParseSignedMessageCookieError = 'ValueCookieMissing' | 'SignatureCookieMissing' | 'SignatureInvalid';
 export declare function parseSignedMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string, keys: Pick<Keygrip, 'verify'>): Result<string, ParseSignedMessageCookieError>;
-export declare function cookieHeader(name: string, { value, path, maxAge, domain, sameSite, secure, httpOnly }: Readonly<Cookie>): string;
+export declare function cookieHeader(name: string, { value, path, maxAge, domain, sameSite, secure, httpOnly }: Cookie): string;
 export declare function signedCookieHeader(name: string, cookie: Readonly<Cookie>, keys: Pick<Keygrip, 'sign'>): string;
 export declare function getMessageHeader(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export interface IncomingMessageIPFields {

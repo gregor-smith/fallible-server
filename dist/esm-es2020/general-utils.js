@@ -13,10 +13,10 @@ export function parseMessageCookie(message, name) {
     }
     return parseCookieHeader(message.headers.cookie, name);
 }
-function joinCookieValue(name, value) {
+function cookieKeyValuePair(name, value) {
     return `${name}=${value}`;
 }
-function cookieSignatureName(name) {
+export function signatureCookieName(name) {
     return `${name}.sig`;
 }
 export function parseSignedMessageCookie(message, name, keys) {
@@ -24,17 +24,17 @@ export function parseSignedMessageCookie(message, name, keys) {
     if (value === undefined) {
         return error('ValueCookieMissing');
     }
-    const signature = parseMessageCookie(message, cookieSignatureName(name));
+    const signature = parseMessageCookie(message, signatureCookieName(name));
     if (signature === undefined) {
         return error('SignatureCookieMissing');
     }
-    if (!keys.verify(joinCookieValue(name, value), signature)) {
+    if (!keys.verify(cookieKeyValuePair(name, value), signature)) {
         return error('SignatureInvalid');
     }
     return ok(value);
 }
 export function cookieHeader(name, { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }) {
-    const segments = [joinCookieValue(name, value)];
+    const segments = [cookieKeyValuePair(name, value)];
     if (path !== undefined) {
         segments.push(`Path=${path}`);
     }
@@ -56,9 +56,9 @@ export function cookieHeader(name, { value, path, maxAge, domain, sameSite, secu
     return segments.join('; ');
 }
 export function signedCookieHeader(name, cookie, keys) {
-    return cookieHeader(cookieSignatureName(name), {
+    return cookieHeader(signatureCookieName(name), {
         ...cookie,
-        value: keys.sign(joinCookieValue(name, cookie.value))
+        value: keys.sign(cookieKeyValuePair(name, cookie.value))
     });
 }
 export function getMessageHeader(message, name) {

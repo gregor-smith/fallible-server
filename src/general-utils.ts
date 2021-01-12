@@ -8,7 +8,7 @@ import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
 import { parse as secureJSONParse } from 'secure-json-parse'
 
-import type { Cookie, Method, ParsedContentType } from './types'
+import type { Cookie, Formattable, Method, ParsedContentType } from './types'
 
 
 export const CloseWebSocket = Symbol()
@@ -30,13 +30,16 @@ export function parseMessageCookie(
 }
 
 
-function joinCookieValue(name: string, value: string): string {
-    return `${name}=${value}`
+function cookieKeyValuePair<A extends Formattable, B extends Formattable>(
+    name: A,
+    value: B
+) {
+    return `${name}=${value}` as const
 }
 
 
-function cookieSignatureName(name: string): string {
-    return `${name}.sig`
+export function signatureCookieName<T extends Formattable>(name: T) {
+    return `${name}.sig` as const
 }
 
 
@@ -55,11 +58,11 @@ export function parseSignedMessageCookie(
     if (value === undefined) {
         return error('ValueCookieMissing')
     }
-    const signature = parseMessageCookie(message, cookieSignatureName(name))
+    const signature = parseMessageCookie(message, signatureCookieName(name))
     if (signature === undefined) {
         return error('SignatureCookieMissing')
     }
-    if (!keys.verify(joinCookieValue(name, value), signature)) {
+    if (!keys.verify(cookieKeyValuePair(name, value), signature)) {
         return error('SignatureInvalid')
     }
     return ok(value)
@@ -68,9 +71,9 @@ export function parseSignedMessageCookie(
 
 export function cookieHeader(
     name: string,
-    { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }: Readonly<Cookie>
+    { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }: Cookie
 ): string {
-    const segments = [ joinCookieValue(name, value) ]
+    const segments: string[] = [ cookieKeyValuePair(name, value) ]
     if (path !== undefined) {
         segments.push(`Path=${path}`)
     }
@@ -99,11 +102,11 @@ export function signedCookieHeader(
     keys: Pick<Keygrip, 'sign'>
 ): string {
     return cookieHeader(
-        cookieSignatureName(name),
+        signatureCookieName(name),
         {
             ...cookie,
             value: keys.sign(
-                joinCookieValue(name, cookie.value)
+                cookieKeyValuePair(name, cookie.value)
             )
         }
     )

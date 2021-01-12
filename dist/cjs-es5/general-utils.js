@@ -3,7 +3,7 @@
 // utils within are useful on both server and client. exclusively server-only
 // utils should go in server-utils
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseJSONString = exports.messageIsWebSocketRequest = exports.parseMessageAuthorizationHeaderBearer = exports.parseAuthorizationHeaderBearer = exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
+exports.parseJSONString = exports.messageIsWebSocketRequest = exports.parseMessageAuthorizationHeaderBearer = exports.parseAuthorizationHeaderBearer = exports.parseMessageContentLength = exports.parseContentLengthHeader = exports.parseMessageContentType = exports.parseContentTypeHeader = exports.parseURLPath = exports.parseURLHash = exports.parseURLQueryString = exports.getMessageURL = exports.getMessageMethod = exports.getMessageIP = exports.getMessageHeader = exports.signedCookieHeader = exports.cookieHeader = exports.parseSignedMessageCookie = exports.signatureCookieName = exports.parseMessageCookie = exports.parseCookieHeader = exports.CloseWebSocket = void 0;
 var tslib_1 = require("tslib");
 var fallible_1 = require("fallible");
 var secure_json_parse_1 = require("secure-json-parse");
@@ -20,22 +20,23 @@ function parseMessageCookie(message, name) {
     return parseCookieHeader(message.headers.cookie, name);
 }
 exports.parseMessageCookie = parseMessageCookie;
-function joinCookieValue(name, value) {
+function cookieKeyValuePair(name, value) {
     return name + "=" + value;
 }
-function cookieSignatureName(name) {
+function signatureCookieName(name) {
     return name + ".sig";
 }
+exports.signatureCookieName = signatureCookieName;
 function parseSignedMessageCookie(message, name, keys) {
     var value = parseMessageCookie(message, name);
     if (value === undefined) {
         return fallible_1.error('ValueCookieMissing');
     }
-    var signature = parseMessageCookie(message, cookieSignatureName(name));
+    var signature = parseMessageCookie(message, signatureCookieName(name));
     if (signature === undefined) {
         return fallible_1.error('SignatureCookieMissing');
     }
-    if (!keys.verify(joinCookieValue(name, value), signature)) {
+    if (!keys.verify(cookieKeyValuePair(name, value), signature)) {
         return fallible_1.error('SignatureInvalid');
     }
     return fallible_1.ok(value);
@@ -43,7 +44,7 @@ function parseSignedMessageCookie(message, name, keys) {
 exports.parseSignedMessageCookie = parseSignedMessageCookie;
 function cookieHeader(name, _a) {
     var value = _a.value, path = _a.path, maxAge = _a.maxAge, domain = _a.domain, sameSite = _a.sameSite, _b = _a.secure, secure = _b === void 0 ? false : _b, _c = _a.httpOnly, httpOnly = _c === void 0 ? false : _c;
-    var segments = [joinCookieValue(name, value)];
+    var segments = [cookieKeyValuePair(name, value)];
     if (path !== undefined) {
         segments.push("Path=" + path);
     }
@@ -66,7 +67,7 @@ function cookieHeader(name, _a) {
 }
 exports.cookieHeader = cookieHeader;
 function signedCookieHeader(name, cookie, keys) {
-    return cookieHeader(cookieSignatureName(name), tslib_1.__assign(tslib_1.__assign({}, cookie), { value: keys.sign(joinCookieValue(name, cookie.value)) }));
+    return cookieHeader(signatureCookieName(name), tslib_1.__assign(tslib_1.__assign({}, cookie), { value: keys.sign(cookieKeyValuePair(name, cookie.value)) }));
 }
 exports.signedCookieHeader = signedCookieHeader;
 function getMessageHeader(message, name) {
