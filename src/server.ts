@@ -7,6 +7,7 @@ import type {
     AwaitableRequestListener,
     Cleanup,
     ErrorHandler,
+    ExceptionHandler,
     MessageHandler,
     MessageHandlerResult,
     Response,
@@ -41,12 +42,14 @@ function setHeaders(response: ServerResponse, { cookies, headers }: Response) {
 export type CreateRequestListenerArguments<Errors> = {
     messageHandler: MessageHandler<void, Response, Errors>
     errorHandler?: ErrorHandler<Errors>
+    exceptionHandler?: ExceptionHandler
 }
 
 
 export function createRequestListener<Errors>({
     messageHandler,
-    errorHandler = defaultErrorHandler
+    errorHandler = defaultErrorHandler,
+    exceptionHandler = defaultErrorHandler
 }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
@@ -62,8 +65,8 @@ export function createRequestListener<Errors>({
                 response = await errorHandler(result.value)
             }
         }
-        catch {
-            response = defaultErrorHandler()
+        catch (exception: unknown) {
+            response = await exceptionHandler(exception)
         }
 
         res.statusCode = response.status ?? 200

@@ -300,41 +300,48 @@ describe('createRequestListener', () => {
         expect(serverResponseMock.end).toHaveBeenCalledWith(body)
     })
 
-    describe('exception from handlers results in default error handler response', () => {
-        const { status, body } = defaultErrorHandler()
-
+    describe('exception from messageHandler or errorHandler propagates to exceptionHandler', () => {
         test('during message handler', async () => {
+            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
+                defaultErrorHandler
+            )
             const listener = createRequestListener({
-                messageHandler: () => { throw 'test' }
+                messageHandler: () => { throw 'test' },
+                exceptionHandler: exceptionHandlerMock
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
-            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
         })
 
         test('during message handler cleanup', async () => {
+            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
+                defaultErrorHandler
+            )
             const listener = createRequestListener({
                 messageHandler: () => ok({
                     state: {},
                     cleanup: () => { throw 'test' }
-                })
+                }),
+                exceptionHandler: exceptionHandlerMock
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
-            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
         })
 
         test('during error handler', async () => {
+            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
+                defaultErrorHandler
+            )
             const listener = createRequestListener({
                 messageHandler: error,
-                errorHandler: () => { throw 'test' }
+                errorHandler: () => { throw 'test' },
+                exceptionHandler: exceptionHandlerMock
             })
             await listener(dummyIncomingMessage, serverResponseMock)
 
-            expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-            expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
         })
     })
 
@@ -348,6 +355,8 @@ describe('createRequestListener', () => {
         expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
         expect(serverResponseMock.end).toHaveBeenCalledWith(body)
     })
+
+    test.todo('default exception handler used when none given as parameter')
 
     // describe('websocket body', () => {
     // })

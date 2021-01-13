@@ -86,3 +86,8 @@ export type MessageHandler<ExistingState, NewState, Errors> = (
 export type ErrorHandler<Errors> = (
     error: Readonly<Errors>
 ) => Awaitable<Response>
+
+
+export type ExceptionHandler = (
+    exception: unknown
+) => Awaitable<Response>

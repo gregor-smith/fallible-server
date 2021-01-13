@@ -1,4 +1,4 @@
-import type { AwaitableRequestListener, ErrorHandler, MessageHandler, Response } from './types';
+import type { AwaitableRequestListener, ErrorHandler, ExceptionHandler, MessageHandler, Response } from './types';
 export declare function defaultErrorHandler(): {
     status: number;
     body: string;
@@ -6,8 +6,9 @@ export declare function defaultErrorHandler(): {
 export declare type CreateRequestListenerArguments<Errors> = {
     messageHandler: MessageHandler<void, Response, Errors>;
     errorHandler?: ErrorHandler<Errors>;
+    exceptionHandler?: ExceptionHandler;
 };
-export declare function createRequestListener<Errors>({ messageHandler, errorHandler }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener;
+export declare function createRequestListener<Errors>({ messageHandler, errorHandler, exceptionHandler }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener;
 export declare function composeMessageHandlers<State1, Error1, State2, Error2, State3>(handlers: [
     MessageHandler<State1, State2, Exclude<Error1, never>>,
     MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>

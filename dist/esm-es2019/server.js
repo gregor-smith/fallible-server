@@ -20,7 +20,7 @@ function setHeaders(response, { cookies, headers }) {
         }
     }
 }
-export function createRequestListener({ messageHandler, errorHandler = defaultErrorHandler }) {
+export function createRequestListener({ messageHandler, errorHandler = defaultErrorHandler, exceptionHandler = defaultErrorHandler }) {
     return async (req, res) => {
         var _a;
         let response;
@@ -36,8 +36,8 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                 response = await errorHandler(result.value);
             }
         }
-        catch {
-            response = defaultErrorHandler();
+        catch (exception) {
+            response = await exceptionHandler(exception);
         }
         res.statusCode = (_a = response.status) !== null && _a !== void 0 ? _a : 200;
         if (typeof response.body === 'string') {

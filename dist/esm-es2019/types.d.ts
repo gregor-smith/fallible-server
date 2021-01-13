@@ -42,3 +42,4 @@ export declare type MessageHandlerResult<State> = {
 };
 export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<NewState>, Errors>>;
 export declare type ErrorHandler<Errors> = (error: Readonly<Errors>) => Awaitable<Response>;
+export declare type ExceptionHandler = (exception: unknown) => Awaitable<Response>;
