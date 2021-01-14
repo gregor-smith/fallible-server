@@ -29,11 +29,12 @@ export declare type WebsocketResponse = {
     onMessage: (message: Data) => WebsocketGenerator;
     onSendError?: (message: Data, error: Error) => Awaitable<void>;
 };
+export declare type Body = string | Buffer | Readable | WebsocketResponse;
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
     headers?: Readonly<Record<string, Formattable>>;
     status?: number;
-    body?: string | Buffer | Readable | WebsocketResponse;
+    body?: Body;
 };
 export declare type Cleanup = (response?: Readonly<Response>) => Awaitable<void>;
 export declare type MessageHandlerResult<State> = {

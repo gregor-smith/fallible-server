@@ -1,4 +1,5 @@
 import type { ServerResponse } from 'http'
+import type { Readable } from 'stream'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { error, ok, Result } from 'fallible'
@@ -53,13 +54,12 @@ export function createRequestListener<Errors>({
 }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
+        let cleanup: Cleanup | undefined
         try {
             const result = await messageHandler(req)
             if (result.ok) {
                 response = result.value.state
-                if (result.value.cleanup !== undefined) {
-                    await result.value.cleanup(response)
-                }
+                cleanup = result.value.cleanup
             }
             else {
                 response = await errorHandler(result.value)
@@ -79,7 +79,9 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body))
             }
-            res.end(response.body)
+            await new Promise<void>(resolve =>
+                res.end(response.body, resolve)
+            )
         }
         else if (response.body instanceof Buffer) {
             setHeaders(res, response)
@@ -89,7 +91,9 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', response.body.length)
             }
-            res.end(response.body)
+            await new Promise<void>(resolve =>
+                res.end(response.body, resolve)
+            )
         }
         else if (response.body !== undefined) {
             // stream
@@ -98,7 +102,10 @@ export function createRequestListener<Errors>({
                 if (!res.hasHeader('Content-Type')) {
                     res.setHeader('Content-Type', 'application/octet-stream')
                 }
-                response.body.pipe(res)
+                await new Promise<void>(resolve => {
+                    (response.body as Readable).on('end', resolve);
+                    (response.body as Readable).pipe(res)
+                })
             }
             // websocket
             else {
@@ -146,7 +153,7 @@ export function createRequestListener<Errors>({
                 }
 
                 if (onClose !== undefined) {
-                    socket.on('close', onClose)
+                    socket.addListener('close', onClose)
                 }
                 if (onError !== undefined) {
                     socket.on('error', onError)
@@ -157,18 +164,32 @@ export function createRequestListener<Errors>({
                     return sendMessages(generator)
                 })
 
-                // the 'open' even is never fired in this case, so just call
-                // onOpen immediately
-                if (onOpen !== undefined) {
+                if (onOpen === undefined) {
+                    await new Promise<number>(resolve =>
+                        socket.addListener('close', resolve)
+                    )
+                }
+                else {
+                    // the 'open' even is never fired in this case, so just
+                    // call onOpen immediately
                     const generator = onOpen()
-                    await sendMessages(generator)
+                    await Promise.all([
+                        new Promise<number>(resolve =>
+                            socket.addListener('close', resolve)
+                        ),
+                        sendMessages(generator)
+                    ])
                 }
             }
         }
         // no body
         else {
             setHeaders(res, response)
-            res.end()
+            await new Promise<void>(resolve => res.end(resolve))
+        }
+
+        if (cleanup !== undefined) {
+            await cleanup(response)
         }
     }
 }

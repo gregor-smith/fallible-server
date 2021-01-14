@@ -24,13 +24,12 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
     return async (req, res) => {
         var _a;
         let response;
+        let cleanup;
         try {
             const result = await messageHandler(req);
             if (result.ok) {
                 response = result.value.state;
-                if (result.value.cleanup !== undefined) {
-                    await result.value.cleanup(response);
-                }
+                cleanup = result.value.cleanup;
             }
             else {
                 response = await errorHandler(result.value);
@@ -48,7 +47,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body));
             }
-            res.end(response.body);
+            await new Promise(resolve => res.end(response.body, resolve));
         }
         else if (response.body instanceof Buffer) {
             setHeaders(res, response);
@@ -58,7 +57,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', response.body.length);
             }
-            res.end(response.body);
+            await new Promise(resolve => res.end(response.body, resolve));
         }
         else if (response.body !== undefined) {
             // stream
@@ -67,7 +66,10 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                 if (!res.hasHeader('Content-Type')) {
                     res.setHeader('Content-Type', 'application/octet-stream');
                 }
-                response.body.pipe(res);
+                await new Promise(resolve => {
+                    response.body.on('end', resolve);
+                    response.body.pipe(res);
+                });
             }
             // websocket
             else {
@@ -103,7 +105,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                     }
                 };
                 if (onClose !== undefined) {
-                    socket.on('close', onClose);
+                    socket.addListener('close', onClose);
                 }
                 if (onError !== undefined) {
                     socket.on('error', onError);
@@ -112,18 +114,27 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                     const generator = onMessage(data);
                     return sendMessages(generator);
                 });
-                // the 'open' even is never fired in this case, so just call
-                // onOpen immediately
-                if (onOpen !== undefined) {
+                if (onOpen === undefined) {
+                    await new Promise(resolve => socket.addListener('close', resolve));
+                }
+                else {
+                    // the 'open' even is never fired in this case, so just
+                    // call onOpen immediately
                     const generator = onOpen();
-                    await sendMessages(generator);
+                    await Promise.all([
+                        new Promise(resolve => socket.addListener('close', resolve)),
+                        sendMessages(generator)
+                    ]);
                 }
             }
         }
         // no body
         else {
             setHeaders(res, response);
-            res.end();
+            await new Promise(resolve => res.end(resolve));
+        }
+        if (cleanup !== undefined) {
+            await cleanup(response);
         }
     };
 }

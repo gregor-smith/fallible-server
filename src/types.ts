@@ -60,11 +60,14 @@ export type WebsocketResponse = {
 }
 
 
+export type Body = string | Buffer | Readable | WebsocketResponse
+
+
 export type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
     headers?: Readonly<Record<string, Formattable>>
     status?: number
-    body?: string | Buffer | Readable | WebsocketResponse
+    body?: Body
 }
 
 

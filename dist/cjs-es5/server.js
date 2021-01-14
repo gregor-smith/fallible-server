@@ -51,38 +51,34 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.errorHandler, errorHandler = _b === void 0 ? defaultErrorHandler : _b, _c = _a.exceptionHandler, exceptionHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, result, exception_1, wss_1, socket_1, _a, onOpen, onClose, onError, onMessage_1, onSendError_1, sendMessages_1, generator;
+        var response, cleanup, result, exception_1, wss_1, socket_1, _a, onOpen, onClose, onError, onMessage_1, onSendError_1, sendMessages_1, generator;
         var _this = this;
         var _b;
         return tslib_1.__generator(this, function (_c) {
             switch (_c.label) {
                 case 0:
-                    _c.trys.push([0, 7, , 9]);
+                    _c.trys.push([0, 5, , 7]);
                     return [4 /*yield*/, messageHandler(req)];
                 case 1:
                     result = _c.sent();
-                    if (!result.ok) return [3 /*break*/, 4];
+                    if (!result.ok) return [3 /*break*/, 2];
                     response = result.value.state;
-                    if (!(result.value.cleanup !== undefined)) return [3 /*break*/, 3];
-                    return [4 /*yield*/, result.value.cleanup(response)];
-                case 2:
-                    _c.sent();
-                    _c.label = 3;
-                case 3: return [3 /*break*/, 6];
-                case 4: return [4 /*yield*/, errorHandler(result.value)];
-                case 5:
+                    cleanup = result.value.cleanup;
+                    return [3 /*break*/, 4];
+                case 2: return [4 /*yield*/, errorHandler(result.value)];
+                case 3:
                     response = _c.sent();
-                    _c.label = 6;
-                case 6: return [3 /*break*/, 9];
-                case 7:
+                    _c.label = 4;
+                case 4: return [3 /*break*/, 7];
+                case 5:
                     exception_1 = _c.sent();
                     return [4 /*yield*/, exceptionHandler(exception_1)];
-                case 8:
+                case 6:
                     response = _c.sent();
-                    return [3 /*break*/, 9];
-                case 9:
+                    return [3 /*break*/, 7];
+                case 7:
                     res.statusCode = (_b = response.status) !== null && _b !== void 0 ? _b : 200;
-                    if (!(typeof response.body === 'string')) return [3 /*break*/, 10];
+                    if (!(typeof response.body === 'string')) return [3 /*break*/, 9];
                     setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -90,9 +86,13 @@ function createRequestListener(_a) {
                     if (!res.hasHeader('Content-Length')) {
                         res.setHeader('Content-Length', Buffer.byteLength(response.body));
                     }
-                    res.end(response.body);
-                    return [3 /*break*/, 17];
-                case 10:
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            return res.end(response.body, resolve);
+                        })];
+                case 8:
+                    _c.sent();
+                    return [3 /*break*/, 21];
+                case 9:
                     if (!(response.body instanceof Buffer)) return [3 /*break*/, 11];
                     setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
@@ -101,18 +101,27 @@ function createRequestListener(_a) {
                     if (!res.hasHeader('Content-Length')) {
                         res.setHeader('Content-Length', response.body.length);
                     }
-                    res.end(response.body);
-                    return [3 /*break*/, 17];
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            return res.end(response.body, resolve);
+                        })];
+                case 10:
+                    _c.sent();
+                    return [3 /*break*/, 21];
                 case 11:
-                    if (!(response.body !== undefined)) return [3 /*break*/, 16];
-                    if (!('pipe' in response.body)) return [3 /*break*/, 12];
+                    if (!(response.body !== undefined)) return [3 /*break*/, 19];
+                    if (!('pipe' in response.body)) return [3 /*break*/, 13];
                     setHeaders(res, response);
                     if (!res.hasHeader('Content-Type')) {
                         res.setHeader('Content-Type', 'application/octet-stream');
                     }
-                    response.body.pipe(res);
-                    return [3 /*break*/, 15];
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            response.body.on('end', resolve);
+                            response.body.pipe(res);
+                        })];
                 case 12:
+                    _c.sent();
+                    return [3 /*break*/, 18];
+                case 13:
                     wss_1 = new ws_1.Server({ noServer: true });
                     wss_1.on('headers', function (headers) {
                         var e_3, _a, e_4, _b;
@@ -151,7 +160,7 @@ function createRequestListener(_a) {
                     return [4 /*yield*/, new Promise(function (resolve) {
                             return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
                         })];
-                case 13:
+                case 14:
                     socket_1 = _c.sent();
                     _a = response.body, onOpen = _a.onOpen, onClose = _a.onClose, onError = _a.onError, onMessage_1 = _a.onMessage, onSendError_1 = _a.onSendError;
                     sendMessages_1 = function (generator) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
@@ -200,7 +209,7 @@ function createRequestListener(_a) {
                         });
                     }); };
                     if (onClose !== undefined) {
-                        socket_1.on('close', onClose);
+                        socket_1.addListener('close', onClose);
                     }
                     if (onError !== undefined) {
                         socket_1.on('error', onError);
@@ -209,18 +218,38 @@ function createRequestListener(_a) {
                         var generator = onMessage_1(data);
                         return sendMessages_1(generator);
                     });
-                    if (!(onOpen !== undefined)) return [3 /*break*/, 15];
-                    generator = onOpen();
-                    return [4 /*yield*/, sendMessages_1(generator)];
-                case 14:
+                    if (!(onOpen === undefined)) return [3 /*break*/, 16];
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            return socket_1.addListener('close', resolve);
+                        })];
+                case 15:
                     _c.sent();
-                    _c.label = 15;
-                case 15: return [3 /*break*/, 17];
+                    return [3 /*break*/, 18];
                 case 16:
+                    generator = onOpen();
+                    return [4 /*yield*/, Promise.all([
+                            new Promise(function (resolve) {
+                                return socket_1.addListener('close', resolve);
+                            }),
+                            sendMessages_1(generator)
+                        ])];
+                case 17:
+                    _c.sent();
+                    _c.label = 18;
+                case 18: return [3 /*break*/, 21];
+                case 19:
                     setHeaders(res, response);
-                    res.end();
-                    _c.label = 17;
-                case 17: return [2 /*return*/];
+                    return [4 /*yield*/, new Promise(function (resolve) { return res.end(resolve); })];
+                case 20:
+                    _c.sent();
+                    _c.label = 21;
+                case 21:
+                    if (!(cleanup !== undefined)) return [3 /*break*/, 23];
+                    return [4 /*yield*/, cleanup(response)];
+                case 22:
+                    _c.sent();
+                    _c.label = 23;
+                case 23: return [2 /*return*/];
             }
         });
     }); };
