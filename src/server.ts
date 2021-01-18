@@ -1,5 +1,4 @@
 import type { ServerResponse } from 'http'
-import type { Readable } from 'stream'
 
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { error, ok, Result } from 'fallible'
@@ -11,6 +10,7 @@ import type {
     ExceptionHandler,
     MessageHandler,
     MessageHandlerResult,
+    Pipeable,
     Response,
     WebsocketResponse
 } from './types'
@@ -25,17 +25,28 @@ export function defaultErrorHandler() {
 }
 
 
-function setHeaders(response: ServerResponse, { cookies, headers }: Response) {
-    if (cookies !== undefined) {
-        for (const [ name, cookie ] of Object.entries(cookies)) {
-            const header = cookieHeader(name, cookie)
-            response.setHeader('Set-Cookie', header)
+function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, string[] ]> {
+    if (headers !== undefined) {
+        for (const [ name, value ] of Object.entries(headers)) {
+            if (Array.isArray(value)) {
+                yield [ name, value.map(String) ]
+            }
+            else {
+                yield [ name, [ String(value) ] ]
+            }
         }
     }
-    if (headers !== undefined) {
-        for (const [ key, value ] of Object.entries(headers)) {
-            response.setHeader(key, String(value))
-        }
+    if (cookies !== undefined) {
+        const values = Object.entries(cookies)
+            .map(([ name, cookie ]) => cookieHeader(name, cookie))
+        yield [ 'Set-Cookie', values ]
+    }
+}
+
+
+function setResponseHeaders(res: ServerResponse, response: Response): void {
+    for (const [ name, values ] of iterateHeaders(response)) {
+        res.setHeader(name, values)
     }
 }
 
@@ -72,7 +83,7 @@ export function createRequestListener<Errors>({
         res.statusCode = response.status ?? 200
 
         if (typeof response.body === 'string') {
-            setHeaders(res, response)
+            setResponseHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8')
             }
@@ -84,7 +95,7 @@ export function createRequestListener<Errors>({
             )
         }
         else if (response.body instanceof Buffer) {
-            setHeaders(res, response)
+            setResponseHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
@@ -95,97 +106,89 @@ export function createRequestListener<Errors>({
                 res.end(response.body, resolve)
             )
         }
-        else if (response.body !== undefined) {
-            // stream
-            if ('pipe' in response.body) {
-                setHeaders(res, response)
-                if (!res.hasHeader('Content-Type')) {
-                    res.setHeader('Content-Type', 'application/octet-stream')
-                }
-                await new Promise<void>(resolve => {
-                    (response.body as Readable).on('end', resolve);
-                    (response.body as Readable).pipe(res)
-                })
-            }
-            // websocket
-            else {
-                const wss = new WebSocketServer({ noServer: true })
-                wss.on('headers', headers => {
-                    if (response.cookies !== undefined) {
-                        for (const [ name, cookie ] of Object.entries(response.cookies)) {
-                            const header = cookieHeader(name, cookie)
-                            headers.push(`Set-Cookie: ${header}`)
-                        }
-                    }
-                    if (response.headers !== undefined) {
-                        for (const [ key, value ] of Object.entries(response.headers)) {
-                            headers.push(`${key}: ${value}`)
-                        }
-                    }
-                })
-                const socket = await new Promise<WebSocket>(resolve =>
-                    wss.handleUpgrade(
-                        req,
-                        req.socket,
-                        Buffer.alloc(0),
-                        resolve
-                    )
-                )
-
-                const { onOpen, onClose, onError, onMessage, onSendError } = response.body
-
-                const sendMessages = async (generator: ReturnType<WebsocketResponse['onMessage']>) => {
-                    while (true) {
-                        const result = await generator.next()
-                        if (result.done) {
-                            if (result.value === CloseWebSocket) {
-                                socket.close(1000)
-                            }
-                            return
-                        }
-                        const error = await new Promise<Error | undefined>(resolve =>
-                            socket.send(result.value, resolve)
-                        )
-                        if (error !== undefined && onSendError !== undefined) {
-                            await onSendError(result.value, error)
-                        }
-                    }
-                }
-
-                if (onClose !== undefined) {
-                    socket.addListener('close', onClose)
-                }
-                if (onError !== undefined) {
-                    socket.on('error', onError)
-                }
-
-                socket.on('message', data => {
-                    const generator = onMessage(data)
-                    return sendMessages(generator)
-                })
-
-                if (onOpen === undefined) {
-                    await new Promise<number>(resolve =>
-                        socket.addListener('close', resolve)
-                    )
-                }
-                else {
-                    // the 'open' even is never fired in this case, so just
-                    // call onOpen immediately
-                    const generator = onOpen()
-                    await Promise.all([
-                        new Promise<number>(resolve =>
-                            socket.addListener('close', resolve)
-                        ),
-                        sendMessages(generator)
-                    ])
-                }
-            }
-        }
         // no body
-        else {
-            setHeaders(res, response)
+        else if (response.body === undefined) {
+            setResponseHeaders(res, response)
             await new Promise<void>(resolve => res.end(resolve))
+        }
+        // stream
+        else if ('pipe' in response.body) {
+            setResponseHeaders(res, response)
+            if (!res.hasHeader('Content-Type')) {
+                res.setHeader('Content-Type', 'application/octet-stream')
+            }
+            await new Promise<void>(resolve => {
+                res.on('finish', resolve);
+                (response.body as Pipeable).pipe(res)
+            })
+        }
+        // websocket
+        else {
+            const wss = new WebSocketServer({ noServer: true })
+            wss.on('headers', headers => {
+                for (const [ name, values ] of iterateHeaders(response)) {
+                    for (const value of values) {
+                        headers.push(`${name}: ${value}`)
+                    }
+                }
+            })
+            const socket = await new Promise<WebSocket>(resolve =>
+                wss.handleUpgrade(
+                    req,
+                    req.socket,
+                    Buffer.alloc(0),
+                    resolve
+                )
+            )
+
+            const { onOpen, onClose, onError, onMessage, onSendError } = response.body
+
+            const sendMessages = async (generator: ReturnType<WebsocketResponse['onMessage']>) => {
+                while (true) {
+                    const result = await generator.next()
+                    if (result.done) {
+                        if (result.value === CloseWebSocket) {
+                            socket.close(1000)
+                        }
+                        return
+                    }
+                    const error = await new Promise<Error | undefined>(resolve =>
+                        socket.send(result.value, resolve)
+                    )
+                    if (error !== undefined && onSendError !== undefined) {
+                        await onSendError(result.value, error)
+                    }
+                }
+            }
+
+            if (onClose !== undefined) {
+                socket.addListener('close', onClose)
+            }
+            if (onError !== undefined) {
+                socket.on('error', onError)
+            }
+
+            socket.on('message', data => {
+                const generator = onMessage(data)
+                return sendMessages(generator)
+            })
+
+            if (onOpen === undefined) {
+                await new Promise<number>(resolve =>
+                    socket.addListener('close', resolve)
+                )
+            }
+            else {
+                // the 'open' even is never fired in this case, so just
+                // call onOpen immediately
+                const generator = onOpen()
+                await Promise.all([
+                    new Promise<number>(resolve =>
+                        socket.addListener('close', resolve)
+                    ),
+                    sendMessages(generator)
+                ])
+            }
         }
 
         if (cleanup !== undefined) {

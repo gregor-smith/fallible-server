@@ -1,4 +1,3 @@
-import type { Readable } from 'stream'
 import type { IncomingMessage, RequestListener } from 'http'
 
 import type { Data } from 'ws'
@@ -60,12 +59,17 @@ export type WebsocketResponse = {
 }
 
 
-export type Body = string | Buffer | Readable | WebsocketResponse
+export interface Pipeable {
+    pipe: (destination: NodeJS.WritableStream) => void
+}
+
+
+export type Body = string | Buffer | Pipeable | WebsocketResponse
 
 
 export type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
-    headers?: Readonly<Record<string, Formattable>>
+    headers?: Readonly<Record<string, Formattable | ReadonlyArray<Formattable>>>
     status?: number
     body?: Body
 }
@@ -74,7 +78,7 @@ export type Response = {
 export type Cleanup = (response?: Readonly<Response>) => Awaitable<void>
 
 
-export type MessageHandlerResult<State> = {
+export type MessageHandlerResult<State = Response> = {
     state: State
     cleanup?: Cleanup
 }
