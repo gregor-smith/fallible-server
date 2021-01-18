@@ -12,7 +12,8 @@ import type {
     MessageHandlerResult,
     Pipeable,
     Response,
-    WebsocketResponse
+    WebsocketGenerator,
+    WebsocketResponse,
 } from './types'
 import { CloseWebSocket, cookieHeader } from './general-utils'
 
@@ -47,6 +48,29 @@ function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, st
 function setResponseHeaders(res: ServerResponse, response: Response): void {
     for (const [ name, values ] of iterateHeaders(response)) {
         res.setHeader(name, values)
+    }
+}
+
+
+async function sendWebsocketMessages(
+    socket: WebSocket,
+    messages: WebsocketGenerator,
+    onError: WebsocketResponse['onSendError']
+): Promise<void> {
+    while (true) {
+        const result = await messages.next()
+        if (result.done) {
+            if (result.value === CloseWebSocket) {
+                socket.close(1000)
+            }
+            return
+        }
+        const error = await new Promise<Error | undefined>(resolve =>
+            socket.send(result.value, resolve)
+        )
+        if (error !== undefined && onError !== undefined) {
+            await onError(result.value, error)
+        }
     }
 }
 
@@ -143,24 +167,6 @@ export function createRequestListener<Errors>({
 
             const { onOpen, onClose, onError, onMessage, onSendError } = response.body
 
-            const sendMessages = async (generator: ReturnType<WebsocketResponse['onMessage']>) => {
-                while (true) {
-                    const result = await generator.next()
-                    if (result.done) {
-                        if (result.value === CloseWebSocket) {
-                            socket.close(1000)
-                        }
-                        return
-                    }
-                    const error = await new Promise<Error | undefined>(resolve =>
-                        socket.send(result.value, resolve)
-                    )
-                    if (error !== undefined && onSendError !== undefined) {
-                        await onSendError(result.value, error)
-                    }
-                }
-            }
-
             if (onClose !== undefined) {
                 socket.addListener('close', onClose)
             }
@@ -168,10 +174,13 @@ export function createRequestListener<Errors>({
                 socket.on('error', onError)
             }
 
-            socket.on('message', data => {
-                const generator = onMessage(data)
-                return sendMessages(generator)
-            })
+            socket.on('message', data =>
+                sendWebsocketMessages(
+                    socket,
+                    onMessage(data),
+                    onSendError
+                )
+            )
 
             if (onOpen === undefined) {
                 await new Promise<number>(resolve =>
@@ -181,12 +190,15 @@ export function createRequestListener<Errors>({
             else {
                 // the 'open' even is never fired in this case, so just
                 // call onOpen immediately
-                const generator = onOpen()
                 await Promise.all([
                     new Promise<number>(resolve =>
                         socket.addListener('close', resolve)
                     ),
-                    sendMessages(generator)
+                    sendWebsocketMessages(
+                        socket,
+                        onOpen(),
+                        onSendError
+                    )
                 ])
             }
         }
