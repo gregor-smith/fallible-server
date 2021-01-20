@@ -7,16 +7,40 @@ export function defaultErrorHandler() {
         body: 'Internal server error'
     };
 }
-function setHeaders(response, { cookies, headers }) {
-    if (cookies !== undefined) {
-        for (const [name, cookie] of Object.entries(cookies)) {
-            const header = cookieHeader(name, cookie);
-            response.setHeader('Set-Cookie', header);
+function* iterateHeaders({ cookies, headers }) {
+    if (headers !== undefined) {
+        for (const [name, value] of Object.entries(headers)) {
+            if (typeof value === 'object') {
+                yield [name, value.map(String)];
+            }
+            else {
+                yield [name, String(value)];
+            }
         }
     }
-    if (headers !== undefined) {
-        for (const [key, value] of Object.entries(headers)) {
-            response.setHeader(key, String(value));
+    if (cookies !== undefined) {
+        const values = Object.entries(cookies)
+            .map(([name, cookie]) => cookieHeader(name, cookie));
+        yield ['Set-Cookie', values];
+    }
+}
+function setResponseHeaders(res, response) {
+    for (const [name, values] of iterateHeaders(response)) {
+        res.setHeader(name, values);
+    }
+}
+async function sendWebsocketMessages(socket, messages, onError) {
+    while (true) {
+        const result = await messages.next();
+        if (result.done) {
+            if (result.value === CloseWebSocket) {
+                socket.close(1000);
+            }
+            return;
+        }
+        const error = await new Promise(resolve => socket.send(result.value, resolve));
+        if (error !== undefined && onError !== undefined) {
+            await onError(result.value, error);
         }
     }
 }
@@ -40,7 +64,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
         }
         res.statusCode = (_a = response.status) !== null && _a !== void 0 ? _a : 200;
         if (typeof response.body === 'string') {
-            setHeaders(res, response);
+            setResponseHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             }
@@ -50,7 +74,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             await new Promise(resolve => res.end(response.body, resolve));
         }
         else if (response.body instanceof Buffer) {
-            setHeaders(res, response);
+            setResponseHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
@@ -59,79 +83,67 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
             }
             await new Promise(resolve => res.end(response.body, resolve));
         }
-        else if (response.body !== undefined) {
-            // stream
-            if ('pipe' in response.body) {
-                setHeaders(res, response);
-                if (!res.hasHeader('Content-Type')) {
-                    res.setHeader('Content-Type', 'application/octet-stream');
-                }
-                await new Promise(resolve => {
-                    response.body.on('end', resolve);
-                    response.body.pipe(res);
-                });
-            }
-            // websocket
-            else {
-                const wss = new WebSocketServer({ noServer: true });
-                wss.on('headers', headers => {
-                    if (response.cookies !== undefined) {
-                        for (const [name, cookie] of Object.entries(response.cookies)) {
-                            const header = cookieHeader(name, cookie);
-                            headers.push(`Set-Cookie: ${header}`);
-                        }
-                    }
-                    if (response.headers !== undefined) {
-                        for (const [key, value] of Object.entries(response.headers)) {
-                            headers.push(`${key}: ${value}`);
-                        }
-                    }
-                });
-                const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-                const { onOpen, onClose, onError, onMessage, onSendError } = response.body;
-                const sendMessages = async (generator) => {
-                    while (true) {
-                        const result = await generator.next();
-                        if (result.done) {
-                            if (result.value === CloseWebSocket) {
-                                socket.close(1000);
-                            }
-                            return;
-                        }
-                        const error = await new Promise(resolve => socket.send(result.value, resolve));
-                        if (error !== undefined && onSendError !== undefined) {
-                            await onSendError(result.value, error);
-                        }
-                    }
-                };
-                if (onClose !== undefined) {
-                    socket.addListener('close', onClose);
-                }
-                if (onError !== undefined) {
-                    socket.on('error', onError);
-                }
-                socket.on('message', data => {
-                    const generator = onMessage(data);
-                    return sendMessages(generator);
-                });
-                if (onOpen === undefined) {
-                    await new Promise(resolve => socket.addListener('close', resolve));
-                }
-                else {
-                    // the 'open' even is never fired in this case, so just
-                    // call onOpen immediately
-                    const generator = onOpen();
-                    await Promise.all([
-                        new Promise(resolve => socket.addListener('close', resolve)),
-                        sendMessages(generator)
-                    ]);
-                }
-            }
-        }
         // no body
-        else {
-            setHeaders(res, response);
+        else if (response.body === undefined) {
+            setResponseHeaders(res, response);
+            if (!res.hasHeader('Content-Length')) {
+                res.setHeader('Content-Length', 0);
+            }
             await new Promise(resolve => res.end(resolve));
+        }
+        // stream
+        else if ('pipe' in response.body) {
+            setResponseHeaders(res, response);
+            if (!res.hasHeader('Content-Type')) {
+                res.setHeader('Content-Type', 'application/octet-stream');
+            }
+            await new Promise(resolve => {
+                res.on('finish', resolve);
+                response.body.pipe(res);
+            });
+        }
+        // websocket
+        else {
+            const wss = new WebSocketServer({ noServer: true });
+            wss.on('headers', headers => {
+                for (const [name, values] of iterateHeaders(response)) {
+                    if (typeof values === 'string') {
+                        headers.push(`${name}: ${values}`);
+                    }
+                    else {
+                        for (const value of values) {
+                            headers.push(`${name}: ${value}`);
+                        }
+                    }
+                }
+            });
+            const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
+            const { onOpen, onClose, onError, onMessage, onSendError } = response.body;
+            socket.on('message', data => sendWebsocketMessages(socket, onMessage(data), onSendError));
+            if (onError !== undefined) {
+                // TODO: await this (use Promise.race with close vs error?)
+                socket.on('error', onError);
+            }
+            let closeReason;
+            if (onOpen === undefined) {
+                closeReason = await new Promise(resolve => 
+                // can't just call onClose here in this callback because
+                // it's potentially async and as such needs to be awaited
+                // before the final cleanup is called
+                socket.on('close', (...args) => resolve(args)));
+            }
+            else {
+                [closeReason,] = await Promise.all([
+                    new Promise(resolve => socket.on('close', (...args) => resolve(args))),
+                    // the 'open' even is never fired when running in noServer
+                    // mode as we are, so just call onOpen straight away as the
+                    // request is already opened
+                    sendWebsocketMessages(socket, onOpen(), onSendError)
+                ]);
+            }
+            if (onClose !== undefined) {
+                await onClose(...closeReason);
+            }
         }
         if (cleanup !== undefined) {
             await cleanup(response);
