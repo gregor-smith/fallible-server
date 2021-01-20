@@ -1,8 +1,0 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
-
-exports[`defaultErrorHandler returns internal server error 1`] = `
-Object {
-  "body": "Internal server error",
-  "status": 500,
-}
-`;

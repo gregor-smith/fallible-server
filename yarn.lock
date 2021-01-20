@@ -604,13 +604,6 @@
   resolved "https://registry.yarnpkg.com/@types/keygrip/-/keygrip-1.0.2.tgz#513abfd256d7ad0bf1ee1873606317b33b1b2a72"
   integrity sha512-GJhpTepz2udxGexqos8wgaBx4I/zWIDPh/KOGEwAqtuGDkOUJu5eFvwmdBX4AmB8Odsr+9pHCQqiAqDL/yKMKw==
 
-"@types/memorystream@^0.3.0":
-  version "0.3.0"
-  resolved "https://registry.yarnpkg.com/@types/memorystream/-/memorystream-0.3.0.tgz#7616df4c42a479805d052a058d990b879d5e368f"
-  integrity sha512-gzh6mqZcLryYHn4g2MuMWjo9J1+Py/XYwITyZmUxV7ZoBIi7bTbBgSiuC5tcm3UL3gmaiYssQFDlXr/3fK94cw==
-  dependencies:
-    "@types/node" "*"
-
 "@types/node@*":
   version "14.14.7"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-14.14.7.tgz#8ea1e8f8eae2430cf440564b98c6dfce1ec5945d"
@@ -2657,15 +2650,15 @@ map-visit@^1.0.0:
   dependencies:
     object-visit "^1.0.0"
 
-memorystream@^0.3.1:
-  version "0.3.1"
-  resolved "https://registry.yarnpkg.com/memorystream/-/memorystream-0.3.1.tgz#86d7090b30ce455d63fbae12dda51a47ddcaf9b2"
-  integrity sha1-htcJCzDORV1j+64S3aUaR93K+bI=
-
 merge-stream@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/merge-stream/-/merge-stream-2.0.0.tgz#52823629a14dd00c9770fb6ad47dc6310f2c1f60"
   integrity sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==
+
+mergee@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/mergee/-/mergee-1.0.0.tgz#027c5addc650f6ecbe4bf56100bd00dae763fda7"
+  integrity sha512-hbbXD4LOcxVkpS+mp3BMEhkSDf+lTVENFeEeqACgjjL8WrgKuW2EyLT0fOHyTbyDiuRLZJZ1HrHNeiX4iOd79Q==
 
 micromatch@^3.1.10, micromatch@^3.1.4:
   version "3.1.10"
@@ -2735,6 +2728,13 @@ mkdirp@1.x:
   version "1.0.4"
   resolved "https://registry.yarnpkg.com/mkdirp/-/mkdirp-1.0.4.tgz#3eb5ed62622756d79a5f0e2a221dfebad75c2f7e"
   integrity sha512-vVqVZQyf3WLx2Shd0qJ9xuvqgAyKPLAiqITEtqW0oIUjzo3PePDd6fW9iFz30ef7Ysp/oiWqbhszeGWW2T6Gzw==
+
+mock-http@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/mock-http/-/mock-http-1.1.0.tgz#b89380a718a103fc5801095804bedd0b20f7638c"
+  integrity sha512-H2HMGaHNQPWY8PdeEw4RFux2WEOHD6eJAtN3+iFELik5kGjPKAcoyPWcsC2vgDiTa2yimAEDssmMed51e+cBKQ==
+  dependencies:
+    mergee "^1.0.0"
 
 ms@2.0.0:
   version "2.0.0"

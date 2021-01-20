@@ -1,365 +1,659 @@
 import 'jest-extended'
 
-import type { IncomingMessage, ServerResponse } from 'http'
-import type { Readable } from 'stream'
+import { createServer } from 'http'
 
-import { error, ok } from 'fallible'
+import { error, ok, Ok } from 'fallible'
+import { Request as MockRequest, Response as MockResponse } from 'mock-http'
+import Websocket, { Data } from 'ws'
 
 import {
     composeMessageHandlers,
     createRequestListener,
-    defaultErrorHandler
+    CreateRequestListenerArguments
 } from '../src/server'
 import type {
-    Response,
-    Cleanup,
-    Cookie,
     MessageHandler,
-    MessageHandlerResult
+    MessageHandlerResult,
+    Response,
+    WebsocketGenerator
 } from '../src/types'
-import { cookieHeader } from '../src/general-utils'
-
-
-describe('defaultErrorHandler', () => {
-    test('returns internal server error', () => {
-        const result = defaultErrorHandler()
-        expect(result).toMatchSnapshot()
-    })
-})
-
-
-const dummyIncomingMessage: IncomingMessage = { tag: 'message' } as any
+import { CloseWebSocket, cookieHeader } from '../src/general-utils'
 
 
 describe('createRequestListener', () => {
-    class ServerResponseMock {
-        public readonly setStatusCode = jest.fn<void, [ number ]>()
-        public readonly setHeader = jest.fn<void, [ string, string ]>()
-        public readonly hasHeader = jest.fn<boolean, [ string ]>()
-        public readonly end = jest.fn<void, [] | [ string | Buffer ]>()
-
-        public set statusCode(value: number) {
-            this.setStatusCode(value)
-        }
+    async function mockRequest<Error>(
+        args: CreateRequestListenerArguments<Error>
+    ): Promise<MockResponse> {
+        const listener = createRequestListener(args)
+        const response = new MockResponse()
+        await listener(new MockRequest(), response)
+        return response
     }
-
-    const serverResponseMock: ServerResponse & ServerResponseMock = new ServerResponseMock() as any
-
-    const testResponse: Response = { body: 'test response' }
-    const testError = { tag: 'error' } as const
-
-    type TestError = typeof testError
-
-    type TestMessageHandler = MessageHandler<void, Response, TestError>
-
-    function createMessageHandlerMock(
-        cleanup?: Cleanup
-    ): jest.MockedFunction<TestMessageHandler> {
-        return jest.fn((..._) => ok({ state: testResponse, cleanup }))
-    }
-
-    afterEach(jest.resetAllMocks)
 
     test('messageHandler param called', async () => {
-        const messageHandlerMock = createMessageHandlerMock()
+        expect.assertions(1)
 
-        const listener = createRequestListener({
-            messageHandler: messageHandlerMock
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(messageHandlerMock).toHaveBeenCalledWith(dummyIncomingMessage)
-    })
-
-    test('cleanup returned by messageHandler called succeeds', async () => {
-        const cleanupMock = jest.fn()
-        const messageHandlerMock = createMessageHandlerMock(cleanupMock)
-
-        const listener = createRequestListener({
-            messageHandler: messageHandlerMock
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(cleanupMock).toHaveBeenCalledTimes(1)
-    })
-
-    test('messageHandler error propagates to errorHandler', async () => {
-        const messageHandlerMock: jest.MockedFunction<TestMessageHandler> = jest.fn(
-            (..._) => error(testError)
+        const messageHandler = jest.fn<Ok<MessageHandlerResult>, []>(() =>
+            ok({ state: {} })
         )
-        const errorHandlerMock = jest.fn(defaultErrorHandler)
+        await mockRequest({ messageHandler })
 
-        const listener = createRequestListener({
-            messageHandler: messageHandlerMock,
-            errorHandler: errorHandlerMock
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(messageHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledTimes(1)
-        expect(errorHandlerMock).toHaveBeenCalledWith<any>(testError)
+        // no need to test if response used here because later tests for
+        // the various different body types also use the messageHandler
+        // param
+        expect(messageHandler).toHaveBeenCalledTimes(1)
     })
 
-    test.each<Response['body']>([
-        undefined,
-        'test body',
-        Buffer.from('test body', 'utf-8'),
-        { pipe: () => {} } as any,
-        // { onMessage: () => CloseWebSocket }
-    ])('cookies, headers and status code passed to response', async body => {
-        expect.assertions(6)
+    test('errorHandler called on messageHandler error and response used', async () => {
+        expect.assertions(3)
 
-        const cookies: Record<string, Cookie> = {
-            'test-cookie': {
-                value: 'test-value'
-            },
-            'test-cookie-2': {
-                value: 'test-value-2',
-                domain: 'test.domain',
-                httpOnly: true,
-                maxAge: 123,
-                path: '/test/path',
-                sameSite: 'lax',
-                secure: true
-            }
-        }
-        const headers = {
-            'X-Test-Header': 'test value',
-            'X-Test-Header-2': 'test value 2'
-        }
-        const status = 123
-
-        const listener = createRequestListener({
-            messageHandler: () => ok({
-                state: {
-                    body,
-                    status,
-                    headers,
-                    cookies
-                }
-            })
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(serverResponseMock.setStatusCode).toHaveBeenCalledTimes(1)
-        expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-
-        for (const [ name, cookie ] of Object.entries(cookies)) {
-            expect(serverResponseMock.setHeader).toHaveBeenCalledWith(
-                'Set-Cookie',
-                cookieHeader(name, cookie)
-            )
-        }
-        for (const [ name, header ] of Object.entries(headers)) {
-            expect(serverResponseMock.setHeader).toHaveBeenCalledWith(
-                name,
-                header
-            )
-        }
-    })
-
-    describe('string response body', () => {
-        const body = 'string body 🤔'
-
-        test('content type and length not set if already present', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => true)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ],
-                [ 'Content-Length' ]
-            ])
-            expect(serverResponseMock.setHeader).not.toHaveBeenCalled()
-            expect(serverResponseMock.end.mock.calls).toEqual([ [ body ] ])
-        })
-
-        test('content type defaults to plain text, content length to body length', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => false)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ],
-                [ 'Content-Length' ]
-            ])
-            expect(serverResponseMock.setHeader.mock.calls).toEqual([
-                [ 'Content-Type', 'text/plain; charset=utf-8' ],
-                [ 'Content-Length', Buffer.byteLength(body) ],
-            ])
-            expect(serverResponseMock.end.mock.calls).toEqual([ [ body ] ])
-        })
-    })
-
-    describe('buffer response body', () => {
-        const body = Buffer.from('buffer body 🤔')
-
-        test('content type and length not set if already present', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => true)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ],
-                [ 'Content-Length' ]
-            ])
-            expect(serverResponseMock.setHeader).not.toHaveBeenCalled()
-            expect(serverResponseMock.end.mock.calls).toEqual([ [ body ] ])
-        })
-
-        test('content type defaults to byte stream, content length to body length', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => false)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ],
-                [ 'Content-Length' ]
-            ])
-            expect(serverResponseMock.setHeader.mock.calls).toEqual([
-                [ 'Content-Type', 'application/octet-stream' ],
-                [ 'Content-Length', body.length ],
-            ])
-            expect(serverResponseMock.end.mock.calls).toEqual([ [ body ] ])
-        })
-    })
-
-    describe('stream response body', () => {
-        const pipeMock = jest.fn<void, [ ServerResponse ]>()
-        const body: Readable = { pipe: pipeMock } as any
-
-        test('body set, content type not set if already present', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => true)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ]
-            ])
-            expect(serverResponseMock.setHeader).not.toHaveBeenCalled()
-            expect(pipeMock.mock.calls).toEqual([ [ serverResponseMock ] ])
-            expect(serverResponseMock.end).not.toHaveBeenCalled()
-        })
-
-        test('content type defaults to byte stream', async () => {
-            serverResponseMock.hasHeader.mockImplementation(() => false)
-
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: { body } })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.hasHeader.mock.calls).toEqual([
-                [ 'Content-Type' ]
-            ])
-            expect(serverResponseMock.setHeader.mock.calls).toEqual([
-                [ 'Content-Type', 'application/octet-stream' ]
-            ])
-            expect(pipeMock.mock.calls).toEqual([ [ serverResponseMock ] ])
-            expect(serverResponseMock.end).not.toHaveBeenCalled()
-        })
-    })
-
-    describe('no response body', () => {
-        test('response ended with no body', async () => {
-            const listener = createRequestListener({
-                messageHandler: () => ok({ state: {} })
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(serverResponseMock.setHeader).not.toHaveBeenCalled()
-            expect(serverResponseMock.end.mock.calls).toEqual([ [] ])
-        })
-    })
-
-    test('response from errorHandler is used when error propagates', async () => {
+        const errorMessage = 'test'
         const body = 'test body'
-        const listener = createRequestListener({
+        const errorHandler = jest.fn<Response, [ typeof errorMessage ]>(() => ({
+            body
+        }))
+
+        const response = await mockRequest({
+            messageHandler: () => error<typeof errorMessage>(errorMessage),
+            errorHandler
+        })
+        expect(errorHandler).toHaveBeenCalledTimes(1)
+        expect(errorHandler).toHaveBeenCalledWith(errorMessage)
+        expect(response._internal.buffer.toString('utf-8')).toBe(body)
+    })
+
+    test('exceptionHandler param called on messageHandler throw and response used', async () => {
+        expect.assertions(3)
+
+        const errorMessage = 'test'
+        const body = 'test body'
+        const exceptionHandler = jest.fn<Response, [ unknown ]>(() => ({
+            body
+        }))
+
+        const response = await mockRequest({
+            messageHandler: () => { throw errorMessage },
+            exceptionHandler
+        })
+        expect(exceptionHandler).toHaveBeenCalledTimes(1)
+        expect(exceptionHandler).toHaveBeenCalledWith(errorMessage)
+        expect(response._internal.buffer.toString('utf-8')).toBe(body)
+    })
+
+    test('exceptionHandler param called on errorHandler throw and response used', async () => {
+        expect.assertions(3)
+
+        const message = 'test'
+        const body = 'test body'
+        const exceptionHandler = jest.fn<Response, [ unknown ]>(() => ({
+            body
+        }))
+
+        const response = await mockRequest({
             messageHandler: error,
-            errorHandler: () => ({ body })
+            errorHandler: () => { throw message },
+            exceptionHandler
         })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
+        expect(exceptionHandler).toHaveBeenCalledTimes(1)
+        expect(exceptionHandler).toHaveBeenCalledWith(message)
+        expect(response._internal.buffer.toString('utf-8')).toBe(body)
     })
 
-    describe('exception from messageHandler or errorHandler propagates to exceptionHandler', () => {
-        test('during message handler', async () => {
-            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
-                defaultErrorHandler
-            )
-            const listener = createRequestListener({
-                messageHandler: () => { throw 'test' },
-                exceptionHandler: exceptionHandlerMock
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
-        })
-
-        test('during message handler cleanup', async () => {
-            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
-                defaultErrorHandler
-            )
-            const listener = createRequestListener({
-                messageHandler: () => ok({
-                    state: {},
-                    cleanup: () => { throw 'test' }
-                }),
-                exceptionHandler: exceptionHandlerMock
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
-        })
-
-        test('during error handler', async () => {
-            const exceptionHandlerMock = jest.fn<Response, [ unknown ]>(
-                defaultErrorHandler
-            )
-            const listener = createRequestListener({
-                messageHandler: error,
-                errorHandler: () => { throw 'test' },
-                exceptionHandler: exceptionHandlerMock
-            })
-            await listener(dummyIncomingMessage, serverResponseMock)
-
-            expect(exceptionHandlerMock.mock.calls).toEqual([ [ 'test' ] ])
-        })
-    })
-
-    test('default error handler used when none given as parameter', async () => {
-        const listener = createRequestListener({
-            messageHandler: error
-        })
-        await listener(dummyIncomingMessage, serverResponseMock)
-
-        const { status, body } = defaultErrorHandler()
-        expect(serverResponseMock.setStatusCode).toHaveBeenCalledWith(status)
-        expect(serverResponseMock.end).toHaveBeenCalledWith(body)
-    })
+    test.todo('default error handler used when none given as parameter')
 
     test.todo('default exception handler used when none given as parameter')
 
-    // describe('websocket body', () => {
-    // })
+    describe('string response', () => {
+        const body = 'string body 🤔'
+        const minimalState: Response = { body }
+        const fullState: Response = {
+            ...minimalState,
+            status: 418,
+            cookies: {
+                'test cookie': {
+                    value: 'test cookie value'
+                },
+                'test cookie 2': {
+                    value: 'test cookie 2 value',
+                    domain: 'test domain',
+                    httpOnly: true,
+                    maxAge: 123,
+                    path: '/test/path',
+                    sameSite: 'lax',
+                    secure: true
+                }
+            },
+            headers: {
+                'x-test': 'test'
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: fullState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(fullState.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(fullState.headers!)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(fullState.cookies!)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, content length, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: minimalState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries([
+                [ 'content-length', Buffer.byteLength(body) ],
+                [ 'content-type', 'text/plain; charset=utf-8' ]
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            return mockRequest({
+                messageHandler: () => ok({
+                    state: minimalState,
+                    cleanup: state => expect(state).toBe(minimalState)
+                })
+            })
+        })
+    })
+
+    describe('buffer response', () => {
+        const body = Buffer.from('buffer body 🤔', 'utf-8')
+        const minimalState: Response = { body }
+        const fullState: Response = {
+            ...minimalState,
+            status: 418,
+            cookies: {
+                'test cookie': {
+                    value: 'test cookie value'
+                },
+                'test cookie 2': {
+                    value: 'test cookie 2 value',
+                    domain: 'test domain',
+                    httpOnly: true,
+                    maxAge: 123,
+                    path: '/test/path',
+                    sameSite: 'lax',
+                    secure: true
+                }
+            },
+            headers: {
+                'x-test': 'test'
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: fullState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(fullState.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body.toString('utf-8'))
+            expect(headers).toContainEntries(
+                Object.entries(fullState.headers!)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(fullState.cookies!)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, content length, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: minimalState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body.toString('utf-8'))
+            expect(headers).toContainEntries([
+                [ 'content-length', body.length ],
+                [ 'content-type', 'application/octet-stream' ]
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            return mockRequest({
+                messageHandler: () => ok({
+                    state: minimalState,
+                    cleanup: state => expect(state).toBe(minimalState)
+                })
+            })
+        })
+    })
+
+    describe('stream response', () => {
+        const body = 'stream body 🤔'
+        const minimalState: Response = {
+            body: {
+                pipe: stream => stream.end(body, 'utf-8')
+            }
+        }
+        const fullState: Response = {
+            ...minimalState,
+            status: 418,
+            cookies: {
+                'test cookie': {
+                    value: 'test cookie value'
+                },
+                'test cookie 2': {
+                    value: 'test cookie 2 value',
+                    domain: 'test domain',
+                    httpOnly: true,
+                    maxAge: 123,
+                    path: '/test/path',
+                    sameSite: 'lax',
+                    secure: true
+                }
+            },
+            headers: {
+                'x-test': 'test'
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: fullState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(fullState.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(fullState.headers!)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(fullState.cookies!)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: minimalState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntry([
+                'content-type',
+                'application/octet-stream'
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            return mockRequest({
+                messageHandler: () => ok({
+                    state: minimalState,
+                    cleanup: state => expect(state).toBe(minimalState)
+                })
+            })
+        })
+    })
+
+    describe('empty response', () => {
+        const minimalState: Response = {}
+        const fullState: Response = {
+            status: 418,
+            cookies: {
+                'test cookie': {
+                    value: 'test cookie value'
+                },
+                'test cookie 2': {
+                    value: 'test cookie 2 value',
+                    domain: 'test domain',
+                    httpOnly: true,
+                    maxAge: 123,
+                    path: '/test/path',
+                    sameSite: 'lax',
+                    secure: true
+                }
+            },
+            headers: {
+                'x-test': 'test'
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: fullState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(fullState.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe('')
+            expect(headers).toContainEntries(
+                Object.entries(fullState.headers!)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(fullState.cookies!)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content length, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({ state: minimalState })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe('')
+            expect(headers).toContainEntry([ 'content-length', 0 ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            return mockRequest({
+                messageHandler: () => ok({
+                    state: minimalState,
+                    cleanup: state => expect(state).toBe(minimalState)
+                })
+            })
+        })
+    })
+
+    describe('websocket response', () => {
+        const server = createServer()
+        const host = '127.0.0.1'
+
+        beforeAll(done => server.listen(0, host, done))
+        afterEach(() => server.removeAllListeners('request'))
+        afterAll(done => server.close(done))
+
+        function setupServerAndConnectClient<Error>(args: CreateRequestListenerArguments<Error>): Websocket {
+            const address = server.address()
+            let url: string
+            if (address === null) {
+                url = `ws://${host}`
+            }
+            else if (typeof address === 'string') {
+                url = `ws://${address}`
+            }
+            else {
+                url = `ws://${address.address}:${address.port}`
+            }
+
+            server.addListener('request', createRequestListener(args))
+
+            return new Websocket(url)
+        }
+
+        test('onOpen called, onClose called, messages sent and received', async () => {
+            expect.assertions(6)
+
+            const onOpen = jest.fn<WebsocketGenerator, []>(function * () {
+                yield 'server open'
+                yield 'server open 2'
+            })
+            const onClose = jest.fn<void, [ number, string ]>()
+            const onMessage = jest.fn<WebsocketGenerator, [ Data ]>(function * (message) {
+                yield 'server message'
+                yield `server echo: ${message}`
+            })
+
+            const messages: Data[] = []
+
+            await new Promise<void>(resolve => {
+                // simply listening for the client close event is not
+                // enough, as the server request listener has not yet
+                // returned at that point. we get around this by both
+                // listening for the client close event and using the
+                // messageHandler's cleanup callback.
+                // conveniently, this also tests that said callback is
+                // being called, as this test would fail with a timeout
+                // error otherwise.
+                let serverDone = false
+                let clientDone = false
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state: {
+                            body: { onOpen, onMessage, onClose }
+                        },
+                        cleanup: () => {
+                            serverDone = true
+                            if (serverDone && clientDone) {
+                                resolve()
+                            }
+                        }
+                    })
+                })
+                client.on('open', () => client.send('client open'))
+                client.on('message', message => {
+                    messages.push(message)
+                    if (messages.length >= 4) {
+                        client.close(4321, 'client close')
+                    }
+                })
+                client.on('close', () => {
+                    clientDone = true
+                    if (serverDone && clientDone) {
+                        resolve()
+                    }
+                })
+            })
+
+            expect(onOpen).toHaveBeenCalledTimes(1)
+            expect(onOpen).toHaveBeenCalledBefore(onMessage)
+            expect(onMessage.mock.calls).toEqual([ [ 'client open' ] ])
+            expect(messages).toEqual([
+                'server open',
+                'server open 2',
+                'server message',
+                'server echo: client open'
+            ])
+            expect(onClose).toHaveBeenCalledAfter(onMessage)
+            expect(onClose.mock.calls).toEqual([ [ 4321, 'client close' ] ])
+        })
+
+        test('passes cookies and headers, status always 101', () => {
+            expect.assertions(3)
+
+            const state: Response = {
+                status: 418,
+                body: {
+                    onMessage: function * () {}
+                },
+                cookies: {
+                    'test cookie': {
+                        value: 'test cookie value'
+                    },
+                    'test cookie 2': {
+                        value: 'test cookie 2 value',
+                        domain: 'test domain',
+                        httpOnly: true,
+                        maxAge: 123,
+                        path: '/test/path',
+                        sameSite: 'lax',
+                        secure: true
+                    }
+                },
+                headers: {
+                    'x-test': 'test'
+                }
+            }
+
+            return new Promise<void>(resolve => {
+                let serverDone = false
+                let clientDone = false
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state,
+                        cleanup: () => {
+                            serverDone = true
+                            if (serverDone && clientDone) {
+                                resolve()
+                            }
+                        }
+                    })
+                })
+                client.on('upgrade', request => {
+                    expect(request.statusCode).toBe(101)
+                    expect(request.headers).toContainEntries(
+                        Object.entries(state.headers!)
+                    )
+                    expect(request.headers).toContainEntry([
+                        'set-cookie',
+                        Object.entries(state.cookies!)
+                            .map(([ name, value ]) =>
+                                cookieHeader(name, value)
+                            )
+                    ])
+                })
+                client.on('open', () => client.close())
+                client.on('close', () => {
+                    clientDone = true
+                    if (serverDone && clientDone) {
+                        resolve()
+                    }
+                })
+            })
+        })
+
+        test('returning CloseWebSocket from onOpen closes connection', async () => {
+            expect.assertions(1)
+
+            const messages: Data[] = []
+
+            await new Promise<void>(resolve => {
+                let serverDone = false
+                let clientDone = false
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state: {
+                            body: {
+                                onOpen: function * () {
+                                    yield 'server closing'
+                                    return CloseWebSocket
+                                },
+                                onMessage: function * () {}
+                            }
+                        },
+                        cleanup: () => {
+                            serverDone = true
+                            if (serverDone && clientDone) {
+                                resolve()
+                            }
+                        }
+                    })
+                })
+                client.on('message', message => messages.push(message))
+                client.on('close', () => {
+                    clientDone = true
+                    if (serverDone && clientDone) {
+                        resolve()
+                    }
+                })
+            })
+
+            expect(messages).toEqual([ 'server closing' ])
+        })
+
+        test('returning CloseWebSocket from onMessage closes connection', async () => {
+            expect.assertions(1)
+
+            const messages: Data[] = []
+
+            await new Promise<void>(resolve => {
+                let serverDone = false
+                let clientDone = false
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state: {
+                            body: {
+                                onMessage: function * () {
+                                    yield 'server closing'
+                                    return CloseWebSocket
+                                }
+                            }
+                        },
+                        cleanup: () => {
+                            serverDone = true
+                            if (serverDone && clientDone) {
+                                resolve()
+                            }
+                        }
+                    })
+                })
+                client.on('open', () => client.send('client open'))
+                client.on('message', message => messages.push(message))
+                client.on('close', () => {
+                    clientDone = true
+                    if (serverDone && clientDone) {
+                        resolve()
+                    }
+                })
+            })
+
+            expect(messages).toEqual([ 'server closing' ])
+        })
+
+        // TODO: figure out how to induce these errors
+        test.todo('socket error calls onError')
+
+        test.todo('send error calls onSendError')
+    })
 })
 
 
@@ -367,8 +661,10 @@ describe('composeMessageHandlers', () => {
     test('handlers called in order with message and each successive state', async () => {
         expect.assertions(7)
 
+        const request = new MockRequest()
+
         const a: MessageHandler<void, { a: true }, void> = (message, state) => {
-            expect(message).toBe(dummyIncomingMessage)
+            expect(message).toBe(request)
             expect(state).toBeUndefined()
             return ok({
                 state: { a: true }
@@ -376,7 +672,7 @@ describe('composeMessageHandlers', () => {
         }
 
         const b: MessageHandler<{ a: true }, { b: true }, void> = (message, state) => {
-            expect(message).toBe(dummyIncomingMessage)
+            expect(message).toBe(request)
             expect(state).toEqual({ a: true })
             return ok({
                 state: { b: true }
@@ -384,7 +680,7 @@ describe('composeMessageHandlers', () => {
         }
 
         const c: MessageHandler<{ b: true }, { c: true }, void> = (message, state) => {
-            expect(message).toBe(dummyIncomingMessage)
+            expect(message).toBe(request)
             expect(state).toEqual({ b: true })
             return ok({
                 state: { c: true }
@@ -392,7 +688,7 @@ describe('composeMessageHandlers', () => {
         }
 
         const composed = composeMessageHandlers([ a, b, c ])
-        const result = await composed(dummyIncomingMessage)
+        const result = await composed(request)
 
         expect(result).toEqual(
             ok({
@@ -410,7 +706,8 @@ describe('composeMessageHandlers', () => {
             ok({ state })
 
         const composed = composeMessageHandlers([ a, b, c ])
-        const result = await composed(dummyIncomingMessage)
+        // request should not be touched in this test so undefined is fine
+        const result = await composed(undefined as any)
         expect(result.ok).toBeTrue()
         const { cleanup } = result.value as MessageHandlerResult<void>
         expect(cleanup).not.toBeUndefined()
@@ -433,7 +730,7 @@ describe('composeMessageHandlers', () => {
             ok({ state, cleanup: dCleanup })
 
         const composed = composeMessageHandlers([ a, b, c, d ])
-        const handlerResult = await composed(dummyIncomingMessage)
+        const handlerResult = await composed(undefined as any)
 
         expect(handlerResult.ok).toBeTrue()
         const { cleanup } = handlerResult.value as MessageHandlerResult<void>
@@ -465,7 +762,7 @@ describe('composeMessageHandlers', () => {
             ok({ state, cleanup: dCleanup })
 
         const composed = composeMessageHandlers([ a, b, c, d ])
-        const result = await composed(dummyIncomingMessage)
+        const result = await composed(undefined as any)
 
         expect(result).toEqual(error(testError))
         expect(aCleanup).toHaveBeenCalledTimes(1)
