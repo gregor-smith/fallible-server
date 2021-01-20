@@ -24,7 +24,6 @@ export declare type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWe
 export declare type WebsocketResponse = {
     onOpen?: () => WebsocketGenerator;
     onClose?: (code: number, reason: string) => Awaitable<void>;
-    onError?: (error: Error) => Awaitable<void>;
     onMessage: (message: Data) => WebsocketGenerator;
     onSendError?: (message: Data, error: Error) => Awaitable<void>;
 };

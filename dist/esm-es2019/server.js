@@ -118,12 +118,11 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                 }
             });
             const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-            const { onOpen, onClose, onError, onMessage, onSendError } = response.body;
+            const { onOpen, onClose, onMessage, onSendError } = response.body;
             socket.on('message', data => sendWebsocketMessages(socket, onMessage(data), onSendError));
-            if (onError !== undefined) {
-                // TODO: await this (use Promise.race with close vs error?)
-                socket.on('error', onError);
-            }
+            // no need to listen for the socket error event as apparently the
+            // close event is always called on errors anyway. see:
+            // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
             let closeReason;
             if (onOpen === undefined) {
                 closeReason = await new Promise(resolve => 

@@ -133,7 +133,7 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.errorHandler, errorHandler = _b === void 0 ? defaultErrorHandler : _b, _c = _a.exceptionHandler, exceptionHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, cleanup, result, exception_1, wss_1, socket_1, _a, onOpen, onClose, onError, onMessage_1, onSendError_1, closeReason;
+        var response, cleanup, result, exception_1, wss_1, socket_1, _a, onOpen, onClose, onMessage_1, onSendError_1, closeReason;
         var _b;
         var _c;
         return tslib_1.__generator(this, function (_d) {
@@ -252,14 +252,10 @@ function createRequestListener(_a) {
                         })];
                 case 16:
                     socket_1 = _d.sent();
-                    _a = response.body, onOpen = _a.onOpen, onClose = _a.onClose, onError = _a.onError, onMessage_1 = _a.onMessage, onSendError_1 = _a.onSendError;
+                    _a = response.body, onOpen = _a.onOpen, onClose = _a.onClose, onMessage_1 = _a.onMessage, onSendError_1 = _a.onSendError;
                     socket_1.on('message', function (data) {
                         return sendWebsocketMessages(socket_1, onMessage_1(data), onSendError_1);
                     });
-                    if (onError !== undefined) {
-                        // TODO: await this (use Promise.race with close vs error?)
-                        socket_1.on('error', onError);
-                    }
                     closeReason = void 0;
                     if (!(onOpen === undefined)) return [3 /*break*/, 18];
                     return [4 /*yield*/, new Promise(function (resolve) {

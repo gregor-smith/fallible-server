@@ -650,8 +650,6 @@ describe('createRequestListener', () => {
         })
 
         // TODO: figure out how to induce these errors
-        test.todo('socket error calls onError')
-
         test.todo('send error calls onSendError')
     })
 })
