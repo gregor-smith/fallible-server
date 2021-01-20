@@ -661,27 +661,27 @@ describe('composeMessageHandlers', () => {
 
         const request = new MockRequest()
 
-        const a: MessageHandler<void, { a: true }, void> = (message, state) => {
+        const a: MessageHandler<void, 'a', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBeUndefined()
             return ok({
-                state: { a: true }
+                state: 'a'
             })
         }
 
-        const b: MessageHandler<{ a: true }, { b: true }, void> = (message, state) => {
+        const b: MessageHandler<'a', 'b', void> = (message, state) => {
             expect(message).toBe(request)
-            expect(state).toEqual({ a: true })
+            expect(state).toBe('a')
             return ok({
-                state: { b: true }
+                state: 'b'
             })
         }
 
-        const c: MessageHandler<{ b: true }, { c: true }, void> = (message, state) => {
+        const c: MessageHandler<'b', 'c', void> = (message, state) => {
             expect(message).toBe(request)
-            expect(state).toEqual({ b: true })
+            expect(state).toBe('b')
             return ok({
-                state: { c: true }
+                state: 'c'
             })
         }
 
@@ -690,7 +690,7 @@ describe('composeMessageHandlers', () => {
 
         expect(result).toEqual(
             ok({
-                state: { c: true }
+                state: 'c'
             })
         )
     })
