@@ -26,14 +26,14 @@ export function defaultErrorHandler() {
 }
 
 
-function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, string[] ]> {
+function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, string | string[] ]> {
     if (headers !== undefined) {
         for (const [ name, value ] of Object.entries(headers)) {
-            if (Array.isArray(value)) {
+            if (typeof value === 'object') {
                 yield [ name, value.map(String) ]
             }
             else {
-                yield [ name, [ String(value) ] ]
+                yield [ name, String(value) ]
             }
         }
     }
@@ -133,6 +133,9 @@ export function createRequestListener<Errors>({
         // no body
         else if (response.body === undefined) {
             setResponseHeaders(res, response)
+            if (!res.hasHeader('Content-Length')) {
+                res.setHeader('Content-Length', 0)
+            }
             await new Promise<void>(resolve => res.end(resolve))
         }
         // stream
@@ -151,8 +154,13 @@ export function createRequestListener<Errors>({
             const wss = new WebSocketServer({ noServer: true })
             wss.on('headers', headers => {
                 for (const [ name, values ] of iterateHeaders(response)) {
-                    for (const value of values) {
-                        headers.push(`${name}: ${value}`)
+                    if (typeof values === 'string') {
+                        headers.push(`${name}: ${values}`)
+                    }
+                    else {
+                        for (const value of values) {
+                            headers.push(`${name}: ${value}`)
+                        }
                     }
                 }
             })
@@ -167,13 +175,6 @@ export function createRequestListener<Errors>({
 
             const { onOpen, onClose, onError, onMessage, onSendError } = response.body
 
-            if (onClose !== undefined) {
-                socket.addListener('close', onClose)
-            }
-            if (onError !== undefined) {
-                socket.on('error', onError)
-            }
-
             socket.on('message', data =>
                 sendWebsocketMessages(
                     socket,
@@ -182,24 +183,38 @@ export function createRequestListener<Errors>({
                 )
             )
 
+            if (onError !== undefined) {
+                // TODO: await this (use Promise.race with close vs error?)
+                socket.on('error', onError)
+            }
+
+            let closeReason: [ number, string ]
             if (onOpen === undefined) {
-                await new Promise<number>(resolve =>
-                    socket.addListener('close', resolve)
+                closeReason = await new Promise<[ number, string ]>(resolve =>
+                    // can't just call onClose here in this callback because
+                    // it's potentially async and as such needs to be awaited
+                    // before the final cleanup is called
+                    socket.on('close', (...args) => resolve(args))
                 )
             }
             else {
-                // the 'open' even is never fired in this case, so just
-                // call onOpen immediately
-                await Promise.all([
-                    new Promise<number>(resolve =>
-                        socket.addListener('close', resolve)
+                [ closeReason, ] = await Promise.all([
+                    new Promise<[ number, string ]>(resolve =>
+                        socket.on('close', (...args) => resolve(args))
                     ),
+                    // the 'open' even is never fired when running in noServer
+                    // mode as we are, so just call onOpen straight away as the
+                    // request is already opened
                     sendWebsocketMessages(
                         socket,
                         onOpen(),
                         onSendError
                     )
                 ])
+            }
+
+            if (onClose !== undefined) {
+                await onClose(...closeReason)
             }
         }
 
