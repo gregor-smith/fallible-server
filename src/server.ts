@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'http'
 
-import Websocket, { Data as WebsocketData, Server as WebsocketServer } from 'ws'
+import Websocket from 'ws'
 import { Awaitable, error, ok, Result } from 'fallible'
 
 import type {
@@ -25,7 +25,7 @@ export function defaultErrorHandler(): Response {
 }
 
 
-export function defaultOnWebsocketSendError(_: WebsocketData, { name, message }: Error): Awaitable<void> {
+export function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }: Error): Awaitable<void> {
     console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
 }
 
@@ -170,7 +170,7 @@ export function createRequestListener<Errors>({
         }
         // websocket
         else {
-            const server = new WebsocketServer({ noServer: true })
+            const server = new Websocket.Server({ noServer: true })
             server.on('headers', headers => {
                 for (const [ name, values ] of iterateHeaders(response)) {
                     if (typeof values === 'string') {

@@ -11,14 +11,14 @@ import {
     createRequestListener,
     CreateRequestListenerArguments,
     fallthroughMessageHandler
-} from '../src/server'
+} from '../src/server.js'
 import type {
     MessageHandler,
     MessageHandlerResult,
     Response,
     WebsocketGenerator
-} from '../src/types'
-import { CloseWebSocket, cookieHeader } from '../src/general-utils'
+} from '../src/types.js'
+import { CloseWebSocket, cookieHeader } from '../src/general-utils.js'
 
 
 function jestMock<F extends (...params: any) => any>(

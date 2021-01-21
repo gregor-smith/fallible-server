@@ -1,4 +1,4 @@
-import { Server as WebsocketServer } from 'ws';
+import Websocket from 'ws';
 import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
 export function defaultErrorHandler() {
@@ -120,7 +120,7 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
         }
         // websocket
         else {
-            const server = new WebsocketServer({ noServer: true });
+            const server = new Websocket.Server({ noServer: true });
             server.on('headers', headers => {
                 for (const [name, values] of iterateHeaders(response)) {
                     if (typeof values === 'string') {

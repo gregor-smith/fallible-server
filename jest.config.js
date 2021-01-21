@@ -1,4 +1,4 @@
 export default {
-    testRegex: '\\.test\\.ts$',
+    testRegex: '\\.test\\.js$',
     setupFilesAfterEnv: [ 'jest-extended' ]
 }

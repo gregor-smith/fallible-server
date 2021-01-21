@@ -3,7 +3,7 @@ import type { IncomingHttpHeaders } from 'http'
 import { ok, error, Error, Ok } from 'fallible'
 import Keygrip from 'keygrip'
 
-import type { Cookie, ParsedContentType } from '../src/types'
+import type { Cookie, ParsedContentType } from '../src/types.js'
 import {
     cookieHeader,
     signedCookieHeader,
@@ -27,7 +27,7 @@ import {
     parseJSONString,
     ParseSignedMessageCookieError,
     signatureCookieName
-} from '../src/general-utils'
+} from '../src/general-utils.js'
 
 
 describe('parseCookieHeader', () => {
