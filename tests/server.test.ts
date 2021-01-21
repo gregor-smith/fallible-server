@@ -422,9 +422,15 @@ describe('createRequestListener', () => {
         const server = createServer()
         const host = '127.0.0.1'
 
-        beforeAll(done => server.listen(0, host, done))
-        afterEach(() => server.removeAllListeners('request'))
-        afterAll(done => server.close(done))
+        beforeAll(done => {
+            server.listen(0, host, done)
+        })
+        afterEach(() => {
+            server.removeAllListeners('request')
+        })
+        afterAll(done => {
+            server.close(done)
+        })
 
         function setupServerAndConnectClient<Error>(args: CreateRequestListenerArguments<Error>): Websocket {
             const address = server.address()

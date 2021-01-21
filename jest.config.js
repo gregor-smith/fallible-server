@@ -1,11 +1,4 @@
-module.exports = {
+export default {
     testRegex: '\\.test\\.ts$',
-    preset: 'ts-jest',
-    testEnvironment: 'node',
-    setupFilesAfterEnv: [ 'jest-extended' ],
-    globals: {
-        'ts-jest': {
-            tsconfig: 'tsconfig.esm.json'
-        }
-    }
+    setupFilesAfterEnv: [ 'jest-extended' ]
 }
