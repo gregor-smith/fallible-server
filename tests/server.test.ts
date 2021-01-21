@@ -9,7 +9,8 @@ import Websocket, { Data } from 'ws'
 import {
     composeMessageHandlers,
     createRequestListener,
-    CreateRequestListenerArguments
+    CreateRequestListenerArguments,
+    fallthroughMessageHandler
 } from '../src/server'
 import type {
     MessageHandler,
@@ -18,6 +19,13 @@ import type {
     WebsocketGenerator
 } from '../src/types'
 import { CloseWebSocket, cookieHeader } from '../src/general-utils'
+
+
+function jestMock<F extends (...params: any) => any>(
+    implementation: F
+): jest.Mock<ReturnType<F>, Parameters<F>> {
+    return jest.fn(implementation)
+}
 
 
 describe('createRequestListener', () => {
@@ -805,6 +813,8 @@ describe('composeMessageHandlers', () => {
     })
 
     test('cleanup returned if at least one handler had cleanup', async () => {
+        expect.assertions(2)
+
         const a: MessageHandler<void, void, void> = (_, state) =>
             ok({ state })
         const b: MessageHandler<void, void, void> = (_, state) =>
@@ -821,6 +831,8 @@ describe('composeMessageHandlers', () => {
     })
 
     test('cleanup calls handler cleanups in reverse order', async () => {
+        expect.assertions(7)
+
         const aCleanup = jest.fn<void, []>()
         const a: MessageHandler<void, void, void> = (_, state) =>
             ok({ state, cleanup: aCleanup })
@@ -852,6 +864,8 @@ describe('composeMessageHandlers', () => {
     })
 
     test('on handler error, cleanups of previous handlers called in reverse order and error returned ', async () => {
+        expect.assertions(5)
+
         const testError = 'test'
 
         const aCleanup = jest.fn<void, []>()
@@ -882,5 +896,71 @@ describe('composeMessageHandlers', () => {
 
 
 describe('fallthroughMessageHandler', () => {
+    test('returns response of first handler to return ok', async () => {
+        expect.assertions(7)
 
+        type Handler = MessageHandler<'state', 'c' | 'd', 'next' | 'noMatch'>
+
+        const a = jestMock<Handler>(() => error('next'))
+        const b = jestMock<Handler>(() => error('next'))
+        const c = jestMock<Handler>(() => ok({ state: 'c' }))
+        const d = jestMock<Handler>(() => ok({ state: 'd' }))
+
+        const handler = fallthroughMessageHandler<'state', 'c' | 'd', 'noMatch', 'next'>(
+            [ a, b, c, d ],
+            (error): error is 'next' => error === 'next',
+            () => 'noMatch'
+        )
+        const request = new MockRequest()
+        const result = await handler(request, 'state')
+
+        expect(result).toEqual(
+            ok({ state: 'c' })
+        )
+        expect(a.mock.calls).toEqual([ [ request, 'state' ] ])
+        expect(b.mock.calls).toEqual([ [ request, 'state' ] ])
+        expect(c.mock.calls).toEqual([ [ request, 'state' ] ])
+        expect(a).toHaveBeenCalledBefore(b)
+        expect(b).toHaveBeenCalledBefore(c)
+        expect(d).not.toHaveBeenCalled()
+    })
+
+    test('returns response of first handler to return non-next error', async () => {
+        expect.assertions(2)
+
+        type Handler = MessageHandler<void, 'c', 'next' | 'noMatch' | 'error'>
+
+        const a: Handler = () => error('next')
+        const b: Handler = () => error('error')
+        const c = jestMock<Handler>(() => ok({ state: 'c' }))
+
+        const handler = fallthroughMessageHandler<void, 'c', 'noMatch' | 'error', 'next'>(
+            [ a, b, c ],
+            (error): error is 'next' => error === 'next',
+            () => 'noMatch'
+        )
+        const result = await handler(undefined as any)
+
+        expect(result).toEqual(
+            error('error')
+        )
+        expect(c).not.toHaveBeenCalled()
+    })
+
+    test('returns nomatch if no handlers return ok or non-next error', async () => {
+        expect.assertions(1)
+
+        const a: MessageHandler<void, void, 'next'> = () => error('next')
+
+        const handler = fallthroughMessageHandler<void, void, 'next' | 'noMatch', 'next'>(
+            [ a, a, a ],
+            (error): error is 'next' => error === 'next',
+            () => 'noMatch'
+        )
+        const result = await handler(undefined as any)
+
+        expect(result).toEqual(
+            error('noMatch')
+        )
+    })
 })
