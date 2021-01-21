@@ -8,7 +8,7 @@ import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
 import { parse as secureJSONParse } from 'secure-json-parse'
 
-import type { Cookie, Formattable, Method, ParsedContentType } from './types'
+import type { Cookie, Formattable, Method, ParsedContentType } from './types.js'
 
 
 export const CloseWebSocket = Symbol()

@@ -14,7 +14,7 @@ import type {
     Response,
     WebsocketGenerator
 } from './types'
-import { CloseWebSocket, cookieHeader } from './general-utils'
+import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
 
 export function defaultErrorHandler(): Response {

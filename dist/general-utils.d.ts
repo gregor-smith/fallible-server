@@ -2,7 +2,7 @@
 import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type { Cookie, Formattable, Method, ParsedContentType } from './types';
+import type { Cookie, Formattable, Method, ParsedContentType } from './types.js';
 export declare const CloseWebSocket: unique symbol;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;

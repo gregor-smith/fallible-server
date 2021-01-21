@@ -4,7 +4,7 @@ import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
 import { createReadStream, stat } from 'fallible-fs';
 import sanitiseFilename from 'sanitize-filename';
-import { parseJSONString } from './general-utils';
+import { parseJSONString } from './general-utils.js';
 function hasTypeField(value) {
     return typeof value === 'object'
         && value !== null

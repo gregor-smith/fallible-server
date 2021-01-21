@@ -8,7 +8,7 @@ import rawBody from 'raw-body'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 import sanitiseFilename from 'sanitize-filename'
 
-import { parseJSONString } from './general-utils'
+import { parseJSONString } from './general-utils.js'
 
 
 export type ParseJSONStreamError =

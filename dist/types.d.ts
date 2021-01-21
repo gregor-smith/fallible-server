@@ -2,7 +2,7 @@
 import type { IncomingMessage, RequestListener } from 'http';
 import type { Data } from 'ws';
 import type { Awaitable, Result } from 'fallible';
-import type { CloseWebSocket } from './general-utils';
+import type { CloseWebSocket } from './general-utils.js';
 export declare type ParsedContentType = {
     type: string;
     characterSet?: string;
