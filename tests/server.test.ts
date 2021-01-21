@@ -460,20 +460,23 @@ describe('createRequestListener', () => {
                 // conveniently, this also tests that said callback is
                 // being called, as this test would fail with a timeout
                 // error otherwise.
-                let serverDone = false
-                let clientDone = false
+                let done = false
+
+                function waitForOtherToFinish() {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
 
                 const client = setupServerAndConnectClient({
                     messageHandler: () => ok({
                         state: {
                             body: { onOpen, onMessage, onClose }
                         },
-                        cleanup: () => {
-                            serverDone = true
-                            if (serverDone && clientDone) {
-                                resolve()
-                            }
-                        }
+                        cleanup: waitForOtherToFinish
                     })
                 })
                 client.on('open', () => client.send('client open'))
@@ -483,12 +486,7 @@ describe('createRequestListener', () => {
                         client.close(4321, 'client close')
                     }
                 })
-                client.on('close', () => {
-                    clientDone = true
-                    if (serverDone && clientDone) {
-                        resolve()
-                    }
-                })
+                client.on('close', waitForOtherToFinish)
             })
 
             expect(onOpen).toHaveBeenCalledTimes(1)
@@ -532,18 +530,21 @@ describe('createRequestListener', () => {
             }
 
             return new Promise<void>(resolve => {
-                let serverDone = false
-                let clientDone = false
+                let done = false
+
+                function waitForOtherToFinish() {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
 
                 const client = setupServerAndConnectClient({
                     messageHandler: () => ok({
                         state,
-                        cleanup: () => {
-                            serverDone = true
-                            if (serverDone && clientDone) {
-                                resolve()
-                            }
-                        }
+                        cleanup: waitForOtherToFinish
                     })
                 })
                 client.on('upgrade', request => {
@@ -560,23 +561,18 @@ describe('createRequestListener', () => {
                     ])
                 })
                 client.on('open', () => client.close())
-                client.on('close', () => {
-                    clientDone = true
-                    if (serverDone && clientDone) {
-                        resolve()
-                    }
-                })
+                client.on('close', waitForOtherToFinish)
             })
         })
 
         test('returning CloseWebSocket from onOpen closes connection', async () => {
-            expect.assertions(1)
+            expect.assertions(2)
 
             const messages: Data[] = []
 
-            await new Promise<void>(resolve => {
+            const closeCode = await new Promise<number>(resolve => {
                 let serverDone = false
-                let clientDone = false
+                let clientCloseCode: number | undefined
 
                 const client = setupServerAndConnectClient({
                     messageHandler: () => ok({
@@ -590,33 +586,38 @@ describe('createRequestListener', () => {
                             }
                         },
                         cleanup: () => {
-                            serverDone = true
-                            if (serverDone && clientDone) {
-                                resolve()
+                            if (clientCloseCode === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseCode)
                             }
                         }
                     })
                 })
                 client.on('message', message => messages.push(message))
-                client.on('close', () => {
-                    clientDone = true
-                    if (serverDone && clientDone) {
-                        resolve()
+                client.on('close', code => {
+                    if (serverDone) {
+                        resolve(code)
+                    }
+                    else {
+                        clientCloseCode = code
                     }
                 })
             })
 
             expect(messages).toEqual([ 'server closing' ])
+            expect(closeCode).toBe(1000)
         })
 
         test('returning CloseWebSocket from onMessage closes connection', async () => {
-            expect.assertions(1)
+            expect.assertions(2)
 
             const messages: Data[] = []
 
-            await new Promise<void>(resolve => {
+            const closeCode = await new Promise<number>(resolve => {
                 let serverDone = false
-                let clientDone = false
+                let clientCloseCode: number | undefined
 
                 const client = setupServerAndConnectClient({
                     messageHandler: () => ok({
@@ -629,28 +630,144 @@ describe('createRequestListener', () => {
                             }
                         },
                         cleanup: () => {
-                            serverDone = true
-                            if (serverDone && clientDone) {
-                                resolve()
+                            if (clientCloseCode === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseCode)
                             }
                         }
                     })
                 })
                 client.on('open', () => client.send('client open'))
                 client.on('message', message => messages.push(message))
-                client.on('close', () => {
-                    clientDone = true
-                    if (serverDone && clientDone) {
-                        resolve()
+                client.on('close', code => {
+                    if (serverDone) {
+                        resolve(code)
+                    }
+                    else {
+                        clientCloseCode = code
                     }
                 })
             })
 
             expect(messages).toEqual([ 'server closing' ])
+            expect(closeCode).toBe(1000)
         })
 
-        // TODO: figure out how to induce these errors
-        test.todo('send error calls onSendError')
+        test('stops sending messages if socket closes during generator', async () => {
+            expect.assertions(2)
+
+            const messages: Data[] = []
+
+            const onClose = jest.fn<void, [ number, string ]>()
+
+            await new Promise<void>(resolve => {
+                let done = false
+
+                function waitForOtherToFinish() {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state: {
+                            body: {
+                                onOpen: async function * () {
+                                    yield 'a'
+                                    await new Promise<void>(resolve =>
+                                        setTimeout(resolve, 5)
+                                    )
+                                    yield 'b'
+                                    yield 'c'
+                                },
+                                onMessage: function * () {},
+                                onClose
+                            }
+                        },
+                        cleanup: waitForOtherToFinish
+                    })
+                })
+                client.on('message', message => {
+                    messages.push(message)
+                    client.close(1001)  // client leaving
+                })
+                client.on('close', waitForOtherToFinish)
+            })
+
+            expect(messages).toEqual([ 'a' ])
+            expect(onClose.mock.calls).toEqual([
+                [ 1001, expect.any(String) ]
+            ])
+        })
+
+        test('onSendError called and socket closed on unknown send error', async () => {
+            expect.assertions(4)
+
+            const error = new Error('test')
+            const onSendError = jest.fn<void, [ Data, Error ]>(() => {})
+            const sendSpy = jest.spyOn(Websocket.prototype, 'send')
+
+            const messages: Data[] = []
+
+            const closeCode = await new Promise<number>(resolve => {
+                let serverDone = false
+                let clientCloseCode: number | undefined
+
+                const client = setupServerAndConnectClient({
+                    messageHandler: () => ok({
+                        state: {
+                            body: {
+                                onOpen: function * () {
+                                    yield 'a'
+                                    // the wrong send overload is inferred so
+                                    // the second parameter must be typed as any
+                                    sendSpy.mockImplementationOnce((_, callback: any) =>
+                                        callback(error)
+                                    )
+                                    yield 'b'
+                                    yield 'c'
+                                },
+                                onMessage: function * () {},
+                                onSendError
+                            }
+                        },
+                        cleanup: () => {
+                            if (clientCloseCode === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseCode)
+                            }
+                        }
+                    })
+                })
+                client.on('message', message => messages.push(message))
+                client.on('close', code => {
+                    if (serverDone) {
+                        resolve(code)
+                    }
+                    else {
+                        clientCloseCode = code
+                    }
+                })
+            })
+
+            expect(messages).toEqual([ 'a' ])
+            expect(sendSpy.mock.calls).toEqual([
+                [ 'a', expect.any(Function) ],
+                [ 'b', expect.any(Function) ]
+            ])
+            expect(onSendError.mock.calls).toEqual([
+                [ 'b', error ]
+            ])
+            expect(closeCode).toBe(1011)  // server error
+        })
     })
 })
 
@@ -664,34 +781,26 @@ describe('composeMessageHandlers', () => {
         const a: MessageHandler<void, 'a', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBeUndefined()
-            return ok({
-                state: 'a'
-            })
+            return ok({ state: 'a' })
         }
 
         const b: MessageHandler<'a', 'b', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBe('a')
-            return ok({
-                state: 'b'
-            })
+            return ok({ state: 'b' })
         }
 
         const c: MessageHandler<'b', 'c', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBe('b')
-            return ok({
-                state: 'c'
-            })
+            return ok({ state: 'c' })
         }
 
         const composed = composeMessageHandlers([ a, b, c ])
         const result = await composed(request)
 
         expect(result).toEqual(
-            ok({
-                state: 'c'
-            })
+            ok({ state: 'c' })
         )
     })
 
@@ -753,7 +862,8 @@ describe('composeMessageHandlers', () => {
         const b: MessageHandler<void, void, typeof testError> = (_, state) =>
             ok({ state, cleanup: bCleanup })
 
-        const c: MessageHandler<void, void, typeof testError> = () => error(testError)
+        const c: MessageHandler<void, void, typeof testError> = () =>
+            error(testError)
 
         const dCleanup = jest.fn<void, []>()
         const d: MessageHandler<void, void, typeof testError> = (_, state) =>
@@ -768,4 +878,9 @@ describe('composeMessageHandlers', () => {
         expect(dCleanup).not.toHaveBeenCalled()
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
     })
+})
+
+
+describe('fallthroughMessageHandler', () => {
+
 })
