@@ -1,8 +1,8 @@
+import { Data as WebsocketData } from 'ws';
+import { Awaitable } from 'fallible';
 import type { AwaitableRequestListener, ErrorHandler, ExceptionHandler, MessageHandler, Response } from './types';
-export declare function defaultErrorHandler(): {
-    status: number;
-    body: string;
-};
+export declare function defaultErrorHandler(): Response;
+export declare function defaultOnWebsocketSendError(_: WebsocketData, { name, message }: Error): Awaitable<void>;
 export declare type CreateRequestListenerArguments<Errors> = {
     messageHandler: MessageHandler<void, Response, Errors>;
     errorHandler?: ErrorHandler<Errors>;

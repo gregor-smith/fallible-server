@@ -1,4 +1,4 @@
-import { Server as WebSocketServer } from 'ws';
+import { Server as WebsocketServer } from 'ws';
 import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils';
 export function defaultErrorHandler() {
@@ -7,15 +7,15 @@ export function defaultErrorHandler() {
         body: 'Internal server error'
     };
 }
+export function defaultOnWebsocketSendError(_, { name, message }) {
+    console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`);
+}
 function* iterateHeaders({ cookies, headers }) {
     if (headers !== undefined) {
         for (const [name, value] of Object.entries(headers)) {
-            if (typeof value === 'object') {
-                yield [name, value.map(String)];
-            }
-            else {
-                yield [name, String(value)];
-            }
+            yield typeof value === 'object'
+                ? [name, value.map(String)]
+                : [name, String(value)];
         }
     }
     if (cookies !== undefined) {
@@ -29,18 +29,34 @@ function setResponseHeaders(res, response) {
         res.setHeader(name, values);
     }
 }
-async function sendWebsocketMessages(socket, messages, onError) {
-    while (true) {
+async function sendWebsocketMessages(websocket, messages, onError = defaultOnWebsocketSendError) {
+    while (websocket.readyState === websocket.OPEN) {
         const result = await messages.next();
         if (result.done) {
             if (result.value === CloseWebSocket) {
-                socket.close(1000);
+                websocket.close(1000); // regular close status
             }
             return;
         }
-        const error = await new Promise(resolve => socket.send(result.value, resolve));
-        if (error !== undefined && onError !== undefined) {
+        const error = await new Promise(resolve => websocket.send(result.value, resolve));
+        // the only time an error *should* occur is if the readyState changes
+        // in between the message being fetched and it being sent, which is
+        // definitely possible since these are both async operations.
+        // the underlying socket should not throw or return an error from the
+        // the send callback because the websocket listens for the socket's
+        // error event, which when fired results in the websocket being closed.
+        // see:
+        // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket.js#L923
+        // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket.js#L856
+        // that said, javascript is javascript, so on the safe assumption that
+        // there is some kind of unlikely albeit possible edge case, we
+        // pass any unknown errors to onError and then close the connection.
+        if (error !== undefined) {
+            if (websocket.readyState !== websocket.OPEN) {
+                return;
+            }
             await onError(result.value, error);
+            websocket.close(1011); // server error close status
         }
     }
 }
@@ -104,8 +120,8 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
         }
         // websocket
         else {
-            const wss = new WebSocketServer({ noServer: true });
-            wss.on('headers', headers => {
+            const server = new WebsocketServer({ noServer: true });
+            server.on('headers', headers => {
                 for (const [name, values] of iterateHeaders(response)) {
                     if (typeof values === 'string') {
                         headers.push(`${name}: ${values}`);
@@ -117,11 +133,11 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                     }
                 }
             });
-            const socket = await new Promise(resolve => wss.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
+            const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
             const { onOpen, onClose, onMessage, onSendError } = response.body;
-            socket.on('message', data => sendWebsocketMessages(socket, onMessage(data), onSendError));
-            // no need to listen for the socket error event as apparently the
-            // close event is always called on errors anyway. see:
+            websocket.on('message', data => sendWebsocketMessages(websocket, onMessage(data), onSendError));
+            // no need to listen for the socket error event as close event is
+            // always called on errors anyway. see:
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
             let closeReason;
             if (onOpen === undefined) {
@@ -129,20 +145,24 @@ export function createRequestListener({ messageHandler, errorHandler = defaultEr
                 // can't just call onClose here in this callback because
                 // it's potentially async and as such needs to be awaited
                 // before the final cleanup is called
-                socket.on('close', (...args) => resolve(args)));
+                websocket.on('close', (...args) => resolve(args)));
             }
             else {
                 [closeReason,] = await Promise.all([
-                    new Promise(resolve => socket.on('close', (...args) => resolve(args))),
+                    new Promise(resolve => websocket.on('close', (...args) => resolve(args))),
                     // the 'open' even is never fired when running in noServer
-                    // mode as we are, so just call onOpen straight away as the
-                    // request is already opened
-                    sendWebsocketMessages(socket, onOpen(), onSendError)
+                    // mode, so just call onOpen straight away as the request
+                    // is already opened
+                    sendWebsocketMessages(websocket, onOpen(), onSendError)
                 ]);
             }
             if (onClose !== undefined) {
                 await onClose(...closeReason);
             }
+            // closing the WebSocketServer is not necessary because in noServer
+            // mode all it does is terminate all connected sockets, which in
+            // this case has already happened. see:
+            // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket-server.js#L126
         }
         if (cleanup !== undefined) {
             await cleanup(response);

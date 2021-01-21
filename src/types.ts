@@ -50,11 +50,15 @@ export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unkn
 export type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
 
 
+export type WebsocketOpenCallback = () => WebsocketGenerator
+export type WebsocketMessageCallback = (message: Data) => WebsocketGenerator
+export type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>
+export type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>
 export type WebsocketResponse = {
-    onOpen?: () => WebsocketGenerator
-    onClose?: (code: number, reason: string) => Awaitable<void>
-    onMessage: (message: Data) => WebsocketGenerator
-    onSendError?: (message: Data, error: Error) => Awaitable<void>
+    onOpen?: WebsocketOpenCallback
+    onMessage: WebsocketMessageCallback
+    onClose?: WebsocketCloseCallback
+    onSendError?: WebsocketSendErrorCallback
 }
 
 

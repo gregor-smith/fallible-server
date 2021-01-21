@@ -21,11 +21,15 @@ export declare type Cookie = {
 export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Awaitable<ReturnType<RequestListener>>;
 export declare type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> = Generator<TYield, TReturn, TNext> | AsyncGenerator<TYield, TReturn, TNext>;
 export declare type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;
+export declare type WebsocketOpenCallback = () => WebsocketGenerator;
+export declare type WebsocketMessageCallback = (message: Data) => WebsocketGenerator;
+export declare type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>;
+export declare type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>;
 export declare type WebsocketResponse = {
-    onOpen?: () => WebsocketGenerator;
-    onClose?: (code: number, reason: string) => Awaitable<void>;
-    onMessage: (message: Data) => WebsocketGenerator;
-    onSendError?: (message: Data, error: Error) => Awaitable<void>;
+    onOpen?: WebsocketOpenCallback;
+    onMessage: WebsocketMessageCallback;
+    onClose?: WebsocketCloseCallback;
+    onSendError?: WebsocketSendErrorCallback;
 };
 export interface Pipeable {
     pipe: (destination: NodeJS.WritableStream) => void;

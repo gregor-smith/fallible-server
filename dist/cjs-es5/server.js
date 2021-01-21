@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fallthroughMessageHandler = exports.composeMessageHandlers = exports.createRequestListener = exports.defaultErrorHandler = void 0;
+exports.fallthroughMessageHandler = exports.composeMessageHandlers = exports.createRequestListener = exports.defaultOnWebsocketSendError = exports.defaultErrorHandler = void 0;
 var tslib_1 = require("tslib");
 var ws_1 = require("ws");
 var fallible_1 = require("fallible");
@@ -12,6 +12,11 @@ function defaultErrorHandler() {
     };
 }
 exports.defaultErrorHandler = defaultErrorHandler;
+function defaultOnWebsocketSendError(_, _a) {
+    var name = _a.name, message = _a.message;
+    console.warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '" + name + "'. Message: '" + message + "'");
+}
+exports.defaultOnWebsocketSendError = defaultOnWebsocketSendError;
 function iterateHeaders(_a) {
     var _b, _c, _d, name, value, e_1_1, values;
     var e_1, _e;
@@ -19,50 +24,47 @@ function iterateHeaders(_a) {
     return tslib_1.__generator(this, function (_f) {
         switch (_f.label) {
             case 0:
-                if (!(headers !== undefined)) return [3 /*break*/, 10];
+                if (!(headers !== undefined)) return [3 /*break*/, 8];
                 _f.label = 1;
             case 1:
-                _f.trys.push([1, 8, 9, 10]);
+                _f.trys.push([1, 6, 7, 8]);
                 _b = tslib_1.__values(Object.entries(headers)), _c = _b.next();
                 _f.label = 2;
             case 2:
-                if (!!_c.done) return [3 /*break*/, 7];
+                if (!!_c.done) return [3 /*break*/, 5];
                 _d = tslib_1.__read(_c.value, 2), name = _d[0], value = _d[1];
-                if (!(typeof value === 'object')) return [3 /*break*/, 4];
-                return [4 /*yield*/, [name, value.map(String)]];
+                return [4 /*yield*/, typeof value === 'object'
+                        ? [name, value.map(String)]
+                        : [name, String(value)]];
             case 3:
                 _f.sent();
-                return [3 /*break*/, 6];
-            case 4: return [4 /*yield*/, [name, String(value)]];
-            case 5:
-                _f.sent();
-                _f.label = 6;
-            case 6:
+                _f.label = 4;
+            case 4:
                 _c = _b.next();
                 return [3 /*break*/, 2];
-            case 7: return [3 /*break*/, 10];
-            case 8:
+            case 5: return [3 /*break*/, 8];
+            case 6:
                 e_1_1 = _f.sent();
                 e_1 = { error: e_1_1 };
-                return [3 /*break*/, 10];
-            case 9:
+                return [3 /*break*/, 8];
+            case 7:
                 try {
                     if (_c && !_c.done && (_e = _b.return)) _e.call(_b);
                 }
                 finally { if (e_1) throw e_1.error; }
                 return [7 /*endfinally*/];
-            case 10:
-                if (!(cookies !== undefined)) return [3 /*break*/, 12];
+            case 8:
+                if (!(cookies !== undefined)) return [3 /*break*/, 10];
                 values = Object.entries(cookies)
                     .map(function (_a) {
                     var _b = tslib_1.__read(_a, 2), name = _b[0], cookie = _b[1];
                     return general_utils_1.cookieHeader(name, cookie);
                 });
                 return [4 /*yield*/, ['Set-Cookie', values]];
-            case 11:
+            case 9:
                 _f.sent();
-                _f.label = 12;
-            case 12: return [2 /*return*/];
+                _f.label = 10;
+            case 10: return [2 /*return*/];
         }
     });
 }
@@ -82,7 +84,8 @@ function setResponseHeaders(res, response) {
         finally { if (e_2) throw e_2.error; }
     }
 }
-function sendWebsocketMessages(socket, messages, onError) {
+function sendWebsocketMessages(websocket, messages, onError) {
+    if (onError === void 0) { onError = defaultOnWebsocketSendError; }
     return tslib_1.__awaiter(this, void 0, void 0, function () {
         var _loop_1, state_1;
         return tslib_1.__generator(this, function (_a) {
@@ -97,19 +100,36 @@ function sendWebsocketMessages(socket, messages, onError) {
                                     result = _a.sent();
                                     if (result.done) {
                                         if (result.value === general_utils_1.CloseWebSocket) {
-                                            socket.close(1000);
+                                            websocket.close(1000); // regular close status
                                         }
                                         return [2 /*return*/, { value: void 0 }];
                                     }
                                     return [4 /*yield*/, new Promise(function (resolve) {
-                                            return socket.send(result.value, resolve);
-                                        })];
+                                            return websocket.send(result.value, resolve);
+                                        })
+                                        // the only time an error *should* occur is if the readyState changes
+                                        // in between the message being fetched and it being sent, which is
+                                        // definitely possible since these are both async operations.
+                                        // the underlying socket should not throw or return an error from the
+                                        // the send callback because the websocket listens for the socket's
+                                        // error event, which when fired results in the websocket being closed.
+                                        // see:
+                                        // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket.js#L923
+                                        // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket.js#L856
+                                        // that said, javascript is javascript, so on the safe assumption that
+                                        // there is some kind of unlikely albeit possible edge case, we
+                                        // pass any unknown errors to onError and then close the connection.
+                                    ];
                                 case 2:
                                     error_1 = _a.sent();
-                                    if (!(error_1 !== undefined && onError !== undefined)) return [3 /*break*/, 4];
+                                    if (!(error_1 !== undefined)) return [3 /*break*/, 4];
+                                    if (websocket.readyState !== websocket.OPEN) {
+                                        return [2 /*return*/, { value: void 0 }];
+                                    }
                                     return [4 /*yield*/, onError(result.value, error_1)];
                                 case 3:
                                     _a.sent();
+                                    websocket.close(1011); // server error close status
                                     _a.label = 4;
                                 case 4: return [2 /*return*/];
                             }
@@ -117,7 +137,7 @@ function sendWebsocketMessages(socket, messages, onError) {
                     };
                     _a.label = 1;
                 case 1:
-                    if (!true) return [3 /*break*/, 3];
+                    if (!(websocket.readyState === websocket.OPEN)) return [3 /*break*/, 3];
                     return [5 /*yield**/, _loop_1()];
                 case 2:
                     state_1 = _a.sent();
@@ -133,7 +153,7 @@ function createRequestListener(_a) {
     var _this = this;
     var messageHandler = _a.messageHandler, _b = _a.errorHandler, errorHandler = _b === void 0 ? defaultErrorHandler : _b, _c = _a.exceptionHandler, exceptionHandler = _c === void 0 ? defaultErrorHandler : _c;
     return function (req, res) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
-        var response, cleanup, result, exception_1, wss_1, socket_1, _a, onOpen, onClose, onMessage_1, onSendError_1, closeReason;
+        var response, cleanup, result, exception_1, server_1, websocket_1, _a, onOpen, onClose, onMessage_1, onSendError_1, closeReason;
         var _b;
         var _c;
         return tslib_1.__generator(this, function (_d) {
@@ -213,8 +233,8 @@ function createRequestListener(_a) {
                     _d.sent();
                     return [3 /*break*/, 22];
                 case 15:
-                    wss_1 = new ws_1.Server({ noServer: true });
-                    wss_1.on('headers', function (headers) {
+                    server_1 = new ws_1.Server({ noServer: true });
+                    server_1.on('headers', function (headers) {
                         var e_3, _a, e_4, _b;
                         try {
                             for (var _c = tslib_1.__values(iterateHeaders(response)), _d = _c.next(); !_d.done; _d = _c.next()) {
@@ -248,13 +268,13 @@ function createRequestListener(_a) {
                         }
                     });
                     return [4 /*yield*/, new Promise(function (resolve) {
-                            return wss_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
+                            return server_1.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve);
                         })];
                 case 16:
-                    socket_1 = _d.sent();
+                    websocket_1 = _d.sent();
                     _a = response.body, onOpen = _a.onOpen, onClose = _a.onClose, onMessage_1 = _a.onMessage, onSendError_1 = _a.onSendError;
-                    socket_1.on('message', function (data) {
-                        return sendWebsocketMessages(socket_1, onMessage_1(data), onSendError_1);
+                    websocket_1.on('message', function (data) {
+                        return sendWebsocketMessages(websocket_1, onMessage_1(data), onSendError_1);
                     });
                     closeReason = void 0;
                     if (!(onOpen === undefined)) return [3 /*break*/, 18];
@@ -262,7 +282,7 @@ function createRequestListener(_a) {
                             // can't just call onClose here in this callback because
                             // it's potentially async and as such needs to be awaited
                             // before the final cleanup is called
-                            return socket_1.on('close', function () {
+                            return websocket_1.on('close', function () {
                                 var args = [];
                                 for (var _i = 0; _i < arguments.length; _i++) {
                                     args[_i] = arguments[_i];
@@ -275,7 +295,7 @@ function createRequestListener(_a) {
                     return [3 /*break*/, 20];
                 case 18: return [4 /*yield*/, Promise.all([
                         new Promise(function (resolve) {
-                            return socket_1.on('close', function () {
+                            return websocket_1.on('close', function () {
                                 var args = [];
                                 for (var _i = 0; _i < arguments.length; _i++) {
                                     args[_i] = arguments[_i];
@@ -284,9 +304,9 @@ function createRequestListener(_a) {
                             });
                         }),
                         // the 'open' even is never fired when running in noServer
-                        // mode as we are, so just call onOpen straight away as the
-                        // request is already opened
-                        sendWebsocketMessages(socket_1, onOpen(), onSendError_1)
+                        // mode, so just call onOpen straight away as the request
+                        // is already opened
+                        sendWebsocketMessages(websocket_1, onOpen(), onSendError_1)
                     ])];
                 case 19:
                     _b = tslib_1.__read.apply(void 0, [_d.sent(), 1]), closeReason = _b[0];
