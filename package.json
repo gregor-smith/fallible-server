@@ -41,7 +41,8 @@
     "ws": "^7.4.0"
   },
   "scripts": {
-    "build": "tsc",
-    "test": "tsc -p ./tsconfig.test.json && jest"
+    "build": "tsc -p ./src/tsconfig.json",
+    "check-tests": "tsc -p ./tests/tsconfig.json",
+    "test": "jest"
   }
 }
