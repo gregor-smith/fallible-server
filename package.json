@@ -5,7 +5,10 @@
   "main": "./dist/src/index.js",
   "exports": {
     ".": "./dist/src/index.js",
-    "./general-utils": "./dist/src/general-utils.js"
+    "./general-utils": "./dist/src/general-utils.js",
+    "./server-utils": "./dist/src/server-utils.js",
+    "./server": "./dist/src/server.js",
+    "./dist/src/general-utils.js": "./dist/src/general-utils.js"
   },
   "sideEffects": false,
   "repository": {
