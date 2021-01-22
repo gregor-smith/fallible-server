@@ -1,6 +1,6 @@
 import { join as joinPath } from 'path';
 import { asyncFallible, error, ok } from 'fallible';
-import formidable from 'formidable';
+import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
 import { createReadStream, stat } from 'fallible-fs';
 import sanitiseFilename from 'sanitize-filename';
@@ -29,7 +29,7 @@ export async function parseJSONStream(stream, { sizeLimit, encoding = 'utf-8' } 
         : error({ tag: 'InvalidSyntax' });
 }
 export function parseMultipartStream(stream, { encoding = 'utf-8', saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit } = {}) {
-    const form = new formidable.Formidable({
+    const form = new Formidable({
         enabledPlugins: ['multipart'],
         encoding,
         keepExtensions: keepFileExtensions,

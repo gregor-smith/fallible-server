@@ -2,7 +2,7 @@
 import type { ReadStream, Stats } from 'fs';
 import type { Readable } from 'stream';
 import { Result } from 'fallible';
-import { FormidableFile } from 'formidable';
+import { File as FormidableFile } from 'formidable';
 import { FileSystemError } from 'fallible-fs';
 export declare type ParseJSONStreamError = {
     tag: 'InvalidSyntax';

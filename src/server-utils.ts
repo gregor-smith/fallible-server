@@ -3,7 +3,7 @@ import type { ReadStream, Stats } from 'fs'
 import type { Readable } from 'stream'
 
 import { asyncFallible, error, ok, Result } from 'fallible'
-import formidable, { FormidableFile } from 'formidable'
+import { Formidable, File as FormidableFile } from 'formidable'
 import rawBody from 'raw-body'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 import sanitiseFilename from 'sanitize-filename'
@@ -90,7 +90,7 @@ export function parseMultipartStream(
         fieldsSizeLimit
     }: ParseMultipartStreamArguments = {}
 ): Promise<Result<ParsedMultipartStream, ParseMultipartStreamError>> {
-    const form = new formidable.Formidable({
+    const form = new Formidable({
         enabledPlugins: [ 'multipart' ],
         encoding,
         keepExtensions: keepFileExtensions,
