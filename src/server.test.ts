@@ -11,14 +11,14 @@ import {
     createRequestListener,
     CreateRequestListenerArguments,
     fallthroughMessageHandler
-} from '../src/server.js'
+} from './server.js'
 import type {
     MessageHandler,
     MessageHandlerResult,
     Response,
     WebsocketGenerator
-} from '../src/types.js'
-import { CloseWebSocket, cookieHeader } from '../src/general-utils.js'
+} from './types.js'
+import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
 
 function jestMock<F extends (...params: any) => any>(
@@ -795,26 +795,26 @@ describe('composeMessageHandlers', () => {
         const a: MessageHandler<void, 'a', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBeUndefined()
-            return ok({ state: 'a' })
+            return ok({ state: 'a' } as const)
         }
 
         const b: MessageHandler<'a', 'b', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBe('a')
-            return ok({ state: 'b' })
+            return ok({ state: 'b' } as const)
         }
 
         const c: MessageHandler<'b', 'c', void> = (message, state) => {
             expect(message).toBe(request)
             expect(state).toBe('b')
-            return ok({ state: 'c' })
+            return ok({ state: 'c' } as const)
         }
 
         const composed = composeMessageHandlers([ a, b, c ])
         const result = await composed(request)
 
         expect(result).toEqual(
-            ok({ state: 'c' })
+            ok({ state: 'c' } as const)
         )
     })
 
@@ -907,8 +907,8 @@ describe('fallthroughMessageHandler', () => {
 
         type Handler = MessageHandler<'state', 'c' | 'd', 'next' | 'noMatch'>
 
-        const a = jestMock<Handler>(() => error('next'))
-        const b = jestMock<Handler>(() => error('next'))
+        const a = jestMock<Handler>(() => error('next' as const))
+        const b = jestMock<Handler>(() => error('next' as const))
         const c = jestMock<Handler>(() => ok({ state: 'c' }))
         const d = jestMock<Handler>(() => ok({ state: 'd' }))
 
@@ -936,8 +936,8 @@ describe('fallthroughMessageHandler', () => {
 
         type Handler = MessageHandler<void, 'c', 'next' | 'noMatch' | 'error'>
 
-        const a: Handler = () => error('next')
-        const b: Handler = () => error('error')
+        const a: Handler = () => error('next' as const)
+        const b: Handler = () => error('error' as const)
         const c = jestMock<Handler>(() => ok({ state: 'c' }))
 
         const handler = fallthroughMessageHandler<void, 'c', 'noMatch' | 'error', 'next'>(
@@ -956,7 +956,7 @@ describe('fallthroughMessageHandler', () => {
     test('returns nomatch if no handlers return ok or non-next error', async () => {
         expect.assertions(1)
 
-        const a: MessageHandler<void, void, 'next'> = () => error('next')
+        const a: MessageHandler<void, void, 'next'> = () => error('next' as const)
 
         const handler = fallthroughMessageHandler<void, void, 'next' | 'noMatch', 'next'>(
             [ a, a, a ],

@@ -1,4 +1,7 @@
 export default {
-    testRegex: '\\.test\\.js$',
+    testRegex: '\\.test\\.tsx?$',
+    moduleNameMapper: {
+        '^(.*)\\.js$': '$1'
+    },
     setupFilesAfterEnv: [ 'jest-extended' ]
 }

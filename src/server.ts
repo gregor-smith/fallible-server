@@ -13,7 +13,7 @@ import type {
     Pipeable,
     Response,
     WebsocketGenerator
-} from './types'
+} from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
 

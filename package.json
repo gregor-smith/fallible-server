@@ -2,13 +2,13 @@
   "name": "fallible-server",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/src/index.js",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/src/index.js",
-    "./general-utils": "./dist/src/general-utils.js",
-    "./server-utils": "./dist/src/server-utils.js",
-    "./server": "./dist/src/server.js",
-    "./dist/src/general-utils.js": "./dist/src/general-utils.js"
+    ".": "./dist/index.js",
+    "./general-utils": "./dist/general-utils.js",
+    "./server-utils": "./dist/server-utils.js",
+    "./server": "./dist/server.js",
+    "./dist/general-utils.js": "./dist/general-utils.js"
   },
   "sideEffects": false,
   "repository": {
@@ -18,19 +18,20 @@
   "author": "Gregor Smith",
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.12.10",
-    "@babel/preset-env": "^7.12.11",
-    "@types/jest": "^26.0.16",
+    "@babel/core": "^7.13.8",
+    "@babel/preset-env": "^7.13.8",
+    "@babel/preset-typescript": "^7.13.0",
+    "@types/jest": "^26.0.20",
     "babel-jest": "^26.6.3",
-    "jest": "^27.0.0-next.2",
+    "jest": "^26.6.3",
     "jest-extended": "^0.11.5",
     "keygrip": "^1.1.0",
     "mock-http": "^1.1.0",
-    "typescript": "^4.1.2"
+    "typescript": "^4.2.2"
   },
   "dependencies": {
     "@types/keygrip": "^1.0.2",
-    "@types/node": "^14.14.10",
+    "@types/node": "^14.14.31",
     "@types/secure-json-parse": "^1.0.2",
     "@types/ws": "^7.4.0",
     "fallible": "link:./../fallible",
@@ -38,11 +39,12 @@
     "formidable": "link:./../formidable",
     "raw-body": "^2.4.1",
     "sanitize-filename": "^1.6.3",
-    "secure-json-parse": "^2.1.0",
-    "ws": "^7.4.0"
+    "secure-json-parse": "^2.3.1",
+    "ws": "^7.4.3"
   },
   "scripts": {
     "build": "tsc",
+    "check-tests": "tsc -p tsconfig.tests.json",
     "test": "jest"
   }
 }

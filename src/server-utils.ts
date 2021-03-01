@@ -47,15 +47,15 @@ export async function parseJSONStream(
     catch (exception: unknown) {
         return error(
             hasTypeField(exception) && exception.type === 'entity.too.large'
-                ? { tag: 'TooLarge' }
-                : { tag: 'OtherError', error: exception }
+                ? { tag: 'TooLarge' } as const
+                : { tag: 'OtherError', error: exception } as const
         )
     }
 
     const result = parseJSONString(body)
     return result.ok
         ? result
-        : error({ tag: 'InvalidSyntax' })
+        : error({ tag: 'InvalidSyntax' } as const)
 }
 
 
@@ -109,19 +109,19 @@ export function parseMultipartStream(
             if (exception instanceof Error) {
                 if (/maxFieldsSize/.test(exception.message)) {
                     resolve(
-                        error({ tag: 'FieldsTooLarge' })
+                        error({ tag: 'FieldsTooLarge' } as const)
                     )
                     return
                 }
                 if (/maxFileSize/.test(exception.message)) {
                     resolve(
-                        error({ tag: 'FilesTooLarge' })
+                        error({ tag: 'FilesTooLarge' } as const)
                     )
                     return
                 }
             }
             resolve(
-                error({ tag: 'OtherError', error: exception })
+                error({ tag: 'OtherError', error: exception } as const)
             )
         })
     })
@@ -149,7 +149,7 @@ export function openFile(path: string, encoding?: BufferEncoding): Promise<Resul
         // event before the error event when trying to open a directory
         // see https://github.com/nodejs/node/issues/31583
         if (stats.isDirectory()) {
-            return error({ tag: 'IsADirectory' })
+            return error({ tag: 'IsADirectory' } as const)
         }
         const stream = propagate(await createReadStream(path, encoding))
 

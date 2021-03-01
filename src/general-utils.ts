@@ -56,14 +56,14 @@ export function parseSignedMessageCookie(
 ): Result<string, ParseSignedMessageCookieError> {
     const value = parseMessageCookie(message, name)
     if (value === undefined) {
-        return error('ValueCookieMissing')
+        return error('ValueCookieMissing' as const)
     }
     const signature = parseMessageCookie(message, signatureCookieName(name))
     if (signature === undefined) {
-        return error('SignatureCookieMissing')
+        return error('SignatureCookieMissing' as const)
     }
     if (!keys.verify(cookieKeyValuePair(name, value), signature)) {
-        return error('SignatureInvalid')
+        return error('SignatureInvalid' as const)
     }
     return ok(value)
 }
@@ -275,11 +275,11 @@ export function parseMessageAuthorizationHeaderBearer(
 ): Result<string, ParseMessageAuthorisationBearerError> {
     const header = getMessageHeader(message, 'authorization')
     if (header === undefined) {
-        return error('Missing')
+        return error('Missing' as const)
     }
     const token = parseAuthorizationHeaderBearer(header)
     return token === undefined
-        ? error('Invalid')
+        ? error('Invalid' as const)
         : ok(token)
 }
 
