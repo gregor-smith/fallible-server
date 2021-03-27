@@ -26,7 +26,8 @@ import {
     messageIsWebSocketRequest,
     parseJSONString,
     ParseSignedMessageCookieError,
-    signatureCookieName
+    signatureCookieName,
+    joinURLQueryString
 } from './general-utils.js'
 
 
@@ -395,6 +396,19 @@ describe('parseURLQueryString', () => {
             skipMissingValues: false
         })
         expect(result).toEqual(query)
+    })
+})
+
+
+describe('joinURLQueryString', () => {
+    test.each<[ Record<string, string | number | bigint | boolean | null | undefined>, string ]>([
+        [ {}, '' ],
+        [ { aaa: undefined }, '' ],
+        [ { aaa: '111', bbb: 222, ccc: null, ddd: true }, '?aaa=111&bbb=222&ccc=null&ddd=true' ],
+        [ { aaa: false, bbb: undefined, ccc: BigInt('333') }, '?aaa=false&ccc=333' ],
+    ])('joins url params', (params, joined) => {
+        const result = joinURLQueryString(params)
+        expect(result).toBe(joined)
     })
 })
 

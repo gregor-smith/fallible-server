@@ -4,8 +4,8 @@
         "noEmit": true
     },
     "include": [
-        "./**/*.test.ts",
-        "./**/*.test.tsx"
+        "./src/**/*.test.ts",
+        "./src/**/*.test.tsx"
     ],
     "exclude": []
 }

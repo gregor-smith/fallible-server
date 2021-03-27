@@ -71,11 +71,11 @@
     "resolveJsonModule": true
   },
   "include": [
-    "./**/*.ts",
-    "./**/*.tsx"
+    "./src/**/*.ts",
+    "./src/**/*.tsx"
   ],
   "exclude": [
-    "./**/*.test.ts",
-    "./**/*.test.tsx"
+    "./src/**/*.test.ts",
+    "./src/**/*.test.tsx"
   ]
 }

@@ -159,8 +159,8 @@ export function getMessageURL(message: Pick<IncomingMessage, 'url'>): string {
 export function parseURLQueryString(
     url: string,
     { skipEmptyValues = true, skipMissingValues = true } = {}
-): Partial<Record<string, string>> {
-    const query: Partial<Record<string, string>> = {}
+): Record<string, string> {
+    const query: Record<string, string> = {}
     const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g)
     for (const match of matches) {
         let [ , key, value ] = match as [ unknown, string, string | undefined ]
@@ -180,6 +180,24 @@ export function parseURLQueryString(
         query[key] = value
     }
     return query
+}
+
+
+export function joinURLQueryString(
+    query: Record<string, string | number | bigint | boolean | null | undefined>
+): string {
+    const pairs: string[] = []
+    for (let [ key, value ] of Object.entries(query)) {
+        if (value === undefined) {
+            continue
+        }
+        key = encodeURIComponent(key)
+        value = encodeURIComponent(String(value))
+        pairs.push(`${key}=${value}`)
+    }
+    return pairs.length === 0
+        ? ''
+        : ('?' + pairs.join('&'))
 }
 
 

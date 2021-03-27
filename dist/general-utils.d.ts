@@ -23,7 +23,8 @@ export declare function getMessageURL(message: Pick<IncomingMessage, 'url'>): st
 export declare function parseURLQueryString(url: string, { skipEmptyValues, skipMissingValues }?: {
     skipEmptyValues?: boolean | undefined;
     skipMissingValues?: boolean | undefined;
-}): Partial<Record<string, string>>;
+}): Record<string, string>;
+export declare function joinURLQueryString(query: Record<string, string | number | bigint | boolean | null | undefined>): string;
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string[];
 export declare function parseContentTypeHeader(header: string): ParsedContentType | undefined;

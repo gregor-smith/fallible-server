@@ -105,6 +105,20 @@ export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingVa
     }
     return query;
 }
+export function joinURLQueryString(query) {
+    const pairs = [];
+    for (let [key, value] of Object.entries(query)) {
+        if (value === undefined) {
+            continue;
+        }
+        key = encodeURIComponent(key);
+        value = encodeURIComponent(String(value));
+        pairs.push(`${key}=${value}`);
+    }
+    return pairs.length === 0
+        ? ''
+        : ('?' + pairs.join('&'));
+}
 export function parseURLHash(url) {
     var _a;
     const match = (_a = url.match(/#(.+)/)) === null || _a === void 0 ? void 0 : _a[1];
