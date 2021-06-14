@@ -103,9 +103,18 @@ export type CreateRequestListenerArguments<Errors> = {
 
 export function createRequestListener<Errors>({
     messageHandler,
-    errorHandler = defaultErrorHandler,
-    exceptionHandler = defaultErrorHandler
+    errorHandler,
+    exceptionHandler
 }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener {
+    if (errorHandler === undefined) {
+        console.warn("Default error handler will be used. Consider overriding via 'errorHandler' option")
+        errorHandler = defaultErrorHandler
+    }
+    if (exceptionHandler === undefined) {
+        console.warn("Default exception handler will be used. Consider overriding via 'exceptionHandler' option")
+        exceptionHandler = defaultErrorHandler
+    }
+
     return async (req, res) => {
         let response: Readonly<Response>
         let cleanup: Cleanup | undefined
@@ -116,11 +125,11 @@ export function createRequestListener<Errors>({
                 cleanup = result.value.cleanup
             }
             else {
-                response = await errorHandler(result.value)
+                response = await errorHandler!(result.value)
             }
         }
         catch (exception: unknown) {
-            response = await exceptionHandler(exception)
+            response = await exceptionHandler!(exception)
         }
 
         res.statusCode = response.status ?? 200
