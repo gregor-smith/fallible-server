@@ -16,7 +16,7 @@ import type {
     MessageHandler,
     MessageHandlerResult,
     Response,
-    WebsocketGenerator
+    WebsocketIterator
 } from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
@@ -453,12 +453,12 @@ describe('createRequestListener', () => {
         test('onOpen called, onClose called, messages sent and received', async () => {
             expect.assertions(6)
 
-            const onOpen = jest.fn<WebsocketGenerator, []>(function * () {
+            const onOpen = jest.fn<WebsocketIterator, []>(function * () {
                 yield 'server open'
                 yield 'server open 2'
             })
             const onClose = jest.fn<void, [ number, string ]>()
-            const onMessage = jest.fn<WebsocketGenerator, [ Data ]>(function * (message) {
+            const onMessage = jest.fn<WebsocketIterator, [ Data ]>(function * (message) {
                 yield 'server message'
                 yield `server echo: ${message}`
             })
