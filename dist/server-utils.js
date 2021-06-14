@@ -1,4 +1,5 @@
 import { join as joinPath } from 'path';
+import { Readable } from 'stream';
 import { asyncFallible, error, ok } from 'fallible';
 import { Formidable } from 'formidable';
 import rawBody from 'raw-body';
@@ -73,5 +74,26 @@ export function openFile(path, encoding) {
 export function openSanitisedFile(directory, filename, encoding) {
     const path = joinPath(directory, sanitiseFilename(filename));
     return openFile(path, encoding);
+}
+export function iteratorToStream(iterator, objectMode = true) {
+    return new Readable({
+        objectMode,
+        async read(_size) {
+            let result;
+            try {
+                result = await iterator.next();
+            }
+            catch (exception) {
+                this.emit('error', exception);
+                return;
+            }
+            try {
+                this.push(result.done ? null : result.value);
+            }
+            catch (exception) {
+                this.emit('error', exception);
+            }
+        }
+    });
 }
 //# sourceMappingURL=server-utils.js.map

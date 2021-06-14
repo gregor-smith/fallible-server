@@ -60,7 +60,15 @@ async function sendWebsocketMessages(websocket, messages, onError = defaultOnWeb
         }
     }
 }
-export function createRequestListener({ messageHandler, errorHandler = defaultErrorHandler, exceptionHandler = defaultErrorHandler }) {
+export function createRequestListener({ messageHandler, errorHandler, exceptionHandler }) {
+    if (errorHandler === undefined) {
+        console.warn("Default error handler will be used. Consider overriding via 'errorHandler' option");
+        errorHandler = defaultErrorHandler;
+    }
+    if (exceptionHandler === undefined) {
+        console.warn("Default exception handler will be used. Consider overriding via 'exceptionHandler' option");
+        exceptionHandler = defaultErrorHandler;
+    }
     return async (req, res) => {
         var _a;
         let response;

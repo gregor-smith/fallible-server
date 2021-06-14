@@ -12,7 +12,7 @@ import type {
     MessageHandlerResult,
     Pipeable,
     Response,
-    WebsocketGenerator
+    WebsocketIterator
 } from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
@@ -56,7 +56,7 @@ function setResponseHeaders(res: ServerResponse, response: Response): void {
 
 async function sendWebsocketMessages(
     websocket: Websocket,
-    messages: WebsocketGenerator,
+    messages: WebsocketIterator,
     onError = defaultOnWebsocketSendError
 ): Promise<void> {
     while (websocket.readyState === websocket.OPEN) {

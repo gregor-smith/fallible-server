@@ -42,16 +42,16 @@ export type AwaitableRequestListener = (..._: Parameters<RequestListener>) =>
     Awaitable<ReturnType<RequestListener>>
 
 
-export type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> =
-    | Generator<TYield, TReturn, TNext>
-    | AsyncGenerator<TYield, TReturn, TNext>
+export type AwaitableIterator<TYield = unknown, TReturn = unknown, TNext = unknown> =
+    | Iterator<TYield, TReturn, TNext>
+    | AsyncIterator<TYield, TReturn, TNext>
 
 
-export type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWebSocket | void, void>
+export type WebsocketIterator = AwaitableIterator<Data, typeof CloseWebSocket | void, void>
 
 
-export type WebsocketOpenCallback = () => WebsocketGenerator
-export type WebsocketMessageCallback = (message: Data) => WebsocketGenerator
+export type WebsocketOpenCallback = () => WebsocketIterator
+export type WebsocketMessageCallback = (message: Data) => WebsocketIterator
 export type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>
 export type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>
 export type WebsocketResponse = {

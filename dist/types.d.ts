@@ -19,10 +19,10 @@ export declare type Cookie = {
     sameSite?: 'strict' | 'lax' | 'none';
 };
 export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Awaitable<ReturnType<RequestListener>>;
-export declare type AwaitableGenerator<TYield = unknown, TReturn = unknown, TNext = unknown> = Generator<TYield, TReturn, TNext> | AsyncGenerator<TYield, TReturn, TNext>;
-export declare type WebsocketGenerator = AwaitableGenerator<Data, typeof CloseWebSocket | void, void>;
-export declare type WebsocketOpenCallback = () => WebsocketGenerator;
-export declare type WebsocketMessageCallback = (message: Data) => WebsocketGenerator;
+export declare type AwaitableIterator<TYield = unknown, TReturn = unknown, TNext = unknown> = Iterator<TYield, TReturn, TNext> | AsyncIterator<TYield, TReturn, TNext>;
+export declare type WebsocketIterator = AwaitableIterator<Data, typeof CloseWebSocket | void, void>;
+export declare type WebsocketOpenCallback = () => WebsocketIterator;
+export declare type WebsocketMessageCallback = (message: Data) => WebsocketIterator;
 export declare type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>;
 export declare type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>;
 export declare type WebsocketResponse = {
