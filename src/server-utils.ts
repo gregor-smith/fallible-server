@@ -1,6 +1,6 @@
 import { join as joinPath } from 'path'
 import type { ReadStream, Stats } from 'fs'
-import type { Readable } from 'stream'
+import { Readable } from 'stream'
 
 import { asyncFallible, error, ok, Result } from 'fallible'
 import { Formidable, File as FormidableFile } from 'formidable'
@@ -165,4 +165,30 @@ export function openSanitisedFile(
 ): Promise<Result<OpenedFile, OpenFileError>> {
     const path = joinPath(directory, sanitiseFilename(filename))
     return openFile(path, encoding)
+}
+
+
+export function iteratorToStream<T>(
+    iterator: Iterator<T, unknown> | AsyncIterator<T, unknown>,
+    objectMode = true
+): Readable {
+    return new Readable({
+        objectMode,
+        async read(_size) {
+            let result: IteratorResult<T>
+            try {
+                result = await iterator.next()
+            }
+            catch (exception: unknown) {
+                this.emit('error', exception)
+                return
+            }
+            try {
+                this.push(result.done ? null : result.value)
+            }
+            catch (exception: unknown) {
+                this.emit('error', exception)
+            }
+        }
+    })
 }
