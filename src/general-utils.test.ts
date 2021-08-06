@@ -222,21 +222,10 @@ describe('getMessageHeader', () => {
 
 
 describe('getMessageIP', () => {
-    test('returns connection remote address when useXForwardedFor false', () => {
-        const remoteAddress = 'test connection remote address'
-        const result = getMessageIP({
-            headers: {},
-            connection: { remoteAddress },
-            socket: {}
-        })
-        expect(result).toBe(remoteAddress)
-    })
-
-    test('returns socket remote address when useXForwardedFor false and connection remote address undefined', () => {
+    test('returns socket remote address when useXForwardedFor false', () => {
         const remoteAddress = 'test socket remote address'
         const result = getMessageIP({
             headers: {},
-            connection: {},
             socket: { remoteAddress }
         })
         expect(result).toBe(remoteAddress)
@@ -255,7 +244,6 @@ describe('getMessageIP', () => {
             headers: {
                 'x-forwarded-for': header
             },
-            connection: {},
             socket: {}
         }, true)
         expect(result).toBe('test-x-forwarded-address')
@@ -264,28 +252,12 @@ describe('getMessageIP', () => {
     test.each([
         '',
         ' ',
-    ])('returns connection remote address when x-forwarded-for header invalid', header => {
-        const remoteAddress = 'test connection remote address'
-        const result = getMessageIP({
-            headers: {
-                'x-forwarded-for': header
-            },
-            connection: { remoteAddress },
-            socket: {}
-        }, true)
-        expect(result).toBe(remoteAddress)
-    })
-
-    test.each([
-        '',
-        ' ',
-    ])('returns socket remote address when x-forwarded-for header invalid and connection remote address undefined', header => {
+    ])('returns socket remote address when x-forwarded-for header invalid', header => {
         const remoteAddress = 'test socket remote address'
         const result = getMessageIP({
             headers: {
                 'x-forwarded-for': header
             },
-            connection: {},
             socket: { remoteAddress }
         }, true)
         expect(result).toBe(remoteAddress)

@@ -126,7 +126,6 @@ export function getMessageHeader(
 
 export interface IncomingMessageIPFields {
     headers: IncomingMessage['headers']
-    connection: Pick<IncomingMessage['connection'], 'remoteAddress'>
     socket: Pick<IncomingMessage['socket'], 'remoteAddress'>
 }
 
@@ -136,12 +135,11 @@ export function getMessageIP(
     useXForwardedFor = false
 ): string | undefined {
     if (!useXForwardedFor) {
-        return message.connection.remoteAddress ?? message.socket.remoteAddress
+        return message.socket.remoteAddress
     }
     return getMessageHeader(message, 'x-forwarded-for')
         ?.match(/^\s*([^\s]+)\s*(?:,|$)/)
         ?.[1]
-        ?? message.connection.remoteAddress
         ?? message.socket.remoteAddress
 }
 
