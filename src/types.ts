@@ -1,4 +1,5 @@
 import type { IncomingMessage, RequestListener } from 'http'
+import type { PipelineSource } from 'stream'
 
 import type { Data } from 'ws'
 import type { Awaitable, Result } from 'fallible'
@@ -62,12 +63,11 @@ export type WebsocketResponse = {
 }
 
 
-export interface Pipeable {
-    pipe: (destination: NodeJS.WritableStream) => void
-}
-
-
-export type Body = string | Buffer | Pipeable | WebsocketResponse
+export type Body =
+    | string
+    | Buffer
+    | PipelineSource<Buffer>
+    | WebsocketResponse
 
 
 export type Response = {

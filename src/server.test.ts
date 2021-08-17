@@ -1,6 +1,7 @@
 import 'jest-extended'
 
 import { createServer } from 'http'
+import { Readable } from 'stream'
 
 import { error, ok, Ok } from 'fallible'
 import { Request as MockRequest, Response as MockResponse } from 'mock-http'
@@ -267,10 +268,103 @@ describe('createRequestListener', () => {
 
     describe('stream response', () => {
         const body = 'stream body 🤔'
-        const minimalState: Response = {
-            body: {
-                pipe: stream => stream.end(body, 'utf-8')
+
+        function createMinimalState(): Response {
+            return {
+                body: new Readable({
+                    read() {
+                        this.push(body, 'utf-8')
+                        this.push(null)
+                    }
+                })
             }
+        }
+
+        function createFullState(): Response {
+            return  {
+                ...createMinimalState(),
+                status: 418,
+                cookies: {
+                    'test cookie': {
+                        value: 'test cookie value'
+                    },
+                    'test cookie 2': {
+                        value: 'test cookie 2 value',
+                        domain: 'test domain',
+                        httpOnly: true,
+                        maxAge: 123,
+                        path: '/test/path',
+                        sameSite: 'lax',
+                        secure: true
+                    }
+                },
+                headers: {
+                    'x-test': 'test'
+                }
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const state = createFullState()
+            const response = await mockRequest({
+                messageHandler: () => ok({ state })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(state.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(state.headers)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(state.cookies)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({
+                    state: createMinimalState()
+                })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntry([
+                'content-type',
+                'application/octet-stream'
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            const state = createMinimalState()
+            return mockRequest({
+                messageHandler: () => ok({
+                    state,
+                    cleanup: s => expect(s).toBe(state)
+                })
+            })
+        })
+    })
+
+    describe('iterable response', () => {
+        const body = 'iterable body 🤔'
+
+        const minimalState: Response = {
+            body: [ Buffer.from(body, 'utf-8') ]
         }
         const fullState: Response = {
             ...minimalState,
@@ -303,7 +397,7 @@ describe('createRequestListener', () => {
             const headers = response.getHeaders()
 
             expect(response._internal.ended).toBeTrue()
-            expect(response.statusCode).toBe(fullState.status)
+            expect(response.statusCode).toBe(fullState.status!)
             expect(response._internal.buffer.toString('utf-8')).toBe(body)
             expect(headers).toContainEntries(
                 Object.entries(fullState.headers!)
@@ -341,6 +435,279 @@ describe('createRequestListener', () => {
                 messageHandler: () => ok({
                     state: minimalState,
                     cleanup: state => expect(state).toBe(minimalState)
+                })
+            })
+        })
+    })
+
+    describe('async iterable response', () => {
+        const body = 'async iterable body 🤔'
+
+        function createMinimalState(): Response {
+            return {
+                body: (async function * () {
+                    yield Buffer.from(body, 'utf-8')
+                })()
+            }
+        }
+
+        function createFullState(): Response {
+            return  {
+                ...createMinimalState(),
+                status: 418,
+                cookies: {
+                    'test cookie': {
+                        value: 'test cookie value'
+                    },
+                    'test cookie 2': {
+                        value: 'test cookie 2 value',
+                        domain: 'test domain',
+                        httpOnly: true,
+                        maxAge: 123,
+                        path: '/test/path',
+                        sameSite: 'lax',
+                        secure: true
+                    }
+                },
+                headers: {
+                    'x-test': 'test'
+                }
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const state = createFullState()
+            const response = await mockRequest({
+                messageHandler: () => ok({ state })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(state.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(state.headers)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(state.cookies)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({
+                    state: createMinimalState()
+                })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntry([
+                'content-type',
+                'application/octet-stream'
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            const state = createMinimalState()
+            return mockRequest({
+                messageHandler: () => ok({
+                    state,
+                    cleanup: s => expect(s).toBe(state)
+                })
+            })
+        })
+    })
+
+    describe('generator function response', () => {
+        const body = 'generator function body 🤔'
+
+        function createMinimalState(): Response {
+            return {
+                body: function * () {
+                    yield Buffer.from(body, 'utf-8')
+                }
+            }
+        }
+
+        function createFullState(): Response {
+            return  {
+                ...createMinimalState(),
+                status: 418,
+                cookies: {
+                    'test cookie': {
+                        value: 'test cookie value'
+                    },
+                    'test cookie 2': {
+                        value: 'test cookie 2 value',
+                        domain: 'test domain',
+                        httpOnly: true,
+                        maxAge: 123,
+                        path: '/test/path',
+                        sameSite: 'lax',
+                        secure: true
+                    }
+                },
+                headers: {
+                    'x-test': 'test'
+                }
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const state = createFullState()
+            const response = await mockRequest({
+                messageHandler: () => ok({ state })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(state.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(state.headers)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(state.cookies)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({
+                    state: createMinimalState()
+                })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntry([
+                'content-type',
+                'application/octet-stream'
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            const state = createMinimalState()
+            return mockRequest({
+                messageHandler: () => ok({
+                    state,
+                    cleanup: s => expect(s).toBe(state)
+                })
+            })
+        })
+    })
+
+    describe('async generator function response', () => {
+        const body = 'async generator function body 🤔'
+
+        function createMinimalState(): Response {
+            return {
+                body: async function * () {
+                    yield Buffer.from(body, 'utf-8')
+                }
+            }
+        }
+
+        function createFullState(): Response {
+            return  {
+                ...createMinimalState(),
+                status: 418,
+                cookies: {
+                    'test cookie': {
+                        value: 'test cookie value'
+                    },
+                    'test cookie 2': {
+                        value: 'test cookie 2 value',
+                        domain: 'test domain',
+                        httpOnly: true,
+                        maxAge: 123,
+                        path: '/test/path',
+                        sameSite: 'lax',
+                        secure: true
+                    }
+                },
+                headers: {
+                    'x-test': 'test'
+                }
+            }
+        }
+
+        test('status, cookies, headers, body passed to server response', async () => {
+            expect.assertions(5)
+
+            const state = createFullState()
+            const response = await mockRequest({
+                messageHandler: () => ok({ state })
+            })
+            const headers = response.getHeaders()
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(state.status)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntries(
+                Object.entries(state.headers)
+            )
+            expect(headers).toContainEntry([
+                'set-cookie',
+                Object.entries(state.cookies)
+                    .map(([ name, value ]) =>
+                        cookieHeader(name, value)
+                    )
+            ])
+        })
+
+        test('passes default status, content type, and date', async () => {
+            expect.assertions(4)
+
+            const response = await mockRequest({
+                messageHandler: () => ok({
+                    state: createMinimalState()
+                })
+            })
+            const headers = response.getHeaders()
+
+            expect(response.statusCode).toBe(200)
+            expect(response._internal.buffer.toString('utf-8')).toBe(body)
+            expect(headers).toContainEntry([
+                'content-type',
+                'application/octet-stream'
+            ])
+            expect(headers).toContainKey('date')
+        })
+
+        test('messageHandler cleanup called', () => {
+            expect.assertions(1)
+
+            const state = createMinimalState()
+            return mockRequest({
+                messageHandler: () => ok({
+                    state,
+                    cleanup: s => expect(s).toBe(state)
                 })
             })
         })

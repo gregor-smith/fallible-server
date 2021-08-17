@@ -1,4 +1,6 @@
 import type { ServerResponse } from 'http'
+import { pipeline } from 'stream/promises'
+import type { PipelineSource } from 'stream'
 
 import Websocket from 'ws'
 import { Awaitable, error, ok, Result } from 'fallible'
@@ -10,9 +12,9 @@ import type {
     ExceptionHandler,
     MessageHandler,
     MessageHandlerResult,
-    Pipeable,
     Response,
-    WebsocketIterator
+    WebsocketIterator,
+    WebsocketResponse
 } from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
@@ -166,16 +168,19 @@ export function createRequestListener<Errors>({
             }
             await new Promise<void>(resolve => res.end(resolve))
         }
-        // stream
-        else if ('pipe' in response.body) {
+        // pipeline source
+        else if ('pipe' in response.body
+                || Symbol.iterator in response.body
+                || Symbol.asyncIterator in response.body
+                || typeof response.body === 'function') {
             setResponseHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
-            await new Promise<void>(resolve => {
-                res.on('finish', resolve);
-                (response.body as Pipeable).pipe(res)
-            })
+            await pipeline(
+                response.body as PipelineSource<Buffer>,
+                res
+            )
         }
         // websocket
         else {
@@ -201,7 +206,7 @@ export function createRequestListener<Errors>({
                 )
             )
 
-            const { onOpen, onClose, onMessage, onSendError } = response.body
+            const { onOpen, onClose, onMessage, onSendError } = response.body as WebsocketResponse
 
             websocket.on('message', data =>
                 sendWebsocketMessages(
