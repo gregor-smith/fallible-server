@@ -14,7 +14,6 @@ export declare function signedCookieHeader(name: string, cookie: Readonly<Cookie
 export declare function getMessageHeader(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export interface IncomingMessageIPFields {
     headers: IncomingMessage['headers'];
-    connection: Pick<IncomingMessage['connection'], 'remoteAddress'>;
     socket: Pick<IncomingMessage['socket'], 'remoteAddress'>;
 }
 export declare function getMessageIP(message: IncomingMessageIPFields, useXForwardedFor?: boolean): string | undefined;

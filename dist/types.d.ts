@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import type { IncomingMessage, RequestListener } from 'http';
+import type { PipelineSource } from 'stream';
 import type { Data } from 'ws';
 import type { Awaitable, Result } from 'fallible';
 import type { CloseWebSocket } from './general-utils.js';
@@ -31,10 +32,7 @@ export declare type WebsocketResponse = {
     onClose?: WebsocketCloseCallback;
     onSendError?: WebsocketSendErrorCallback;
 };
-export interface Pipeable {
-    pipe: (destination: NodeJS.WritableStream) => void;
-}
-export declare type Body = string | Buffer | Pipeable | WebsocketResponse;
+export declare type Body = string | Buffer | PipelineSource<Buffer> | WebsocketResponse;
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
     headers?: Readonly<Record<string, Formattable | ReadonlyArray<Formattable>>>;

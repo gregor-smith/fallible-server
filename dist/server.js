@@ -1,3 +1,4 @@
+import { pipeline } from 'stream/promises';
 import Websocket from 'ws';
 import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
@@ -115,16 +116,16 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             }
             await new Promise(resolve => res.end(resolve));
         }
-        // stream
-        else if ('pipe' in response.body) {
+        // pipeline source
+        else if ('pipe' in response.body
+            || Symbol.iterator in response.body
+            || Symbol.asyncIterator in response.body
+            || typeof response.body === 'function') {
             setResponseHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
-            await new Promise(resolve => {
-                res.on('finish', resolve);
-                response.body.pipe(res);
-            });
+            await pipeline(response.body, res);
         }
         // websocket
         else {

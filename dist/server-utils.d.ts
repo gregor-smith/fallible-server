@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import type { ReadStream, Stats } from 'fs';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import { Result } from 'fallible';
 import { File as FormidableFile } from 'formidable';
 import { FileSystemError } from 'fallible-fs';
@@ -47,4 +47,3 @@ export declare type OpenFileError = FileSystemError | {
 };
 export declare function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;
 export declare function openSanitisedFile(directory: string, filename: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;
-export declare function iteratorToStream<T>(iterator: Iterator<T, unknown> | AsyncIterator<T, unknown>, objectMode?: boolean): Readable;

@@ -69,11 +69,11 @@ export function getMessageHeader(message, name) {
         : header;
 }
 export function getMessageIP(message, useXForwardedFor = false) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c;
     if (!useXForwardedFor) {
-        return (_a = message.connection.remoteAddress) !== null && _a !== void 0 ? _a : message.socket.remoteAddress;
+        return message.socket.remoteAddress;
     }
-    return (_e = (_d = (_c = (_b = getMessageHeader(message, 'x-forwarded-for')) === null || _b === void 0 ? void 0 : _b.match(/^\s*([^\s]+)\s*(?:,|$)/)) === null || _c === void 0 ? void 0 : _c[1]) !== null && _d !== void 0 ? _d : message.connection.remoteAddress) !== null && _e !== void 0 ? _e : message.socket.remoteAddress;
+    return (_c = (_b = (_a = getMessageHeader(message, 'x-forwarded-for')) === null || _a === void 0 ? void 0 : _a.match(/^\s*([^\s]+)\s*(?:,|$)/)) === null || _b === void 0 ? void 0 : _b[1]) !== null && _c !== void 0 ? _c : message.socket.remoteAddress;
 }
 export function getMessageMethod(message) {
     var _a, _b;
