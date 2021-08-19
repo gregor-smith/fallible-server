@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'http'
-import { pipeline } from 'stream/promises'
+import { pipeline } from 'stream'
 import type { PipelineSource } from 'stream'
 
 import Websocket from 'ws'
@@ -177,9 +177,19 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
-            await pipeline(
-                response.body as PipelineSource<Buffer>,
-                res
+            await new Promise<void>((resolve, reject) =>
+                pipeline(
+                    response.body as PipelineSource<Buffer>,
+                    res,
+                    error => {
+                        if (error === null) {
+                            resolve()
+                        }
+                        else {
+                            reject(error)
+                        }
+                    }
+                )
             )
         }
         // websocket

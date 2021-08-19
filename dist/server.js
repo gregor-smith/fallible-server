@@ -1,4 +1,4 @@
-import { pipeline } from 'stream/promises';
+import { pipeline } from 'stream';
 import Websocket from 'ws';
 import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
@@ -125,7 +125,14 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
-            await pipeline(response.body, res);
+            await new Promise((resolve, reject) => pipeline(response.body, res, error => {
+                if (error === null) {
+                    resolve();
+                }
+                else {
+                    reject(error);
+                }
+            }));
         }
         // websocket
         else {
