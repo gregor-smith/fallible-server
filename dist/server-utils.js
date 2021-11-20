@@ -1,44 +1,97 @@
 import { join as joinPath } from 'path';
+import { parse as secureJSONParse } from 'secure-json-parse';
 import { asyncFallible, error, ok } from 'fallible';
 import { Formidable } from 'formidable';
-import rawBody from 'raw-body';
-import { createReadStream, stat } from 'fallible-fs';
 import sanitiseFilename from 'sanitize-filename';
-import { parseJSONString } from './general-utils.js';
-function hasTypeField(value) {
-    return typeof value === 'object'
-        && value !== null
-        && 'type' in value;
+import { createReadStream, stat } from 'fallible-fs';
+export function readBufferStream(request, limit = Number.POSITIVE_INFINITY) {
+    if (request.destroyed) {
+        return error({ tag: 'StreamClosed' });
+    }
+    return new Promise(resolve => {
+        const chunks = [];
+        let length = 0;
+        const onData = (chunk) => {
+            if (!(chunk instanceof Buffer)) {
+                cleanup();
+                const result = error({ tag: 'NonBufferChunk', chunk });
+                return resolve(result);
+            }
+            if (request.destroyed) {
+                cleanup();
+                const result = error({ tag: 'StreamClosed' });
+                return resolve(result);
+            }
+            length += chunk.length;
+            if (length > limit) {
+                cleanup();
+                const result = error({ tag: 'LimitExceeded' });
+                return resolve(result);
+            }
+            chunks.push(chunk);
+        };
+        const onEnd = () => {
+            cleanup();
+            const buffer = Buffer.concat(chunks);
+            const result = ok(buffer);
+            resolve(result);
+        };
+        const onError = (exception) => {
+            cleanup();
+            const result = error({
+                tag: 'OtherError',
+                error: exception
+            });
+            resolve(result);
+        };
+        const onClose = () => {
+            cleanup();
+            const result = error({ tag: 'StreamClosed' });
+            return resolve(result);
+        };
+        const cleanup = () => {
+            request.off('data', onData);
+            request.off('error', onError);
+            request.off('end', onEnd);
+            request.off('close', onClose);
+        };
+        request.on('data', onData);
+        request.once('end', onEnd);
+        request.once('error', onError);
+        request.once('close', onClose);
+    });
 }
-export async function parseJSONStream(stream, { sizeLimit, encoding = 'utf-8' } = {}) {
-    let body;
-    try {
-        body = await rawBody(stream, {
-            encoding,
-            limit: sizeLimit
-        });
-    }
-    catch (exception) {
-        return error(hasTypeField(exception) && exception.type === 'entity.too.large'
-            ? { tag: 'TooLarge' }
-            : { tag: 'OtherError', error: exception });
-    }
-    const result = parseJSONString(body);
-    return result.ok
-        ? result
-        : error({ tag: 'InvalidSyntax' });
+export function parseJSONStream(stream, limit) {
+    return asyncFallible(async (propagate) => {
+        const buffer = propagate(await readBufferStream(stream, limit));
+        let text;
+        try {
+            // not sure if this can throw but just in case
+            text = buffer.toString('utf-8');
+        }
+        catch (exception) {
+            return error({ tag: 'OtherError', error: exception });
+        }
+        let value;
+        try {
+            value = secureJSONParse(text);
+        }
+        catch {
+            return error({ tag: 'InvalidSyntax' });
+        }
+        return ok(value);
+    });
 }
 export function parseMultipartStream(stream, { encoding = 'utf-8', saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit } = {}) {
-    const form = new Formidable({
-        enabledPlugins: ['multipart'],
-        encoding,
-        keepExtensions: keepFileExtensions,
-        uploadDir: saveDirectory,
-        maxFieldsSize: fieldsSizeLimit,
-        maxFileSize: fileSizeLimit
-    });
     return new Promise(resolve => {
-        form.parse(stream, (exception, fields, files) => {
+        new Formidable({
+            enabledPlugins: ['multipart'],
+            encoding,
+            keepExtensions: keepFileExtensions,
+            uploadDir: saveDirectory,
+            maxFieldsSize: fieldsSizeLimit,
+            maxFileSize: fileSizeLimit
+        }).parse(stream, (exception, fields, files) => {
             if (exception === null || exception === undefined) {
                 resolve(ok({ fields, files }));
                 return;

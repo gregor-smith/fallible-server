@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
 import type { Cookie, Formattable, Method, ParsedContentType } from './types.js';
+export { parse as parseJSONString } from 'secure-json-parse';
 export declare const CloseWebSocket: unique symbol;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
@@ -34,4 +35,3 @@ export declare function parseAuthorizationHeaderBearer(header: string): string |
 export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
 export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;
 export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean;
-export declare function parseJSONString<T = unknown>(string: string): Result<T, void>;

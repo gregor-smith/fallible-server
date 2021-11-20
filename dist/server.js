@@ -1,4 +1,4 @@
-import { pipeline } from 'stream';
+import { pipeline } from 'stream/promises';
 import Websocket from 'ws';
 import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
@@ -14,7 +14,7 @@ export function defaultOnWebsocketSendError(_, { name, message }) {
 function* iterateHeaders({ cookies, headers }) {
     if (headers !== undefined) {
         for (const [name, value] of Object.entries(headers)) {
-            yield typeof value === 'object'
+            yield Array.isArray(value)
                 ? [name, value.map(String)]
                 : [name, String(value)];
         }
@@ -61,17 +61,16 @@ async function sendWebsocketMessages(websocket, messages, onError = defaultOnWeb
         }
     }
 }
-export function createRequestListener({ messageHandler, errorHandler, exceptionHandler }) {
+export function createRequestListener({ messageHandler, errorHandler, exceptionListener }) {
     if (errorHandler === undefined) {
-        console.warn("Default error handler will be used. Consider overriding via 'errorHandler' option");
+        console.warn("Default error handler will be used. Consider overriding via the 'errorHandler' option");
         errorHandler = defaultErrorHandler;
     }
-    if (exceptionHandler === undefined) {
-        console.warn("Default exception handler will be used. Consider overriding via 'exceptionHandler' option");
-        exceptionHandler = defaultErrorHandler;
+    if (exceptionListener === undefined) {
+        console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option");
+        exceptionListener = console.error;
     }
     return async (req, res) => {
-        var _a;
         let response;
         let cleanup;
         try {
@@ -85,9 +84,28 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             }
         }
         catch (exception) {
-            response = await exceptionHandler(exception);
+            exceptionListener(exception, req);
+            try {
+                if (req.aborted) {
+                    if (cleanup !== undefined) {
+                        await cleanup(req);
+                    }
+                }
+                else {
+                    res.statusCode = 500;
+                    res.setHeader('Content-Length', 0);
+                    await Promise.all([
+                        cleanup?.(req),
+                        new Promise(resolve => res.end(resolve))
+                    ]);
+                }
+            }
+            catch (exception) {
+                exceptionListener(exception, req);
+            }
+            return;
         }
-        res.statusCode = (_a = response.status) !== null && _a !== void 0 ? _a : 200;
+        res.statusCode = response.status ?? 200;
         if (typeof response.body === 'string') {
             setResponseHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
@@ -96,7 +114,15 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body));
             }
-            await new Promise(resolve => res.end(response.body, resolve));
+            try {
+                await new Promise(resolve => {
+                    res.on('close', resolve);
+                    res.end(response.body, 'utf-8', resolve);
+                });
+            }
+            catch (exception) {
+                exceptionListener(exception, req, response);
+            }
         }
         else if (response.body instanceof Buffer) {
             setResponseHeaders(res, response);
@@ -106,7 +132,15 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', response.body.length);
             }
-            await new Promise(resolve => res.end(response.body, resolve));
+            try {
+                await new Promise(resolve => {
+                    res.on('close', resolve);
+                    res.end(response.body, resolve);
+                });
+            }
+            catch (exception) {
+                exceptionListener(exception, req, response);
+            }
         }
         // no body
         else if (response.body === undefined) {
@@ -114,28 +148,13 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', 0);
             }
-            await new Promise(resolve => res.end(resolve));
-        }
-        // pipeline source
-        else if ('pipe' in response.body
-            || Symbol.iterator in response.body
-            || Symbol.asyncIterator in response.body
-            || typeof response.body === 'function') {
-            setResponseHeaders(res, response);
-            if (!res.hasHeader('Content-Type')) {
-                res.setHeader('Content-Type', 'application/octet-stream');
-            }
-            await new Promise((resolve, reject) => pipeline(response.body, res, error => {
-                if (error === null) {
-                    resolve();
-                }
-                else {
-                    reject(error);
-                }
-            }));
+            await new Promise(resolve => {
+                res.on('close', resolve);
+                res.end(resolve);
+            });
         }
         // websocket
-        else {
+        else if ('onMessage' in response.body) {
             const server = new Websocket.Server({ noServer: true });
             server.on('headers', headers => {
                 for (const [name, values] of iterateHeaders(response)) {
@@ -150,13 +169,13 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
                 }
             });
             const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-            const { onOpen, onClose, onMessage, onSendError } = response.body;
-            websocket.on('message', data => sendWebsocketMessages(websocket, onMessage(data), onSendError));
+            const body = response.body;
+            websocket.on('message', data => sendWebsocketMessages(websocket, body.onMessage(data), body.onSendError));
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
             let closeReason;
-            if (onOpen === undefined) {
+            if (body.onOpen === undefined) {
                 closeReason = await new Promise(resolve => 
                 // can't just call onClose here in this callback because
                 // it's potentially async and as such needs to be awaited
@@ -169,26 +188,41 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionH
                     // the 'open' even is never fired when running in noServer
                     // mode, so just call onOpen straight away as the request
                     // is already opened
-                    sendWebsocketMessages(websocket, onOpen(), onSendError)
+                    sendWebsocketMessages(websocket, body.onOpen(), body.onSendError)
                 ]);
             }
-            if (onClose !== undefined) {
-                await onClose(...closeReason);
+            if (body.onClose !== undefined) {
+                await body.onClose(...closeReason);
             }
             // closing the WebSocketServer is not necessary because in noServer
             // mode all it does is terminate all connected sockets, which in
             // this case has already happened. see:
             // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket-server.js#L126
         }
+        // pipeline source
+        else {
+            setResponseHeaders(res, response);
+            if (!res.hasHeader('Content-Type')) {
+                res.setHeader('Content-Type', 'application/octet-stream');
+            }
+            try {
+                await pipeline(response.body, res);
+            }
+            catch (exception) {
+                if (exception?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+                    throw exception;
+                }
+            }
+        }
         if (cleanup !== undefined) {
-            await cleanup(response);
+            await cleanup(req, response);
         }
     };
 }
 function composedCleanups(cleanups) {
-    return async (response) => {
+    return async (message, state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index](response);
+            await cleanups[index](message, state);
         }
     };
 }
@@ -198,7 +232,7 @@ export function composeMessageHandlers(handlers) {
         for (const handler of handlers) {
             const result = await handler(message, state);
             if (!result.ok) {
-                await composedCleanups(cleanups)();
+                await composedCleanups(cleanups)(message);
                 return result;
             }
             state = result.value.state;

@@ -1,22 +1,25 @@
 /// <reference types="node" />
 import type { ReadStream, Stats } from 'fs';
 import type { Readable } from 'stream';
-import { Result } from 'fallible';
+import { Awaitable, Result } from 'fallible';
 import { File as FormidableFile } from 'formidable';
 import { FileSystemError } from 'fallible-fs';
-export declare type ParseJSONStreamError = {
-    tag: 'InvalidSyntax';
+export declare type ReadBufferStreamError = {
+    tag: 'LimitExceeded';
 } | {
-    tag: 'TooLarge';
+    tag: 'StreamClosed';
+} | {
+    tag: 'NonBufferChunk';
+    chunk: unknown;
 } | {
     tag: 'OtherError';
     error: unknown;
 };
-export declare type ParseJSONStreamArguments = {
-    sizeLimit?: number;
-    encoding?: BufferEncoding;
+export declare function readBufferStream(request: Readable, limit?: number): Awaitable<Result<Buffer, ReadBufferStreamError>>;
+export declare type ParseJSONStreamError = ReadBufferStreamError | {
+    tag: 'InvalidSyntax';
 };
-export declare function parseJSONStream(stream: Readable, { sizeLimit, encoding }?: ParseJSONStreamArguments): Promise<Result<unknown, ParseJSONStreamError>>;
+export declare function parseJSONStream(stream: Readable, limit?: number): Promise<Result<unknown, ParseJSONStreamError>>;
 export declare type ParseMultipartStreamError = {
     tag: 'FilesTooLarge';
 } | {

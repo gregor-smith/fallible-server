@@ -2,11 +2,10 @@
 // utils within are useful on both server and client. exclusively server-only
 // utils should go in server-utils
 import { error, ok } from 'fallible';
-import { parse as secureJSONParse } from 'secure-json-parse';
+export { parse as parseJSONString } from 'secure-json-parse';
 export const CloseWebSocket = Symbol();
 export function parseCookieHeader(header, name) {
-    var _a;
-    return (_a = header.match(`(?:^|; )${name}=([^;]*)`)) === null || _a === void 0 ? void 0 : _a[1];
+    return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
 export function parseMessageCookie(message, name) {
     if (message.headers.cookie === undefined) {
@@ -69,19 +68,18 @@ export function getMessageHeader(message, name) {
         : header;
 }
 export function getMessageIP(message, useXForwardedFor = false) {
-    var _a, _b, _c;
     if (!useXForwardedFor) {
         return message.socket.remoteAddress;
     }
-    return (_c = (_b = (_a = getMessageHeader(message, 'x-forwarded-for')) === null || _a === void 0 ? void 0 : _a.match(/^\s*([^\s]+)\s*(?:,|$)/)) === null || _b === void 0 ? void 0 : _b[1]) !== null && _c !== void 0 ? _c : message.socket.remoteAddress;
+    return getMessageHeader(message, 'x-forwarded-for')
+        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1]
+        ?? message.socket.remoteAddress;
 }
 export function getMessageMethod(message) {
-    var _a, _b;
-    return (_b = (_a = message.method) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== null && _b !== void 0 ? _b : 'GET';
+    return message.method?.toUpperCase() ?? 'GET';
 }
 export function getMessageURL(message) {
-    var _a;
-    return (_a = message.url) !== null && _a !== void 0 ? _a : '/';
+    return message.url ?? '/';
 }
 export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingValues = true } = {}) {
     const query = {};
@@ -120,8 +118,7 @@ export function joinURLQueryString(query) {
         : ('?' + pairs.join('&'));
 }
 export function parseURLHash(url) {
-    var _a;
-    const match = (_a = url.match(/#(.+)/)) === null || _a === void 0 ? void 0 : _a[1];
+    const match = url.match(/#(.+)/)?.[1];
     return match === undefined
         ? ''
         : decodeURIComponent(match);
@@ -179,8 +176,8 @@ export function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 export function parseAuthorizationHeaderBearer(header) {
-    var _a, _b;
-    const token = (_b = (_a = header.match(/^Bearer (.+)/)) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.trim();
+    const token = header.match(/^Bearer (.+)/)?.[1]
+        ?.trim();
     if (token === undefined || token.length === 0) {
         return;
     }
@@ -198,15 +195,5 @@ export function parseMessageAuthorizationHeaderBearer(message) {
 }
 export function messageIsWebSocketRequest(message) {
     return getMessageHeader(message, 'upgrade') === 'websocket';
-}
-export function parseJSONString(string) {
-    let json;
-    try {
-        json = secureJSONParse(string);
-    }
-    catch {
-        return error();
-    }
-    return ok(json);
 }
 //# sourceMappingURL=general-utils.js.map
