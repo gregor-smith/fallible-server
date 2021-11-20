@@ -1,6 +1,5 @@
 import type { ServerResponse } from 'http'
-import { pipeline } from 'stream'
-import type { PipelineSource } from 'stream'
+import { pipeline } from 'stream/promises'
 
 import Websocket from 'ws'
 import { Awaitable, error, ok, Result } from 'fallible'
@@ -9,12 +8,11 @@ import type {
     AwaitableRequestListener,
     Cleanup,
     ErrorHandler,
-    ExceptionHandler,
+    ExceptionListener,
     MessageHandler,
     MessageHandlerResult,
     Response,
-    WebsocketIterator,
-    WebsocketResponse
+    WebsocketIterator
 } from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
@@ -36,7 +34,7 @@ export function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }
 function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, string | string[] ]> {
     if (headers !== undefined) {
         for (const [ name, value ] of Object.entries(headers)) {
-            yield typeof value === 'object'
+            yield Array.isArray(value)
                 ? [ name, value.map(String) ]
                 : [ name, String(value) ]
         }
@@ -99,22 +97,22 @@ async function sendWebsocketMessages(
 export type CreateRequestListenerArguments<Errors> = {
     messageHandler: MessageHandler<void, Response, Errors>
     errorHandler?: ErrorHandler<Errors>
-    exceptionHandler?: ExceptionHandler
+    exceptionListener?: ExceptionListener
 }
 
 
 export function createRequestListener<Errors>({
     messageHandler,
     errorHandler,
-    exceptionHandler
+    exceptionListener
 }: CreateRequestListenerArguments<Errors>): AwaitableRequestListener {
     if (errorHandler === undefined) {
-        console.warn("Default error handler will be used. Consider overriding via 'errorHandler' option")
+        console.warn("Default error handler will be used. Consider overriding via the 'errorHandler' option")
         errorHandler = defaultErrorHandler
     }
-    if (exceptionHandler === undefined) {
-        console.warn("Default exception handler will be used. Consider overriding via 'exceptionHandler' option")
-        exceptionHandler = defaultErrorHandler
+    if (exceptionListener === undefined) {
+        console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option")
+        exceptionListener = console.error
     }
 
     return async (req, res) => {
@@ -131,7 +129,26 @@ export function createRequestListener<Errors>({
             }
         }
         catch (exception: unknown) {
-            response = await exceptionHandler!(exception)
+            exceptionListener!(exception, req)
+            try {
+                if (req.aborted) {
+                    if (cleanup !== undefined) {
+                        await cleanup(req)
+                    }
+                }
+                else {
+                    res.statusCode = 500
+                    res.setHeader('Content-Length', 0)
+                    await Promise.all([
+                        cleanup?.(req),
+                        new Promise<void>(resolve => res.end(resolve))
+                    ])
+                }
+            }
+            catch (exception: unknown) {
+                exceptionListener!(exception, req)
+            }
+            return
         }
 
         res.statusCode = response.status ?? 200
@@ -144,9 +161,15 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body))
             }
-            await new Promise<void>(resolve =>
-                res.end(response.body, resolve)
-            )
+            try {
+                await new Promise<void>(resolve => {
+                    res.on('close', resolve)
+                    res.end(response.body, 'utf-8', resolve)
+                })
+            }
+            catch (exception) {
+                exceptionListener!(exception, req, response)
+            }
         }
         else if (response.body instanceof Buffer) {
             setResponseHeaders(res, response)
@@ -156,9 +179,15 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', response.body.length)
             }
-            await new Promise<void>(resolve =>
-                res.end(response.body, resolve)
-            )
+            try {
+                await new Promise<void>(resolve => {
+                    res.on('close', resolve)
+                    res.end(response.body, resolve)
+                })
+            }
+            catch (exception) {
+                exceptionListener!(exception, req, response)
+            }
         }
         // no body
         else if (response.body === undefined) {
@@ -166,34 +195,13 @@ export function createRequestListener<Errors>({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', 0)
             }
-            await new Promise<void>(resolve => res.end(resolve))
-        }
-        // pipeline source
-        else if ('pipe' in response.body
-                || Symbol.iterator in response.body
-                || Symbol.asyncIterator in response.body
-                || typeof response.body === 'function') {
-            setResponseHeaders(res, response)
-            if (!res.hasHeader('Content-Type')) {
-                res.setHeader('Content-Type', 'application/octet-stream')
-            }
-            await new Promise<void>((resolve, reject) =>
-                pipeline(
-                    response.body as PipelineSource<Buffer>,
-                    res,
-                    error => {
-                        if (error === null) {
-                            resolve()
-                        }
-                        else {
-                            reject(error)
-                        }
-                    }
-                )
-            )
+            await new Promise<void>(resolve => {
+                res.on('close', resolve)
+                res.end(resolve)
+            })
         }
         // websocket
-        else {
+        else if ('onMessage' in response.body) {
             const server = new Websocket.Server({ noServer: true })
             server.on('headers', headers => {
                 for (const [ name, values ] of iterateHeaders(response)) {
@@ -216,13 +224,13 @@ export function createRequestListener<Errors>({
                 )
             )
 
-            const { onOpen, onClose, onMessage, onSendError } = response.body as WebsocketResponse
+            const body = response.body
 
             websocket.on('message', data =>
                 sendWebsocketMessages(
                     websocket,
-                    onMessage(data),
-                    onSendError
+                    body.onMessage(data),
+                    body.onSendError
                 )
             )
 
@@ -231,7 +239,7 @@ export function createRequestListener<Errors>({
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
 
             let closeReason: [ number, string ]
-            if (onOpen === undefined) {
+            if (body.onOpen === undefined) {
                 closeReason = await new Promise<[ number, string ]>(resolve =>
                     // can't just call onClose here in this callback because
                     // it's potentially async and as such needs to be awaited
@@ -249,14 +257,14 @@ export function createRequestListener<Errors>({
                     // is already opened
                     sendWebsocketMessages(
                         websocket,
-                        onOpen(),
-                        onSendError
+                        body.onOpen(),
+                        body.onSendError
                     )
                 ])
             }
 
-            if (onClose !== undefined) {
-                await onClose(...closeReason)
+            if (body.onClose !== undefined) {
+                await body.onClose(...closeReason)
             }
 
             // closing the WebSocketServer is not necessary because in noServer
@@ -264,18 +272,33 @@ export function createRequestListener<Errors>({
             // this case has already happened. see:
             // https://github.com/websockets/ws/blob/d1a8af4ddb1b24a4ee23acf66decb0ed0e0d8862/lib/websocket-server.js#L126
         }
+        // pipeline source
+        else {
+            setResponseHeaders(res, response)
+            if (!res.hasHeader('Content-Type')) {
+                res.setHeader('Content-Type', 'application/octet-stream')
+            }
+            try {
+                await pipeline(response.body, res)
+            }
+            catch (exception) {
+                if ((exception as NodeJS.ErrnoException)?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+                    throw exception
+                }
+            }
+        }
 
         if (cleanup !== undefined) {
-            await cleanup(response)
+            await cleanup(req, response)
         }
     }
 }
 
 
 function composedCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup {
-    return async response => {
+    return async (message, state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index]!(response)
+            await cleanups[index]!(message, state)
         }
     }
 }
@@ -490,7 +513,7 @@ export function composeMessageHandlers<State, Error>(
         for (const handler of handlers) {
             const result = await handler(message, state)
             if (!result.ok) {
-                await composedCleanups(cleanups)()
+                await composedCleanups(cleanups)(message)
                 return result
             }
             state = result.value.state

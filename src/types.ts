@@ -1,5 +1,4 @@
 import type { IncomingMessage, RequestListener } from 'http'
-import type { PipelineSource } from 'stream'
 
 import type { Data } from 'ws'
 import type { Awaitable, Result } from 'fallible'
@@ -25,7 +24,7 @@ export type Method =
     | 'CONNECT'
 
 
-export type Formattable = string | number | boolean | bigint
+export type Formattable = string | number | boolean | bigint | null
 
 
 export type Cookie = {
@@ -48,6 +47,16 @@ export type AwaitableIterator<TYield = unknown, TReturn = unknown, TNext = unkno
     | AsyncIterator<TYield, TReturn, TNext>
 
 
+export type AwaitableIterable<T> =
+    | Iterable<T>
+    | AsyncIterable<T>
+
+
+export type StreamBody =
+    | AwaitableIterable<Buffer>
+    | (() => AwaitableIterable<Buffer>)
+
+
 export type WebsocketIterator = AwaitableIterator<Data, typeof CloseWebSocket | void, void>
 
 
@@ -55,7 +64,7 @@ export type WebsocketOpenCallback = () => WebsocketIterator
 export type WebsocketMessageCallback = (message: Data) => WebsocketIterator
 export type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>
 export type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>
-export type WebsocketResponse = {
+export type WebsocketBody = {
     onOpen?: WebsocketOpenCallback
     onMessage: WebsocketMessageCallback
     onClose?: WebsocketCloseCallback
@@ -66,8 +75,8 @@ export type WebsocketResponse = {
 export type Body =
     | string
     | Buffer
-    | PipelineSource<Buffer>
-    | WebsocketResponse
+    | StreamBody
+    | Readonly<WebsocketBody>
 
 
 export type Response = {
@@ -78,7 +87,10 @@ export type Response = {
 }
 
 
-export type Cleanup = (response?: Readonly<Response>) => Awaitable<void>
+export type Cleanup = (
+    message: IncomingMessage,
+    state?: Readonly<Response>
+) => Awaitable<void>
 
 
 export type MessageHandlerResult<State = Response> = {
@@ -98,6 +110,8 @@ export type ErrorHandler<Errors> = (
 ) => Awaitable<Response>
 
 
-export type ExceptionHandler = (
-    exception: unknown
-) => Awaitable<Response>
+export type ExceptionListener = (
+    exception: unknown,
+    message: IncomingMessage,
+    state?: Readonly<Response>
+) => void
