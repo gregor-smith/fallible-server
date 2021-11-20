@@ -6,9 +6,11 @@ import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
-import { parse as secureJSONParse } from 'secure-json-parse'
 
 import type { Cookie, Formattable, Method, ParsedContentType } from './types.js'
+
+
+export { parse as parseJSONString } from 'secure-json-parse'
 
 
 export const CloseWebSocket = Symbol()
@@ -302,16 +304,4 @@ export function parseMessageAuthorizationHeaderBearer(
 
 export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
     return getMessageHeader(message, 'upgrade') === 'websocket'
-}
-
-
-export function parseJSONString<T = unknown>(string: string): Result<T, void> {
-    let json: T
-    try {
-        json = secureJSONParse(string)
-    }
-    catch {
-        return error()
-    }
-    return ok(json)
 }
