@@ -2,60 +2,115 @@ import { join as joinPath } from 'path'
 import type { ReadStream, Stats } from 'fs'
 import type { Readable } from 'stream'
 
-import { asyncFallible, error, ok, Result } from 'fallible'
+import { parse as secureJSONParse } from 'secure-json-parse'
+import { asyncFallible, Awaitable, error, ok, Result } from 'fallible'
 import { Formidable, File as FormidableFile } from 'formidable'
-import rawBody from 'raw-body'
-import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 import sanitiseFilename from 'sanitize-filename'
+import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 
-import { parseJSONString } from './general-utils.js'
 
-
-export type ParseJSONStreamError =
-    | { tag: 'InvalidSyntax' }
-    | { tag: 'TooLarge' }
+export type ReadBufferStreamError =
+    | { tag: 'LimitExceeded' }
+    | { tag: 'StreamClosed' }
+    | { tag: 'NonBufferChunk', chunk: unknown }
     | { tag: 'OtherError', error: unknown }
 
 
-export type ParseJSONStreamArguments = {
-    sizeLimit?: number
-    encoding?: BufferEncoding
+export function readBufferStream(
+    request: Readable,
+    limit = Number.POSITIVE_INFINITY
+): Awaitable<Result<Buffer, ReadBufferStreamError>> {
+    if (request.destroyed) {
+        return error({ tag: 'StreamClosed' } as const)
+    }
+    return new Promise(resolve => {
+        const chunks: Buffer[] = []
+        let length = 0
+
+        const onData = (chunk: unknown): void => {
+            if (!(chunk instanceof Buffer)) {
+                cleanup()
+                const result = error({ tag: 'NonBufferChunk', chunk } as const)
+                return resolve(result)
+            }
+            if (request.destroyed) {
+                cleanup()
+                const result = error({ tag: 'StreamClosed' } as const)
+                return resolve(result)
+            }
+            length += chunk.length
+            if (length > limit) {
+                cleanup()
+                const result = error({ tag: 'LimitExceeded' } as const)
+                return resolve(result)
+            }
+            chunks.push(chunk)
+        }
+
+        const onEnd = (): void => {
+            cleanup()
+            const buffer = Buffer.concat(chunks)
+            const result = ok(buffer)
+            resolve(result)
+        }
+
+        const onError = (exception: Error): void => {
+            cleanup()
+            const result = error({
+                tag: 'OtherError',
+                error: exception
+            } as const)
+            resolve(result)
+        }
+
+        const onClose = (): void => {
+            cleanup()
+            const result = error({ tag: 'StreamClosed' } as const)
+            return resolve(result)
+        }
+
+        const cleanup = (): void => {
+            request.off('data', onData)
+            request.off('error', onError)
+            request.off('end', onEnd)
+            request.off('close', onClose)
+        }
+
+        request.on('data', onData)
+        request.once('end', onEnd)
+        request.once('error', onError)
+        request.once('close', onClose)
+    })
 }
 
 
-function hasTypeField(value: unknown): value is { type: unknown } {
-    return typeof value === 'object'
-        && value !== null
-        && 'type' in value
-}
+
+export type ParseJSONStreamError = ReadBufferStreamError | { tag: 'InvalidSyntax' }
 
 
-export async function parseJSONStream(
+export function parseJSONStream(
     stream: Readable,
-    {
-        sizeLimit,
-        encoding = 'utf-8'
-    }: ParseJSONStreamArguments = {}
+    limit?: number
 ): Promise<Result<unknown, ParseJSONStreamError>> {
-    let body: string
-    try {
-        body = await rawBody(stream, {
-            encoding,
-            limit: sizeLimit
-        })
-    }
-    catch (exception: unknown) {
-        return error(
-            hasTypeField(exception) && exception.type === 'entity.too.large'
-                ? { tag: 'TooLarge' } as const
-                : { tag: 'OtherError', error: exception } as const
-        )
-    }
-
-    const result = parseJSONString(body)
-    return result.ok
-        ? result
-        : error({ tag: 'InvalidSyntax' } as const)
+    return asyncFallible(async propagate => {
+        const buffer = propagate(await readBufferStream(stream, limit))
+        let text: string
+        try {
+            // not sure if this can throw but just in case
+            text = buffer.toString('utf-8')
+        }
+        catch (exception) {
+            return error({ tag: 'OtherError', error: exception } as const)
+        }
+        let value: unknown
+        try {
+            value = secureJSONParse(text)
+        }
+        catch {
+            return error({ tag: 'InvalidSyntax' } as const)
+        }
+        return ok(value)
+    })
 }
 
 
@@ -90,16 +145,15 @@ export function parseMultipartStream(
         fieldsSizeLimit
     }: ParseMultipartStreamArguments = {}
 ): Promise<Result<ParsedMultipartStream, ParseMultipartStreamError>> {
-    const form = new Formidable({
-        enabledPlugins: [ 'multipart' ],
-        encoding,
-        keepExtensions: keepFileExtensions,
-        uploadDir: saveDirectory,
-        maxFieldsSize: fieldsSizeLimit,
-        maxFileSize: fileSizeLimit
-    })
     return new Promise(resolve => {
-        form.parse(stream, (exception, fields, files) => {
+        new Formidable({
+            enabledPlugins: [ 'multipart' ],
+            encoding,
+            keepExtensions: keepFileExtensions,
+            uploadDir: saveDirectory,
+            maxFieldsSize: fieldsSizeLimit,
+            maxFileSize: fileSizeLimit
+        }).parse(stream, (exception, fields, files) => {
             if (exception === null || exception === undefined) {
                 resolve(
                     ok({ fields, files })
