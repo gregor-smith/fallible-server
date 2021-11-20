@@ -2,7 +2,6 @@
   "name": "fallible-server",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
     "./general-utils": "./dist/general-utils.js",
@@ -27,11 +26,11 @@
     "jest-extended": "^0.11.5",
     "keygrip": "^1.1.0",
     "mock-http": "^1.1.0",
-    "typescript": "^4.3.5"
+    "typescript": "4.5.0-dev.20211101"
   },
   "dependencies": {
     "@types/keygrip": "^1.0.2",
-    "@types/node": "^16.6.1",
+    "@types/node": "^16.11.6",
     "@types/secure-json-parse": "^1.0.2",
     "@types/ws": "^7.4.0",
     "fallible": "link:./../fallible",
