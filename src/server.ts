@@ -2,33 +2,22 @@ import type { ServerResponse } from 'http'
 import { pipeline } from 'stream/promises'
 
 import Websocket from 'ws'
-import { Awaitable, error, ok, Result } from 'fallible'
+import type { Awaitable } from 'fallible'
 
 import type {
     AwaitableRequestListener,
     Cleanup,
-    ErrorHandler,
     ExceptionListener,
     MessageHandler,
-    MessageHandlerResult,
     Response,
     WebsocketIterator
 } from './types.js'
 import { CloseWebSocket, cookieHeader } from './general-utils.js'
 
 
-export function defaultErrorHandler(): Response {
-    return {
-        status: 500,
-        body: 'Internal server error'
-    }
-}
-
-
 export function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }: Error): Awaitable<void> {
     console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
 }
-
 
 
 function * iterateHeaders({ cookies, headers }: Response): Iterable<[ string, string | string[] ]> {
@@ -94,42 +83,32 @@ async function sendWebsocketMessages(
 }
 
 
-export type CreateRequestListenerArguments<Errors> = {
-    messageHandler: MessageHandler<void, Response, Errors>
-    errorHandler?: ErrorHandler<Errors>
+export type CreateRequestListenerArguments = {
+    messageHandler: MessageHandler<void, Response>
     exceptionListener?: ExceptionListener
 }
 
 
-export function createRequestListener<Errors>({
-    messageHandler,
-    errorHandler,
-    exceptionListener
-}: CreateRequestListenerArguments<Errors>): AwaitableRequestListener {
-    if (errorHandler === undefined) {
-        console.warn("Default error handler will be used. Consider overriding via the 'errorHandler' option")
-        errorHandler = defaultErrorHandler
-    }
-    if (exceptionListener === undefined) {
-        console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option")
-        exceptionListener = console.error
-    }
+function getDefaultExceptionListener(): ExceptionListener {
+    console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option")
+    return console.error
+}
 
+
+export function createRequestListener({
+    messageHandler,
+    exceptionListener = getDefaultExceptionListener()
+}: CreateRequestListenerArguments): AwaitableRequestListener {
     return async (req, res) => {
         let response: Readonly<Response>
         let cleanup: Cleanup | undefined
         try {
             const result = await messageHandler(req)
-            if (result.ok) {
-                response = result.value.state
-                cleanup = result.value.cleanup
-            }
-            else {
-                response = await errorHandler!(result.value)
-            }
+            response = result.state
+            cleanup = result.cleanup
         }
         catch (exception: unknown) {
-            exceptionListener!(exception, req)
+            exceptionListener(exception, req)
             try {
                 if (req.aborted) {
                     if (cleanup !== undefined) {
@@ -146,7 +125,7 @@ export function createRequestListener<Errors>({
                 }
             }
             catch (exception: unknown) {
-                exceptionListener!(exception, req)
+                exceptionListener(exception, req)
             }
             return
         }
@@ -156,7 +135,7 @@ export function createRequestListener<Errors>({
         if (typeof response.body === 'string') {
             setResponseHeaders(res, response)
             if (!res.hasHeader('Content-Type')) {
-                res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+                res.setHeader('Content-Type', 'text/html; charset=utf-8')
             }
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body))
@@ -168,7 +147,7 @@ export function createRequestListener<Errors>({
                 })
             }
             catch (exception) {
-                exceptionListener!(exception, req, response)
+                exceptionListener(exception, req, response)
             }
         }
         else if (response.body instanceof Buffer) {
@@ -186,7 +165,7 @@ export function createRequestListener<Errors>({
                 })
             }
             catch (exception) {
-                exceptionListener!(exception, req, response)
+                exceptionListener(exception, req, response)
             }
         }
         // no body
@@ -295,7 +274,10 @@ export function createRequestListener<Errors>({
 }
 
 
-function composedCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup {
+function composeCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup | undefined {
+    if (cleanups.length === 0) {
+        return
+    }
     return async (message, state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
             await cleanups[index]!(message, state)
@@ -307,243 +289,211 @@ function composedCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup {
 // there's probably some way to do this with variadic tuple types but fuck it
 // see generateTypings.py in the root of the project
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
+    State1,
+    State2,
     State3
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
     ]
-): MessageHandler<
-    State1,
-    State3,
-    Exclude<Error1 | Error2, never>
->
+): MessageHandler<State1, State3>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
+    State1,
+    State2,
+    State3,
     State4
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
     ]
-): MessageHandler<
-    State1,
-    State4,
-    Exclude<Error1 | Error2 | Error3, never>
->
+): MessageHandler<State1, State4>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
+    State1,
+    State2,
+    State3,
+    State4,
     State5
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
     ]
-): MessageHandler<
-    State1,
-    State5,
-    Exclude<Error1 | Error2 | Error3 | Error4, never>
->
+): MessageHandler<State1, State5>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
     State6
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
     ]
-): MessageHandler<
-    State1,
-    State6,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>
->
+): MessageHandler<State1, State6>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
-    State6, Error6,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
+    State6,
     State7
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
-        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
+        MessageHandler<State6, State7>,
     ]
-): MessageHandler<
-    State1,
-    State7,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>
->
+): MessageHandler<State1, State7>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
-    State6, Error6,
-    State7, Error7,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
+    State6,
+    State7,
     State8
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
-        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
-        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
+        MessageHandler<State6, State7>,
+        MessageHandler<State7, State8>,
     ]
-): MessageHandler<
-    State1,
-    State8,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>
->
+): MessageHandler<State1, State8>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
-    State6, Error6,
-    State7, Error7,
-    State8, Error8,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
+    State6,
+    State7,
+    State8,
     State9
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
-        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
-        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
-        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
+        MessageHandler<State6, State7>,
+        MessageHandler<State7, State8>,
+        MessageHandler<State8, State9>,
     ]
-): MessageHandler<
-    State1,
-    State9,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>
->
+): MessageHandler<State1, State9>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
-    State6, Error6,
-    State7, Error7,
-    State8, Error8,
-    State9, Error9,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
+    State6,
+    State7,
+    State8,
+    State9,
     State10
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
-        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
-        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
-        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
-        MessageHandler<State9, State10, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
+        MessageHandler<State6, State7>,
+        MessageHandler<State7, State8>,
+        MessageHandler<State8, State9>,
+        MessageHandler<State9, State10>,
     ]
-): MessageHandler<
-    State1,
-    State10,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>
->
+): MessageHandler<State1, State10>
 export function composeMessageHandlers<
-    State1, Error1,
-    State2, Error2,
-    State3, Error3,
-    State4, Error4,
-    State5, Error5,
-    State6, Error6,
-    State7, Error7,
-    State8, Error8,
-    State9, Error9,
-    State10, Error10,
+    State1,
+    State2,
+    State3,
+    State4,
+    State5,
+    State6,
+    State7,
+    State8,
+    State9,
+    State10,
     State11
 >(
     handlers: [
-        MessageHandler<State1, State2, Exclude<Error1, never>>,
-        MessageHandler<State2, State3, Exclude<Error1 | Error2, never>>,
-        MessageHandler<State3, State4, Exclude<Error1 | Error2 | Error3, never>>,
-        MessageHandler<State4, State5, Exclude<Error1 | Error2 | Error3 | Error4, never>>,
-        MessageHandler<State5, State6, Exclude<Error1 | Error2 | Error3 | Error4 | Error5, never>>,
-        MessageHandler<State6, State7, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6, never>>,
-        MessageHandler<State7, State8, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7, never>>,
-        MessageHandler<State8, State9, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8, never>>,
-        MessageHandler<State9, State10, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9, never>>,
-        MessageHandler<State10, State11, Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>>,
+        MessageHandler<State1, State2>,
+        MessageHandler<State2, State3>,
+        MessageHandler<State3, State4>,
+        MessageHandler<State4, State5>,
+        MessageHandler<State5, State6>,
+        MessageHandler<State6, State7>,
+        MessageHandler<State7, State8>,
+        MessageHandler<State8, State9>,
+        MessageHandler<State9, State10>,
+        MessageHandler<State10, State11>,
     ]
-): MessageHandler<
-    State1,
-    State11,
-    Exclude<Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10, never>
->
-export function composeMessageHandlers<State, Error>(
-    handlers: ReadonlyArray<MessageHandler<any, any, Error>>
-): MessageHandler<State, any, Error> {
+): MessageHandler<State1, State11>
+
+export function composeMessageHandlers<State>(
+    handlers: ReadonlyArray<MessageHandler<any, any>>
+): MessageHandler<State, any> {
     return async (message, state) => {
         const cleanups: Cleanup[] = []
-
         for (const handler of handlers) {
             const result = await handler(message, state)
-            if (!result.ok) {
-                await composedCleanups(cleanups)(message)
-                return result
-            }
-            state = result.value.state
-            if (result.value.cleanup !== undefined) {
-                cleanups.push(result.value.cleanup)
+            state = result.state
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup)
             }
         }
-
-        return ok({
+        return {
             state,
-            cleanup: cleanups.length === 0
-                ? undefined
-                : composedCleanups(cleanups)
-        })
+            cleanup: composeCleanups(cleanups)
+        }
     }
 }
 
 
-export function fallthroughMessageHandler<ExistingState, NewState, Error, Next>(
-    handlers: ReadonlyArray<MessageHandler<ExistingState, NewState, Error | Next>>,
-    isNext: (error: Readonly<Error | Next>) => error is Next,
-    noMatch: () => Error
-): MessageHandler<ExistingState, NewState, Error> {
+export function fallthroughMessageHandler<ExistingState, NewState, Next>(
+    handlers: ReadonlyArray<MessageHandler<ExistingState, NewState | Next>>,
+    isNext: (state: Readonly<NewState | Next>) => state is Next,
+    noMatch: NewState
+): MessageHandler<ExistingState, NewState> {
     return async (message, state) => {
+        const cleanups: Cleanup[] = []
         for (const handler of handlers) {
             const result = await handler(message, state)
-            if (result.ok || !isNext(result.value)) {
-                return result as Result<MessageHandlerResult<NewState>, Error>
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup)
+            }
+            if (isNext(result.state)) {
+                continue
+            }
+            return {
+                state: result.state,
+                cleanup: composeCleanups(cleanups)
             }
         }
-        return error(noMatch())
+        return {
+            state: noMatch,
+            cleanup: composeCleanups(cleanups)
+        }
     }
 }

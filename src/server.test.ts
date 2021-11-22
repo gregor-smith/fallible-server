@@ -82,7 +82,7 @@ describe('createRequestListener', () => {
 
         const response = await mockRequest({
             messageHandler: () => { throw errorMessage },
-            exceptionHandler
+            exceptionListener: exceptionHandler
         })
         expect(exceptionHandler).toHaveBeenCalledTimes(1)
         expect(exceptionHandler).toHaveBeenCalledWith(errorMessage)
@@ -101,7 +101,7 @@ describe('createRequestListener', () => {
         const response = await mockRequest({
             messageHandler: error,
             errorHandler: () => { throw message },
-            exceptionHandler
+            exceptionListener: exceptionHandler
         })
         expect(exceptionHandler).toHaveBeenCalledTimes(1)
         expect(exceptionHandler).toHaveBeenCalledWith(message)

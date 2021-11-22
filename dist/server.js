@@ -1,13 +1,6 @@
 import { pipeline } from 'stream/promises';
 import Websocket from 'ws';
-import { error, ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
-export function defaultErrorHandler() {
-    return {
-        status: 500,
-        body: 'Internal server error'
-    };
-}
 export function defaultOnWebsocketSendError(_, { name, message }) {
     console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`);
 }
@@ -61,27 +54,18 @@ async function sendWebsocketMessages(websocket, messages, onError = defaultOnWeb
         }
     }
 }
-export function createRequestListener({ messageHandler, errorHandler, exceptionListener }) {
-    if (errorHandler === undefined) {
-        console.warn("Default error handler will be used. Consider overriding via the 'errorHandler' option");
-        errorHandler = defaultErrorHandler;
-    }
-    if (exceptionListener === undefined) {
-        console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option");
-        exceptionListener = console.error;
-    }
+function getDefaultExceptionListener() {
+    console.warn("Default exception listener will be used. Consider overriding via the 'errorHandler' option");
+    return console.error;
+}
+export function createRequestListener({ messageHandler, exceptionListener = getDefaultExceptionListener() }) {
     return async (req, res) => {
         let response;
         let cleanup;
         try {
             const result = await messageHandler(req);
-            if (result.ok) {
-                response = result.value.state;
-                cleanup = result.value.cleanup;
-            }
-            else {
-                response = await errorHandler(result.value);
-            }
+            response = result.state;
+            cleanup = result.cleanup;
         }
         catch (exception) {
             exceptionListener(exception, req);
@@ -109,7 +93,7 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionL
         if (typeof response.body === 'string') {
             setResponseHeaders(res, response);
             if (!res.hasHeader('Content-Type')) {
-                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
             }
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', Buffer.byteLength(response.body));
@@ -219,7 +203,10 @@ export function createRequestListener({ messageHandler, errorHandler, exceptionL
         }
     };
 }
-function composedCleanups(cleanups) {
+function composeCleanups(cleanups) {
+    if (cleanups.length === 0) {
+        return;
+    }
     return async (message, state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
             await cleanups[index](message, state);
@@ -231,32 +218,37 @@ export function composeMessageHandlers(handlers) {
         const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(message, state);
-            if (!result.ok) {
-                await composedCleanups(cleanups)(message);
-                return result;
-            }
-            state = result.value.state;
-            if (result.value.cleanup !== undefined) {
-                cleanups.push(result.value.cleanup);
+            state = result.state;
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup);
             }
         }
-        return ok({
+        return {
             state,
-            cleanup: cleanups.length === 0
-                ? undefined
-                : composedCleanups(cleanups)
-        });
+            cleanup: composeCleanups(cleanups)
+        };
     };
 }
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
     return async (message, state) => {
+        const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(message, state);
-            if (result.ok || !isNext(result.value)) {
-                return result;
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup);
             }
+            if (isNext(result.state)) {
+                continue;
+            }
+            return {
+                state: result.state,
+                cleanup: composeCleanups(cleanups)
+            };
         }
-        return error(noMatch());
+        return {
+            state: noMatch,
+            cleanup: composeCleanups(cleanups)
+        };
     };
 }
 //# sourceMappingURL=server.js.map

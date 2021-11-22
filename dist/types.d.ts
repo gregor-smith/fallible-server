@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import type { IncomingMessage, RequestListener } from 'http';
 import type { Data } from 'ws';
-import type { Awaitable, Result } from 'fallible';
+import type { Awaitable } from 'fallible';
 import type { CloseWebSocket } from './general-utils.js';
 export declare type ParsedContentType = {
     type: string;
@@ -45,6 +45,5 @@ export declare type MessageHandlerResult<State = Response> = {
     state: State;
     cleanup?: Cleanup;
 };
-export declare type MessageHandler<ExistingState, NewState, Errors> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<Result<MessageHandlerResult<NewState>, Errors>>;
-export declare type ErrorHandler<Errors> = (error: Readonly<Errors>) => Awaitable<Response>;
+export declare type MessageHandler<ExistingState, NewState> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<MessageHandlerResult<NewState>>;
 export declare type ExceptionListener = (exception: unknown, message: IncomingMessage, state?: Readonly<Response>) => void;

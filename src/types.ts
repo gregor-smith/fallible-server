@@ -1,7 +1,7 @@
 import type { IncomingMessage, RequestListener } from 'http'
 
 import type { Data } from 'ws'
-import type { Awaitable, Result } from 'fallible'
+import type { Awaitable } from 'fallible'
 
 import type { CloseWebSocket } from './general-utils.js'
 
@@ -99,15 +99,10 @@ export type MessageHandlerResult<State = Response> = {
 }
 
 
-export type MessageHandler<ExistingState, NewState, Errors> = (
+export type MessageHandler<ExistingState, NewState> = (
     message: IncomingMessage,
     state: Readonly<ExistingState>
-) => Awaitable<Result<MessageHandlerResult<NewState>, Errors>>
-
-
-export type ErrorHandler<Errors> = (
-    error: Readonly<Errors>
-) => Awaitable<Response>
+) => Awaitable<MessageHandlerResult<NewState>>
 
 
 export type ExceptionListener = (
