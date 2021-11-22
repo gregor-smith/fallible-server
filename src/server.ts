@@ -9,6 +9,7 @@ import type {
     Cleanup,
     ExceptionListener,
     MessageHandler,
+    MessageHandlerResult,
     Response,
     WebsocketIterator
 } from './types.js'
@@ -274,18 +275,6 @@ export function createRequestListener({
 }
 
 
-function composeCleanups(cleanups: ReadonlyArray<Cleanup>): Cleanup | undefined {
-    if (cleanups.length === 0) {
-        return
-    }
-    return async (message, state) => {
-        for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index]!(message, state)
-        }
-    }
-}
-
-
 // there's probably some way to do this with variadic tuple types but fuck it
 // see generateTypings.py in the root of the project
 export function composeMessageHandlers<
@@ -463,10 +452,7 @@ export function composeMessageHandlers<State>(
                 cleanups.push(result.cleanup)
             }
         }
-        return {
-            state,
-            cleanup: composeCleanups(cleanups)
-        }
+        return composeCleanupResponse(state, cleanups)
     }
 }
 
@@ -486,14 +472,27 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
             if (isNext(result.state)) {
                 continue
             }
-            return {
-                state: result.state,
-                cleanup: composeCleanups(cleanups)
-            }
+            return composeCleanupResponse(result.state, cleanups)
         }
-        return {
-            state: noMatch,
-            cleanup: composeCleanups(cleanups)
-        }
+        return composeCleanupResponse(noMatch, cleanups)
     }
+}
+
+
+export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
+    return { state, cleanup }
+}
+
+
+function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup>): MessageHandlerResult<T> {
+    return response(
+        state,
+        cleanups.length === 0
+            ? undefined
+            : async (message, state) => {
+                for (let index = cleanups.length - 1; index >= 0; index--) {
+                    await cleanups[index]!(message, state)
+                }
+            }
+    )
 }
