@@ -2,7 +2,7 @@ import type { ServerResponse } from 'http'
 import { pipeline } from 'stream/promises'
 
 import Websocket from 'ws'
-import type { Awaitable } from 'fallible'
+import { Awaitable, ok, Result } from 'fallible'
 
 import type {
     AwaitableRequestListener,
@@ -439,7 +439,6 @@ export function composeMessageHandlers<
         MessageHandler<State10, State11>,
     ]
 ): MessageHandler<State1, State11>
-
 export function composeMessageHandlers<State>(
     handlers: ReadonlyArray<MessageHandler<any, any>>
 ): MessageHandler<State, any> {
@@ -447,12 +446,194 @@ export function composeMessageHandlers<State>(
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
             const result = await handler(message, state)
-            state = result.state
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
+            state = result.state
         }
         return composeCleanupResponse(state, cleanups)
+    }
+}
+
+
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+    ]
+): MessageHandler<State1, Result<State3, Error1 | Error2>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+    ]
+): MessageHandler<State1, Result<State4, Error1 | Error2 | Error3>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+    ]
+): MessageHandler<State1, Result<State5, Error1 | Error2 | Error3 | Error4>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+    ]
+): MessageHandler<State1, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6, Error6,
+    State7
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+        MessageHandler<State6, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>,
+    ]
+): MessageHandler<State1, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6, Error6,
+    State7, Error7,
+    State8
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+        MessageHandler<State6, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>,
+        MessageHandler<State7, Result<State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>,
+    ]
+): MessageHandler<State1, Result<State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6, Error6,
+    State7, Error7,
+    State8, Error8,
+    State9
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+        MessageHandler<State6, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>,
+        MessageHandler<State7, Result<State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>,
+        MessageHandler<State8, Result<State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>,
+    ]
+): MessageHandler<State1, Result<State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6, Error6,
+    State7, Error7,
+    State8, Error8,
+    State9, Error9,
+    State10
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+        MessageHandler<State6, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>,
+        MessageHandler<State7, Result<State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>,
+        MessageHandler<State8, Result<State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>,
+        MessageHandler<State9, Result<State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>>,
+    ]
+): MessageHandler<State1, Result<State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>>
+export function composeResultMessageHandlers<
+    State1, Error1,
+    State2, Error2,
+    State3, Error3,
+    State4, Error4,
+    State5, Error5,
+    State6, Error6,
+    State7, Error7,
+    State8, Error8,
+    State9, Error9,
+    State10, Error10,
+    State11
+>(
+    handlers: [
+        MessageHandler<State1, Result<State2, Error1>>,
+        MessageHandler<State2, Result<State3, Error1 | Error2>>,
+        MessageHandler<State3, Result<State4, Error1 | Error2 | Error3>>,
+        MessageHandler<State4, Result<State5, Error1 | Error2 | Error3 | Error4>>,
+        MessageHandler<State5, Result<State6, Error1 | Error2 | Error3 | Error4 | Error5>>,
+        MessageHandler<State6, Result<State7, Error1 | Error2 | Error3 | Error4 | Error5 | Error6>>,
+        MessageHandler<State7, Result<State8, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7>>,
+        MessageHandler<State8, Result<State9, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8>>,
+        MessageHandler<State9, Result<State10, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9>>,
+        MessageHandler<State10, Result<State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>,
+    ]
+): MessageHandler<State1, Result<State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>
+export function composeResultMessageHandlers(
+    handlers: ReadonlyArray<MessageHandler<any, Result<any, any>>>
+): MessageHandler<any, Result<any, any>> {
+    return async (message, state) => {
+        const cleanups: Cleanup[] = []
+        for (const handler of handlers) {
+            const result = await handler(message, state)
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup)
+            }
+            if (!result.state.ok) {
+                return composeCleanupResponse(result.state, cleanups)
+            }
+            state = result.state.value
+        }
+        return composeCleanupResponse(ok(state), cleanups)
     }
 }
 

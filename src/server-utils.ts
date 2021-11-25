@@ -66,7 +66,7 @@ export function readBufferStream(
         const onClose = (): void => {
             cleanup()
             const result = error({ tag: 'StreamClosed' } as const)
-            return resolve(result)
+            resolve(result)
         }
 
         const cleanup = (): void => {
