@@ -1,5 +1,6 @@
 import { pipeline } from 'stream/promises';
 import Websocket from 'ws';
+import { ok } from 'fallible';
 import { CloseWebSocket, cookieHeader } from './general-utils.js';
 export function defaultOnWebsocketSendError(_, { name, message }) {
     console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`);
@@ -203,30 +204,33 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
         }
     };
 }
-function composeCleanups(cleanups) {
-    if (cleanups.length === 0) {
-        return;
-    }
-    return async (message, state) => {
-        for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index](message, state);
-        }
-    };
-}
 export function composeMessageHandlers(handlers) {
     return async (message, state) => {
         const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(message, state);
-            state = result.state;
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
+            state = result.state;
         }
-        return {
-            state,
-            cleanup: composeCleanups(cleanups)
-        };
+        return composeCleanupResponse(state, cleanups);
+    };
+}
+export function composeResultMessageHandlers(handlers) {
+    return async (message, state) => {
+        const cleanups = [];
+        for (const handler of handlers) {
+            const result = await handler(message, state);
+            if (result.cleanup !== undefined) {
+                cleanups.push(result.cleanup);
+            }
+            if (!result.state.ok) {
+                return composeCleanupResponse(result.state, cleanups);
+            }
+            state = result.state.value;
+        }
+        return composeCleanupResponse(ok(state), cleanups);
     };
 }
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
@@ -240,15 +244,21 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
             if (isNext(result.state)) {
                 continue;
             }
-            return {
-                state: result.state,
-                cleanup: composeCleanups(cleanups)
-            };
+            return composeCleanupResponse(result.state, cleanups);
         }
-        return {
-            state: noMatch,
-            cleanup: composeCleanups(cleanups)
-        };
+        return composeCleanupResponse(noMatch, cleanups);
     };
+}
+export function response(state, cleanup) {
+    return { state, cleanup };
+}
+function composeCleanupResponse(state, cleanups) {
+    return response(state, cleanups.length === 0
+        ? undefined
+        : async (message, state) => {
+            for (let index = cleanups.length - 1; index >= 0; index--) {
+                await cleanups[index](message, state);
+            }
+        });
 }
 //# sourceMappingURL=server.js.map

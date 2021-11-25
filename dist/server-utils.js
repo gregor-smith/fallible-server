@@ -47,7 +47,7 @@ export function readBufferStream(request, limit = Number.POSITIVE_INFINITY) {
         const onClose = () => {
             cleanup();
             const result = error({ tag: 'StreamClosed' });
-            return resolve(result);
+            resolve(result);
         };
         const cleanup = () => {
             request.off('data', onData);
