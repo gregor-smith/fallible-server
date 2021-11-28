@@ -124,6 +124,12 @@ export function parseURLHash(url) {
         : decodeURIComponent(match);
 }
 export function parseURLPath(url) {
+    const match = url.match(/^([^?#]+)/)?.[1];
+    return match === undefined
+        ? ''
+        : decodeURI(match);
+}
+export function parseURLPathSegments(url) {
     const segments = [];
     const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g);
     for (let [segment] of matches) {

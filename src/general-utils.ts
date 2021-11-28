@@ -51,10 +51,13 @@ export type ParseSignedMessageCookieError =
     | 'SignatureInvalid'
 
 
+export type Keys = Pick<Keygrip, 'verify'>
+
+
 export function parseSignedMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
     name: string,
-    keys: Pick<Keygrip, 'verify'>
+    keys: Keys
 ): Result<string, ParseSignedMessageCookieError> {
     const value = parseMessageCookie(message, name)
     if (value === undefined) {
@@ -209,7 +212,15 @@ export function parseURLHash(url: string): string {
 }
 
 
-export function parseURLPath(url: string): string[] {
+export function parseURLPath(url: string): string {
+    const match = url.match(/^([^?#]+)/)?.[1]
+    return match === undefined
+        ? ''
+        : decodeURI(match)
+}
+
+
+export function parseURLPathSegments(url: string): string[] {
     const segments: string[] = []
     const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g)
     for (let [ segment ] of matches as Iterable<[ string ]>) {
