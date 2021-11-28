@@ -34,9 +34,10 @@ export declare type WebsocketBody = {
     onSendError?: WebsocketSendErrorCallback;
 };
 export declare type Body = string | Buffer | StreamBody | Readonly<WebsocketBody>;
+export declare type Header = Formattable | ReadonlyArray<Formattable>;
 export declare type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
-    headers?: Readonly<Record<string, Formattable | ReadonlyArray<Formattable>>>;
+    headers?: Readonly<Record<string, Header>>;
     status?: number;
     body?: Body;
 };

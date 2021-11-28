@@ -79,9 +79,12 @@ export type Body =
     | Readonly<WebsocketBody>
 
 
+export type Header = Formattable | ReadonlyArray<Formattable>
+
+
 export type Response = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
-    headers?: Readonly<Record<string, Formattable | ReadonlyArray<Formattable>>>
+    headers?: Readonly<Record<string, Header>>
     status?: number
     body?: Body
 }
