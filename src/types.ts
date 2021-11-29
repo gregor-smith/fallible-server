@@ -6,6 +6,9 @@ import type { Awaitable } from 'fallible'
 import type { CloseWebSocket } from './general-utils.js'
 
 
+export type { IncomingMessage } from 'http'
+
+
 export type ParsedContentType = {
     type: string
     characterSet?: string
@@ -102,7 +105,7 @@ export type MessageHandlerResult<State = Response> = {
 }
 
 
-export type MessageHandler<ExistingState, NewState> = (
+export type MessageHandler<ExistingState = void, NewState = Response> = (
     message: IncomingMessage,
     state: Readonly<ExistingState>
 ) => Awaitable<MessageHandlerResult<NewState>>
