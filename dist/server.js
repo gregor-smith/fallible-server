@@ -1,7 +1,7 @@
 import { pipeline } from 'stream/promises';
 import Websocket from 'ws';
 import { ok } from 'fallible';
-import { CloseWebSocket, cookieHeader } from './general-utils.js';
+import { CloseWebSocket, cookieHeader, response } from './general-utils.js';
 export function defaultOnWebsocketSendError(_, { name, message }) {
     console.warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`);
 }
@@ -248,9 +248,6 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
         }
         return composeCleanupResponse(noMatch, cleanups);
     };
-}
-export function response(state, cleanup) {
-    return { state, cleanup };
 }
 function composeCleanupResponse(state, cleanups) {
     return response(state, cleanups.length === 0

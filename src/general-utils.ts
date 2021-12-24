@@ -7,7 +7,14 @@ import type { IncomingMessage } from 'http'
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
 
-import type { Cookie, Formattable, Method, ParsedContentType } from './types.js'
+import type {
+    Cleanup,
+    Cookie,
+    Formattable,
+    MessageHandlerResult,
+    Method,
+    ParsedContentType
+} from './types.js'
 
 
 export { parse as parseJSONString } from 'secure-json-parse'
@@ -315,4 +322,9 @@ export function parseMessageAuthorizationHeaderBearer(
 
 export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
     return getMessageHeader(message, 'upgrade') === 'websocket'
+}
+
+
+export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
+    return { state, cleanup }
 }

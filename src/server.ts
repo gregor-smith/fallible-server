@@ -13,7 +13,7 @@ import type {
     Response,
     WebsocketIterator
 } from './types.js'
-import { CloseWebSocket, cookieHeader } from './general-utils.js'
+import { CloseWebSocket, cookieHeader, response } from './general-utils.js'
 
 
 export function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }: Error): Awaitable<void> {
@@ -657,11 +657,6 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
         }
         return composeCleanupResponse(noMatch, cleanups)
     }
-}
-
-
-export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
-    return { state, cleanup }
 }
 
 

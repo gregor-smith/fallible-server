@@ -4,9 +4,12 @@ import type { Readable } from 'stream'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
 import { asyncFallible, Awaitable, error, ok, Result } from 'fallible'
-import { Formidable, File as FormidableFile } from 'formidable'
+import { Formidable, File } from 'formidable'
 import sanitiseFilename from 'sanitize-filename'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
+
+
+export type { File } from 'formidable'
 
 
 export type ReadBufferStreamError =
@@ -122,7 +125,7 @@ export type ParseMultipartStreamError =
 
 export type ParsedMultipartStream = {
     fields: Record<string, string>
-    files: Record<string, FormidableFile>
+    files: Record<string, File>
 }
 
 

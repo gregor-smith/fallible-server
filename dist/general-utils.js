@@ -202,4 +202,7 @@ export function parseMessageAuthorizationHeaderBearer(message) {
 export function messageIsWebSocketRequest(message) {
     return getMessageHeader(message, 'upgrade') === 'websocket';
 }
+export function response(state, cleanup) {
+    return { state, cleanup };
+}
 //# sourceMappingURL=general-utils.js.map

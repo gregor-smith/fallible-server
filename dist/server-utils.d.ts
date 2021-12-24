@@ -2,8 +2,9 @@
 import type { ReadStream, Stats } from 'fs';
 import type { Readable } from 'stream';
 import { Awaitable, Result } from 'fallible';
-import { File as FormidableFile } from 'formidable';
+import { File } from 'formidable';
 import { FileSystemError } from 'fallible-fs';
+export type { File } from 'formidable';
 export declare type ReadBufferStreamError = {
     tag: 'LimitExceeded';
 } | {
@@ -30,7 +31,7 @@ export declare type ParseMultipartStreamError = {
 };
 export declare type ParsedMultipartStream = {
     fields: Record<string, string>;
-    files: Record<string, FormidableFile>;
+    files: Record<string, File>;
 };
 export declare type ParseMultipartStreamArguments = {
     encoding?: BufferEncoding;

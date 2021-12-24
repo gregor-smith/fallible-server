@@ -1,6 +1,6 @@
 import Websocket from 'ws';
 import { Awaitable, Result } from 'fallible';
-import type { AwaitableRequestListener, Cleanup, ExceptionListener, MessageHandler, MessageHandlerResult, Response } from './types.js';
+import type { AwaitableRequestListener, ExceptionListener, MessageHandler, Response } from './types.js';
 export declare function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }: Error): Awaitable<void>;
 export declare type CreateRequestListenerArguments = {
     messageHandler: MessageHandler<void, Response>;
@@ -152,4 +152,3 @@ export declare function composeResultMessageHandlers<State1, Error1, State2, Err
     MessageHandler<State10, Result<State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>
 ]): MessageHandler<State1, Result<State11, Error1 | Error2 | Error3 | Error4 | Error5 | Error6 | Error7 | Error8 | Error9 | Error10>>;
 export declare function fallthroughMessageHandler<ExistingState, NewState, Next>(handlers: ReadonlyArray<MessageHandler<ExistingState, NewState | Next>>, isNext: (state: Readonly<NewState | Next>) => state is Next, noMatch: NewState): MessageHandler<ExistingState, NewState>;
-export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
