@@ -93,7 +93,20 @@ export function parseMultipartStream(stream, { encoding = 'utf-8', saveDirectory
             maxFileSize: fileSizeLimit
         }).parse(stream, (exception, fields, files) => {
             if (exception === null || exception === undefined) {
-                resolve(ok({ fields, files }));
+                const newFiles = {};
+                for (const [name, file] of Object.entries(files)) {
+                    newFiles[name] = {
+                        size: file.size,
+                        path: file.path,
+                        name: file.name,
+                        mimetype: file.type,
+                        dateModified: file.mtime
+                    };
+                }
+                resolve(ok({
+                    fields,
+                    files: newFiles
+                }));
                 return;
             }
             if (exception instanceof Error) {

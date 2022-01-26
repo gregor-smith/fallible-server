@@ -4,12 +4,9 @@ import type { Readable } from 'stream'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
 import { asyncFallible, Awaitable, error, ok, Result } from 'fallible'
-import { Formidable, File } from 'formidable'
+import { Formidable } from 'formidable'
 import sanitiseFilename from 'sanitize-filename'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
-
-
-export type { File } from 'formidable'
 
 
 export type ReadBufferStreamError =
@@ -123,6 +120,15 @@ export type ParseMultipartStreamError =
     | { tag: 'OtherError', error: unknown }
 
 
+export type File = {
+    size: number
+    path: string
+    name: string
+    mimetype: string
+    dateModified: Date
+}
+
+
 export type ParsedMultipartStream = {
     fields: Record<string, string>
     files: Record<string, File>
@@ -158,8 +164,21 @@ export function parseMultipartStream(
             maxFileSize: fileSizeLimit
         }).parse(stream, (exception, fields, files) => {
             if (exception === null || exception === undefined) {
+                const newFiles: Record<string, File> = {}
+                for (const [ name, file ] of Object.entries(files)) {
+                    newFiles[name] = {
+                        size: file.size,
+                        path: file.path,
+                        name: file.name,
+                        mimetype: file.type,
+                        dateModified: file.mtime
+                    }
+                }
                 resolve(
-                    ok({ fields, files })
+                    ok({
+                        fields,
+                        files: newFiles
+                    })
                 )
                 return
             }
