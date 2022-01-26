@@ -2,7 +2,7 @@
 import type { IncomingMessage, RequestListener } from 'http';
 import type { Data } from 'ws';
 import type { Awaitable } from 'fallible';
-import type { CloseWebSocket } from './general-utils.js';
+import type WebSocket from 'ws';
 export type { IncomingMessage } from 'http';
 export declare type ParsedContentType = {
     type: string;
@@ -20,14 +20,26 @@ export declare type Cookie = {
     sameSite?: 'strict' | 'lax' | 'none';
 };
 export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Awaitable<ReturnType<RequestListener>>;
-export declare type AwaitableIterator<TYield = unknown, TReturn = unknown, TNext = unknown> = Iterator<TYield, TReturn, TNext> | AsyncIterator<TYield, TReturn, TNext>;
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
 export declare type StreamBody = AwaitableIterable<Buffer> | (() => AwaitableIterable<Buffer>);
-export declare type WebsocketIterator = AwaitableIterator<Data, typeof CloseWebSocket | void, void>;
-export declare type WebsocketOpenCallback = () => WebsocketIterator;
-export declare type WebsocketMessageCallback = (message: Data) => WebsocketIterator;
+export declare type WebsocketMessageAction = {
+    tag: 'Message';
+    data: Data;
+};
+export declare type WebsocketBroadcastAction = {
+    tag: 'Broadcast';
+    data: Data;
+    self: boolean;
+};
+export declare type WebsocketCloseAction = {
+    tag: 'Close';
+};
+export declare type WebsocketAction = WebsocketMessageAction | WebsocketBroadcastAction | WebsocketCloseAction;
+export declare type WebsocketIterable = AwaitableIterable<WebsocketAction>;
+export declare type WebsocketOpenCallback = () => WebsocketIterable;
+export declare type WebsocketMessageCallback = (message: Data) => WebsocketIterable;
 export declare type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>;
-export declare type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>;
+export declare type WebsocketSendErrorCallback = (message: Data, error: Error, socket: WebSocket) => Awaitable<void>;
 export declare type WebsocketBody = {
     onOpen?: WebsocketOpenCallback;
     onMessage: WebsocketMessageCallback;
@@ -49,3 +61,4 @@ export declare type MessageHandlerResult<State = Response> = {
 };
 export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: IncomingMessage, state: Readonly<ExistingState>) => Awaitable<MessageHandlerResult<NewState>>;
 export declare type ExceptionListener = (exception: unknown, message: IncomingMessage, state?: Readonly<Response>) => void;
+export declare type RequestListenerCleanup = () => Promise<Error | undefined>;

@@ -2,8 +2,7 @@ import type { IncomingMessage, RequestListener } from 'http'
 
 import type { Data } from 'ws'
 import type { Awaitable } from 'fallible'
-
-import type { CloseWebSocket } from './general-utils.js'
+import type WebSocket from 'ws'
 
 
 export type { IncomingMessage } from 'http'
@@ -45,11 +44,6 @@ export type AwaitableRequestListener = (..._: Parameters<RequestListener>) =>
     Awaitable<ReturnType<RequestListener>>
 
 
-export type AwaitableIterator<TYield = unknown, TReturn = unknown, TNext = unknown> =
-    | Iterator<TYield, TReturn, TNext>
-    | AsyncIterator<TYield, TReturn, TNext>
-
-
 export type AwaitableIterable<T> =
     | Iterable<T>
     | AsyncIterable<T>
@@ -60,13 +54,20 @@ export type StreamBody =
     | (() => AwaitableIterable<Buffer>)
 
 
-export type WebsocketIterator = AwaitableIterator<Data, typeof CloseWebSocket | void, void>
+export type WebsocketMessageAction = { tag: 'Message', data: Data }
+export type WebsocketBroadcastAction = { tag: 'Broadcast', data: Data, self: boolean }
+export type WebsocketCloseAction = { tag: 'Close' }
+export type WebsocketAction =
+    | WebsocketMessageAction
+    | WebsocketBroadcastAction
+    | WebsocketCloseAction
 
+export type WebsocketIterable = AwaitableIterable<WebsocketAction>
 
-export type WebsocketOpenCallback = () => WebsocketIterator
-export type WebsocketMessageCallback = (message: Data) => WebsocketIterator
+export type WebsocketOpenCallback = () => WebsocketIterable
+export type WebsocketMessageCallback = (message: Data) => WebsocketIterable
 export type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>
-export type WebsocketSendErrorCallback = (message: Data, error: Error) => Awaitable<void>
+export type WebsocketSendErrorCallback = (message: Data, error: Error, socket: WebSocket) => Awaitable<void>
 export type WebsocketBody = {
     onOpen?: WebsocketOpenCallback
     onMessage: WebsocketMessageCallback
@@ -116,3 +117,6 @@ export type ExceptionListener = (
     message: IncomingMessage,
     state?: Readonly<Response>
 ) => void
+
+
+export type RequestListenerCleanup = () => Promise<Error | undefined>

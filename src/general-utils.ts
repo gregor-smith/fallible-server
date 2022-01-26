@@ -6,6 +6,7 @@ import type { IncomingMessage } from 'http'
 
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
+import type { Data } from 'ws'
 
 import type {
     Cleanup,
@@ -13,14 +14,15 @@ import type {
     Formattable,
     MessageHandlerResult,
     Method,
-    ParsedContentType
+    ParsedContentType,
+    Response,
+    WebsocketCloseAction,
+    WebsocketBroadcastAction,
+    WebsocketMessageAction
 } from './types.js'
 
 
 export { parse as parseJSONString } from 'secure-json-parse'
-
-
-export const CloseWebSocket = Symbol()
 
 
 export function parseCookieHeader(header: string, name: string): string | undefined {
@@ -325,6 +327,21 @@ export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'header
 }
 
 
-export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
+export function response(): MessageHandlerResult<Response>
+export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>
+export function response(state = {}, cleanup?: Cleanup) {
     return { state, cleanup }
+}
+
+
+export const close: WebsocketCloseAction = { tag: 'Close' }
+
+
+export function message(data: Data): WebsocketMessageAction {
+    return { tag: 'Message', data }
+}
+
+
+export function broadcast(data: Data, self = true): WebsocketBroadcastAction {
+    return { tag: 'Broadcast', data, self }
 }

@@ -3,7 +3,6 @@
 // utils should go in server-utils
 import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
-export const CloseWebSocket = Symbol();
 export function parseCookieHeader(header, name) {
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
@@ -202,7 +201,14 @@ export function parseMessageAuthorizationHeaderBearer(message) {
 export function messageIsWebSocketRequest(message) {
     return getMessageHeader(message, 'upgrade') === 'websocket';
 }
-export function response(state, cleanup) {
+export function response(state = {}, cleanup) {
     return { state, cleanup };
+}
+export const close = { tag: 'Close' };
+export function message(data) {
+    return { tag: 'Message', data };
+}
+export function broadcast(data, self = true) {
+    return { tag: 'Broadcast', data, self };
 }
 //# sourceMappingURL=general-utils.js.map

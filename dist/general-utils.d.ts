@@ -2,9 +2,9 @@
 import type { IncomingMessage } from 'http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, ParsedContentType } from './types.js';
+import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, ParsedContentType, Response, WebsocketCloseAction, WebsocketBroadcastAction, WebsocketMessageAction } from './types.js';
+import type { Data } from 'ws';
 export { parse as parseJSONString } from 'secure-json-parse';
-export declare const CloseWebSocket: unique symbol;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export declare function signatureCookieName<T extends Formattable>(name: T): `${T}.sig`;
@@ -37,4 +37,8 @@ export declare function parseAuthorizationHeaderBearer(header: string): string |
 export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
 export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;
 export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean;
+export declare function response(): MessageHandlerResult<Response>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
+export declare const close: WebsocketCloseAction;
+export declare function message(data: Data): WebsocketMessageAction;
+export declare function broadcast(data: Data, self?: boolean): WebsocketBroadcastAction;
