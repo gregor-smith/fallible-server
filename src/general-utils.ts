@@ -334,14 +334,31 @@ export function response(state = {}, cleanup?: Cleanup) {
 }
 
 
-export const close: WebsocketCloseAction = { tag: 'Close' }
-
-
 export function message(data: Data): WebsocketMessageAction {
     return { tag: 'Message', data }
 }
 
 
-export function broadcast(data: Data, self = true): WebsocketBroadcastAction {
+export function broadcast(data: Data, self = false): WebsocketBroadcastAction {
     return { tag: 'Broadcast', data, self }
+}
+
+
+export const close: WebsocketCloseAction = { tag: 'Close' }
+
+
+export async function * iterateAsResolved<T>(
+    promises: Iterable<PromiseLike<T>>
+): AsyncGenerator<T, void, unknown> {
+    const map = new Map<number, PromiseLike<[ number, T ]>>()
+    let counter = 0
+    for (const promise of promises) {
+        const current = counter++
+        map.set(current, promise.then(value => [ current, value ]))
+    }
+    for (; counter > 0; counter--) {
+        const [ current, value ] = await Promise.race(map.values())
+        yield value
+        map.delete(current)
+    }
 }

@@ -204,11 +204,24 @@ export function messageIsWebSocketRequest(message) {
 export function response(state = {}, cleanup) {
     return { state, cleanup };
 }
-export const close = { tag: 'Close' };
 export function message(data) {
     return { tag: 'Message', data };
 }
-export function broadcast(data, self = true) {
+export function broadcast(data, self = false) {
     return { tag: 'Broadcast', data, self };
+}
+export const close = { tag: 'Close' };
+export async function* iterateAsResolved(promises) {
+    const map = new Map();
+    let counter = 0;
+    for (const promise of promises) {
+        const current = counter++;
+        map.set(current, promise.then(value => [current, value]));
+    }
+    for (; counter > 0; counter--) {
+        const [current, value] = await Promise.race(map.values());
+        yield value;
+        map.delete(current);
+    }
 }
 //# sourceMappingURL=general-utils.js.map

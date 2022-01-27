@@ -1,7 +1,7 @@
 import type { ServerResponse } from 'http'
 import { pipeline } from 'stream/promises'
 
-import Websocket, { Data } from 'ws'
+import WebSocket, { Data, Server as WebSocketServer } from 'ws'
 import { ok, Result } from 'fallible'
 
 import type {
@@ -12,10 +12,11 @@ import type {
     MessageHandlerResult,
     RequestListenerCleanup,
     Response,
-    WebsocketIterable,
+    WebsocketBroadcaster,
+    WebsocketIterator,
     WebsocketSendErrorCallback
 } from './types.js'
-import { cookieHeader, response } from './general-utils.js'
+import { iterateAsResolved, cookieHeader, response } from './general-utils.js'
 
 
 function warn(message: string): void {
@@ -23,7 +24,10 @@ function warn(message: string): void {
 }
 
 
-export function defaultOnWebsocketSendError(_: Websocket.Data, { name, message }: Error): void {
+export function defaultOnWebsocketSendError(
+    _data: Data,
+    { name, message }: Error
+): void {
     warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
 }
 
@@ -43,72 +47,61 @@ function setResponseHeaders(res: ServerResponse, { cookies, headers }: Response)
 }
 
 
-function send(websocket: Websocket, data: Data): Promise<Error | undefined> {
+function send(websocket: WebSocket, data: Data): Promise<Error | undefined> {
     return new Promise<Error | undefined>(resolve =>
         websocket.send(data, resolve)
     )
 }
 
 
-async function sendAndHandleError(
-    websocket: Websocket,
+function * sendAll(
+    server: WebSocketServer,
     data: Data,
-    onError: WebsocketSendErrorCallback
-): Promise<boolean> {
-    const error = await send(websocket, data)
-    if (error === undefined) {
-        return true
+    websocket?: WebSocket
+): Generator<Promise<Error | undefined>, void, unknown> {
+    for (const client of server.clients) {
+        if (client.readyState !== WebSocket.OPEN || client === websocket) {
+            continue
+        }
+        yield send(client, data)
     }
-    await onError(data, error, websocket)
-    return false
 }
 
 
 async function sendWebsocketMessages(
-    server: Websocket.Server,
-    websocket: Websocket,
-    messages: WebsocketIterable,
+    server: WebSocketServer,
+    websocket: WebSocket,
+    messages: WebsocketIterator,
     onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
 ): Promise<void> {
-    for await (const action of messages) {
-        if (websocket.readyState !== Websocket.OPEN) {
+    while (true) {
+        const result = await messages.next()
+        if (result.done) {
+            if (result.value?.tag === 'Close') {
+                websocket.close(1000)
+            }
             return
         }
-        switch (action.tag) {
-            case 'Message': {
-                const error = await send(websocket, action.data)
-                if (error !== undefined) {
-                    if (websocket.readyState === Websocket.OPEN) {
-                        await onError(action.data, error, websocket)
-                        websocket.close(1011)  // server error close status
-                    }
-                    return
-                }
-                break
-            }
+        switch (result.value.tag) {
             case 'Broadcast': {
-                const promises: Promise<boolean>[] = []
-                for (const client of server.clients) {
-                    if (client.readyState !== Websocket.OPEN
-                            || (!action.self && client === websocket)) {
+                const promises = sendAll(
+                    server,
+                    result.value.data,
+                    result.value.self ? websocket : undefined
+                )
+                for await (const error of iterateAsResolved(promises)) {
+                    if (error === undefined) {
                         continue
                     }
-                    const promise = sendAndHandleError(client, action.data, onError)
-                    promises.push(promise)
-                }
-                const results = await Promise.all(promises)
-                for (const ok of results) {
-                    if (ok) {
-                        continue
-                    }
-                    websocket.close(1011)
-                    return
+                    await onError(result.value.data, error)
                 }
                 break
             }
-            case 'Close': {
-                websocket.close(1000) // regular close status
-                return
+            case 'Message': {
+                const error = await send(websocket, result.value.data)
+                if (error !== undefined) {
+                    await onError(result.value.data, error)
+                }
             }
         }
     }
@@ -130,8 +123,8 @@ function getDefaultExceptionListener(): ExceptionListener {
 export function createRequestListener({
     messageHandler,
     exceptionListener = getDefaultExceptionListener()
-}: CreateRequestListenerArguments): [ AwaitableRequestListener, RequestListenerCleanup ] {
-    const server = new Websocket.Server({ noServer: true })
+}: CreateRequestListenerArguments): [ AwaitableRequestListener, RequestListenerCleanup, WebsocketBroadcaster ] {
+    const server = new WebSocketServer({ noServer: true })
 
     const listener: AwaitableRequestListener = async (req, res) => {
         let response: Readonly<Response>
@@ -211,14 +204,19 @@ export function createRequestListener({
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', 0)
             }
-            await new Promise<void>(resolve => {
-                res.on('close', resolve)
-                res.end(resolve)
-            })
+            try {
+                await new Promise<void>(resolve => {
+                    res.on('close', resolve)
+                    res.end(resolve)
+                })
+            }
+            catch (exception) {
+                exceptionListener(exception, req, response)
+            }
         }
         // websocket
         else if ('onMessage' in response.body) {
-            const websocket = await new Promise<Websocket>(resolve =>
+            const websocket = await new Promise<WebSocket>(resolve =>
                 server.handleUpgrade(
                     req,
                     req.socket,
@@ -283,7 +281,7 @@ export function createRequestListener({
             }
             catch (exception) {
                 if ((exception as NodeJS.ErrnoException)?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                    throw exception
+                    exceptionListener(exception, req, response)
                 }
             }
         }
@@ -296,7 +294,12 @@ export function createRequestListener({
     const cleanup: RequestListenerCleanup = () =>
         new Promise(resolve => server.close(resolve))
 
-    return [ listener, cleanup ]
+    const broadcaster: WebsocketBroadcaster = data => {
+        const promises = sendAll(server, data)
+        return iterateAsResolved(promises)
+    }
+
+    return [ listener, cleanup, broadcaster ]
 }
 
 
