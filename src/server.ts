@@ -1,7 +1,8 @@
 import type { ServerResponse } from 'http'
 import { pipeline } from 'stream/promises'
 
-import WebSocket, { Data, Server as WebSocketServer } from 'ws'
+import type WebSocket from 'ws'
+import { Data, OPEN, Server as WebSocketServer } from 'ws'
 import { ok, Result } from 'fallible'
 
 import type {
@@ -17,6 +18,7 @@ import type {
     WebsocketSendErrorCallback
 } from './types.js'
 import { iterateAsResolved, cookieHeader, response } from './general-utils.js'
+import type { Awaitable } from 'fallible'
 
 
 function warn(message: string): void {
@@ -60,7 +62,7 @@ function * sendAll(
     websocket?: WebSocket
 ): Generator<Promise<Error | undefined>, void, unknown> {
     for (const client of server.clients) {
-        if (client.readyState !== WebSocket.OPEN || client === websocket) {
+        if (client.readyState !== OPEN || client === websocket) {
             continue
         }
         yield send(client, data)
@@ -74,37 +76,50 @@ async function sendWebsocketMessages(
     messages: WebsocketIterator,
     onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
 ): Promise<void> {
-    while (true) {
+    const promises: Promise<void>[] = []
+
+    while (websocket.readyState === OPEN) {
         const result = await messages.next()
+
         if (result.done) {
-            if (result.value?.tag === 'Close') {
+            await Promise.all(promises)
+            if (result.value?.tag === 'Close' && websocket.readyState === OPEN) {
                 websocket.close(1000)
             }
             return
         }
+
+        const data = result.value.data
+        const handleError = (error: Error | undefined): Awaitable<void> => {
+            if (error !== undefined) {
+                return onError(data, error)
+            }
+        }
+
         switch (result.value.tag) {
-            case 'Broadcast': {
-                const promises = sendAll(
-                    server,
-                    result.value.data,
-                    result.value.self ? websocket : undefined
+            case 'Message': {
+                promises.push(
+                    send(websocket, data)
+                        .then(handleError)
                 )
-                for await (const error of iterateAsResolved(promises)) {
-                    if (error === undefined) {
-                        continue
-                    }
-                    await onError(result.value.data, error)
-                }
                 break
             }
-            case 'Message': {
-                const error = await send(websocket, result.value.data)
-                if (error !== undefined) {
-                    await onError(result.value.data, error)
+            case 'Broadcast': {
+                const sendPromises = sendAll(
+                    server,
+                    data,
+                    result.value.self ? websocket : undefined
+                )
+                for (const promise of sendPromises) {
+                    promises.push(
+                        promise.then(handleError)
+                    )
                 }
             }
         }
     }
+
+    await Promise.all(promises)
 }
 
 
