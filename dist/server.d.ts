@@ -1,7 +1,7 @@
-import { Data } from 'ws';
+import WebSocket from 'ws';
 import { Result } from 'fallible';
 import type { AwaitableRequestListener, ExceptionListener, MessageHandler, RequestListenerCleanup, Response, WebsocketBroadcaster } from './types.js';
-export declare function defaultOnWebsocketSendError(_data: Data, { name, message }: Error): void;
+export declare function defaultOnWebsocketSendError(_data: WebSocket.Data, { name, message }: Error): void;
 export declare type CreateRequestListenerArguments = {
     messageHandler: MessageHandler<void, Response>;
     exceptionListener?: ExceptionListener;

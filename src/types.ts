@@ -1,10 +1,10 @@
-import type { IncomingMessage, RequestListener } from 'http'
+import type { IncomingMessage, RequestListener } from 'node:http'
 
-import type { Data } from 'ws'
+import type WebSocket from 'ws'
 import type { Awaitable } from 'fallible'
 
 
-export type { IncomingMessage } from 'http'
+export type { IncomingMessage } from 'node:http'
 
 
 export type ParsedContentType = {
@@ -60,18 +60,18 @@ export type StreamBody =
     | (() => AwaitableIterable<Buffer>)
 
 
-export type WebsocketMessageAction = { tag: 'Message', data: Data }
-export type WebsocketBroadcastAction = { tag: 'Broadcast', data: Data, self: boolean }
+export type WebsocketMessageAction = { tag: 'Message', data: WebSocket.Data }
+export type WebsocketBroadcastAction = { tag: 'Broadcast', data: WebSocket.Data, self: boolean }
 export type WebsocketCloseAction = { tag: 'Close' }
 
 export type WebsocketIterator = AwaitableIterator<WebsocketMessageAction | WebsocketBroadcastAction, WebsocketCloseAction | void>
 
-export type WebsocketBroadcaster = (data: Data) => AsyncGenerator<Error | undefined, void>
+export type WebsocketBroadcaster = (data: WebSocket.Data) => AsyncGenerator<Error | undefined, void>
 
 export type WebsocketOpenCallback = () => WebsocketIterator
-export type WebsocketMessageCallback = (data: Data) => WebsocketIterator
+export type WebsocketMessageCallback = (data: WebSocket.Data) => WebsocketIterator
 export type WebsocketCloseCallback = (code: number, reason: string) => Awaitable<void>
-export type WebsocketSendErrorCallback = (data: Data, error: Error) => Awaitable<void>
+export type WebsocketSendErrorCallback = (data: WebSocket.Data, error: Error) => Awaitable<void>
 export type WebsocketBody = {
     onOpen?: WebsocketOpenCallback
     onMessage: WebsocketMessageCallback
@@ -80,22 +80,24 @@ export type WebsocketBody = {
 }
 
 
-export type Body =
-    | string
-    | Buffer
-    | StreamBody
-    | Readonly<WebsocketBody>
-
-
 export type Header = Formattable | ReadonlyArray<Formattable>
 
 
-export type Response = {
+export type RegularResponse = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
     headers?: Readonly<Record<string, Header>>
     status?: number
-    body?: Body
+    body?: string | Buffer | StreamBody
 }
+
+export type WebsocketResponse = {
+    cookies?: undefined
+    headers?: undefined
+    status?: 101
+    body: Readonly<WebsocketBody>
+}
+
+export type Response = RegularResponse | WebsocketResponse
 
 
 export type Cleanup = (
@@ -112,7 +114,8 @@ export type MessageHandlerResult<State = Response> = {
 
 export type MessageHandler<ExistingState = void, NewState = Response> = (
     message: IncomingMessage,
-    state: Readonly<ExistingState>
+    state: Readonly<ExistingState>,
+    broadcast: WebsocketBroadcaster
 ) => Awaitable<MessageHandlerResult<NewState>>
 
 

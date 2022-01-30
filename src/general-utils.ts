@@ -2,11 +2,11 @@
 // utils within are useful on both server and client. exclusively server-only
 // utils should go in server-utils
 
-import type { IncomingMessage } from 'http'
+import type { IncomingMessage } from 'node:http'
 
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
-import type { Data } from 'ws'
+import type WebSocket from 'ws'
 
 import type {
     Cleanup,
@@ -15,10 +15,12 @@ import type {
     MessageHandlerResult,
     Method,
     ParsedContentType,
-    Response,
     WebsocketCloseAction,
     WebsocketBroadcastAction,
-    WebsocketMessageAction
+    WebsocketMessageAction,
+    WebsocketBody,
+    RegularResponse,
+    WebsocketResponse
 } from './types.js'
 
 
@@ -327,19 +329,24 @@ export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'header
 }
 
 
-export function response(): MessageHandlerResult<Response>
+export function response(): MessageHandlerResult<RegularResponse>
 export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>
 export function response(state = {}, cleanup?: Cleanup) {
     return { state, cleanup }
 }
 
 
-export function message(data: Data): WebsocketMessageAction {
+export function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse> {
+    return response({ body }, cleanup)
+}
+
+
+export function message(data: WebSocket.Data): WebsocketMessageAction {
     return { tag: 'Message', data }
 }
 
 
-export function broadcast(data: Data, self = false): WebsocketBroadcastAction {
+export function broadcast(data: WebSocket.Data, self = false): WebsocketBroadcastAction {
     return { tag: 'Broadcast', data, self }
 }
 

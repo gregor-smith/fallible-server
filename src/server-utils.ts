@@ -1,6 +1,6 @@
-import { join as joinPath } from 'path'
-import type { ReadStream, Stats } from 'fs'
-import type { Readable } from 'stream'
+import { join as joinPath } from 'node:path'
+import type { ReadStream, Stats } from 'node:fs'
+import type { Readable } from 'node:stream'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
 import { asyncFallible, Awaitable, error, ok, Result } from 'fallible'

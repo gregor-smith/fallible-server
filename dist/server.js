@@ -1,5 +1,5 @@
 import { pipeline } from 'stream/promises';
-import WebSocket, { Server as WebSocketServer } from 'ws';
+import WebSocket from 'ws';
 import { ok } from 'fallible';
 import { iterateAsResolved, cookieHeader, response } from './general-utils.js';
 function warn(message) {
@@ -33,45 +33,54 @@ function* sendAll(server, data, websocket) {
     }
 }
 async function sendWebsocketMessages(server, websocket, messages, onError = defaultOnWebsocketSendError) {
-    while (true) {
+    const promises = [];
+    while (websocket.readyState === WebSocket.OPEN) {
         const result = await messages.next();
         if (result.done) {
-            if (result.value?.tag === 'Close') {
+            await Promise.all(promises);
+            if (result.value?.tag === 'Close' && websocket.readyState === WebSocket.OPEN) {
                 websocket.close(1000);
             }
             return;
         }
+        const data = result.value.data;
+        const handleError = (error) => {
+            if (error !== undefined) {
+                return onError(data, error);
+            }
+        };
         switch (result.value.tag) {
-            case 'Broadcast': {
-                const promises = sendAll(server, result.value.data, result.value.self ? websocket : undefined);
-                for await (const error of iterateAsResolved(promises)) {
-                    if (error === undefined) {
-                        continue;
-                    }
-                    await onError(result.value.data, error);
-                }
+            case 'Message': {
+                promises.push(send(websocket, data)
+                    .then(handleError));
                 break;
             }
-            case 'Message': {
-                const error = await send(websocket, result.value.data);
-                if (error !== undefined) {
-                    await onError(result.value.data, error);
+            case 'Broadcast': {
+                const sendPromises = sendAll(server, data, result.value.self ? websocket : undefined);
+                for (const promise of sendPromises) {
+                    promises.push(promise.then(handleError));
                 }
             }
         }
     }
+    await Promise.all(promises);
 }
 function getDefaultExceptionListener() {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option");
     return console.error;
 }
 export function createRequestListener({ messageHandler, exceptionListener = getDefaultExceptionListener() }) {
-    const server = new WebSocketServer({ noServer: true });
+    const server = new WebSocket.Server({ noServer: true });
+    const cleanup = () => new Promise(resolve => server.close(resolve));
+    const broadcaster = data => {
+        const promises = sendAll(server, data);
+        return iterateAsResolved(promises);
+    };
     const listener = async (req, res) => {
         let response;
         let cleanup;
         try {
-            const result = await messageHandler(req);
+            const result = await messageHandler(req, undefined, broadcaster);
             response = result.state;
             cleanup = result.cleanup;
         }
@@ -201,18 +210,13 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
             await cleanup(req, response);
         }
     };
-    const cleanup = () => new Promise(resolve => server.close(resolve));
-    const broadcaster = data => {
-        const promises = sendAll(server, data);
-        return iterateAsResolved(promises);
-    };
     return [listener, cleanup, broadcaster];
 }
 export function composeMessageHandlers(handlers) {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state);
+            const result = await handler(message, state, broadcast);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -222,10 +226,10 @@ export function composeMessageHandlers(handlers) {
     };
 }
 export function composeResultMessageHandlers(handlers) {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state);
+            const result = await handler(message, state, broadcast);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -238,10 +242,10 @@ export function composeResultMessageHandlers(handlers) {
     };
 }
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state);
+            const result = await handler(message, state, broadcast);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }

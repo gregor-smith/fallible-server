@@ -204,6 +204,9 @@ export function messageIsWebSocketRequest(message) {
 export function response(state = {}, cleanup) {
     return { state, cleanup };
 }
+export function websocketResponse(body, cleanup) {
+    return response({ body }, cleanup);
+}
 export function message(data) {
     return { tag: 'Message', data };
 }

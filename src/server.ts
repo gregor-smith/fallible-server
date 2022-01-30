@@ -1,9 +1,8 @@
-import type { ServerResponse } from 'http'
-import { pipeline } from 'stream/promises'
+import type { ServerResponse } from 'node:http'
+import { pipeline } from 'node:stream/promises'
 
-import type WebSocket from 'ws'
-import { Data, OPEN, Server as WebSocketServer } from 'ws'
-import { ok, Result } from 'fallible'
+import WebSocket from 'ws'
+import { ok, Result, Awaitable } from 'fallible'
 
 import type {
     AwaitableRequestListener,
@@ -18,7 +17,6 @@ import type {
     WebsocketSendErrorCallback
 } from './types.js'
 import { iterateAsResolved, cookieHeader, response } from './general-utils.js'
-import type { Awaitable } from 'fallible'
 
 
 function warn(message: string): void {
@@ -27,7 +25,7 @@ function warn(message: string): void {
 
 
 export function defaultOnWebsocketSendError(
-    _data: Data,
+    _data: WebSocket.Data,
     { name, message }: Error
 ): void {
     warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
@@ -49,7 +47,7 @@ function setResponseHeaders(res: ServerResponse, { cookies, headers }: Response)
 }
 
 
-function send(websocket: WebSocket, data: Data): Promise<Error | undefined> {
+function send(websocket: WebSocket, data: WebSocket.Data): Promise<Error | undefined> {
     return new Promise<Error | undefined>(resolve =>
         websocket.send(data, resolve)
     )
@@ -57,12 +55,12 @@ function send(websocket: WebSocket, data: Data): Promise<Error | undefined> {
 
 
 function * sendAll(
-    server: WebSocketServer,
-    data: Data,
+    server: WebSocket.Server,
+    data: WebSocket.Data,
     websocket?: WebSocket
 ): Generator<Promise<Error | undefined>, void, unknown> {
     for (const client of server.clients) {
-        if (client.readyState !== OPEN || client === websocket) {
+        if (client.readyState !== WebSocket.OPEN || client === websocket) {
             continue
         }
         yield send(client, data)
@@ -71,19 +69,19 @@ function * sendAll(
 
 
 async function sendWebsocketMessages(
-    server: WebSocketServer,
+    server: WebSocket.Server,
     websocket: WebSocket,
     messages: WebsocketIterator,
     onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
-    while (websocket.readyState === OPEN) {
+    while (websocket.readyState === WebSocket.OPEN) {
         const result = await messages.next()
 
         if (result.done) {
             await Promise.all(promises)
-            if (result.value?.tag === 'Close' && websocket.readyState === OPEN) {
+            if (result.value?.tag === 'Close' && websocket.readyState === WebSocket.OPEN) {
                 websocket.close(1000)
             }
             return
@@ -139,13 +137,21 @@ export function createRequestListener({
     messageHandler,
     exceptionListener = getDefaultExceptionListener()
 }: CreateRequestListenerArguments): [ AwaitableRequestListener, RequestListenerCleanup, WebsocketBroadcaster ] {
-    const server = new WebSocketServer({ noServer: true })
+    const server = new WebSocket.Server({ noServer: true })
+
+    const cleanup: RequestListenerCleanup = () =>
+        new Promise(resolve => server.close(resolve))
+
+    const broadcaster: WebsocketBroadcaster = data => {
+        const promises = sendAll(server, data)
+        return iterateAsResolved(promises)
+    }
 
     const listener: AwaitableRequestListener = async (req, res) => {
         let response: Readonly<Response>
         let cleanup: Cleanup | undefined
         try {
-            const result = await messageHandler(req)
+            const result = await messageHandler(req, undefined, broadcaster)
             response = result.state
             cleanup = result.cleanup
         }
@@ -304,14 +310,6 @@ export function createRequestListener({
         if (cleanup !== undefined) {
             await cleanup(req, response)
         }
-    }
-
-    const cleanup: RequestListenerCleanup = () =>
-        new Promise(resolve => server.close(resolve))
-
-    const broadcaster: WebsocketBroadcaster = data => {
-        const promises = sendAll(server, data)
-        return iterateAsResolved(promises)
     }
 
     return [ listener, cleanup, broadcaster ]
@@ -485,10 +483,10 @@ export function composeMessageHandlers<
 export function composeMessageHandlers<State>(
     handlers: ReadonlyArray<MessageHandler<any, any>>
 ): MessageHandler<State, any> {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state)
+            const result = await handler(message, state, broadcast)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -664,10 +662,10 @@ export function composeResultMessageHandlers<
 export function composeResultMessageHandlers(
     handlers: ReadonlyArray<MessageHandler<any, Result<any, any>>>
 ): MessageHandler<any, Result<any, any>> {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state)
+            const result = await handler(message, state, broadcast)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -686,10 +684,10 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
     isNext: (state: Readonly<NewState | Next>) => state is Next,
     noMatch: NewState
 ): MessageHandler<ExistingState, NewState> {
-    return async (message, state) => {
+    return async (message, state, broadcast) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state)
+            const result = await handler(message, state, broadcast)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
