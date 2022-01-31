@@ -2,9 +2,15 @@
 import type { IncomingMessage } from 'node:http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type WebSocket from 'ws';
-import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, ParsedContentType, WebsocketCloseAction, WebsocketBroadcastAction, WebsocketMessageAction, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
+import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, ParsedContentType, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
+export declare const CloseWebsocket: unique symbol;
+export declare const enum WebsocketReadyState {
+    Connecting = 0,
+    Open = 1,
+    Closing = 2,
+    Closed = 3
+}
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export declare function signatureCookieName<T extends Formattable>(name: T): `${T}.sig`;
@@ -40,7 +46,4 @@ export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage,
 export declare function response(): MessageHandlerResult<RegularResponse>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
 export declare function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse>;
-export declare function message(data: WebSocket.Data): WebsocketMessageAction;
-export declare function broadcast(data: WebSocket.Data, self?: boolean): WebsocketBroadcastAction;
-export declare const close: WebsocketCloseAction;
 export declare function iterateAsResolved<T>(promises: Iterable<PromiseLike<T>>): AsyncGenerator<T, void, unknown>;

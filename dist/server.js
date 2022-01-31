@@ -1,7 +1,8 @@
 import { pipeline } from 'node:stream/promises';
+import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { ok } from 'fallible';
-import { iterateAsResolved, cookieHeader, response } from './general-utils.js';
+import { cookieHeader, response, CloseWebsocket } from './general-utils.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -21,47 +22,24 @@ function setResponseHeaders(res, { cookies, headers }) {
         res.setHeader('Set-Cookie', values);
     }
 }
-function send(websocket, data) {
-    return new Promise(resolve => websocket.send(data, resolve));
-}
-function* sendAll(server, data, websocket) {
-    for (const client of server.clients) {
-        if (client.readyState !== WebSocket.OPEN || client === websocket) {
-            continue;
-        }
-        yield send(client, data);
-    }
-}
-async function sendWebsocketMessages(server, websocket, messages, onError = defaultOnWebsocketSendError) {
+async function sendWebsocketMessages(socket, messages, onError = defaultOnWebsocketSendError) {
     const promises = [];
-    while (websocket.readyState === WebSocket.OPEN) {
+    while (socket.readyState === 1 /* Open */) {
         const result = await messages.next();
         if (result.done) {
             await Promise.all(promises);
-            if (result.value?.tag === 'Close' && websocket.readyState === WebSocket.OPEN) {
-                websocket.close(1000);
+            if (result.value === CloseWebsocket && socket.readyState <= 1 /* Open */) {
+                await socket.close();
             }
             return;
         }
-        const data = result.value.data;
-        const handleError = (error) => {
+        const promise = socket.send(result.value)
+            .then(error => {
             if (error !== undefined) {
-                return onError(data, error);
+                return onError(result.value, error, socket.uuid);
             }
-        };
-        switch (result.value.tag) {
-            case 'Message': {
-                promises.push(send(websocket, data)
-                    .then(handleError));
-                break;
-            }
-            case 'Broadcast': {
-                const sendPromises = sendAll(server, data, result.value.self ? websocket : undefined);
-                for (const promise of sendPromises) {
-                    promises.push(promise.then(handleError));
-                }
-            }
-        }
+        });
+        promises.push(promise);
     }
     await Promise.all(promises);
 }
@@ -69,18 +47,32 @@ function getDefaultExceptionListener() {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option");
     return console.error;
 }
+class Socket {
+    constructor(wrapped) {
+        this.wrapped = wrapped;
+        this.uuid = randomUUID();
+    }
+    get readyState() {
+        return this.wrapped.readyState;
+    }
+    send(data) {
+        return new Promise(resolve => this.wrapped.send(data, resolve));
+    }
+    close(code, reason) {
+        return new Promise(resolve => {
+            this.wrapped.on('close', () => resolve());
+            this.wrapped.close(code, reason);
+        });
+    }
+}
 export function createRequestListener({ messageHandler, exceptionListener = getDefaultExceptionListener() }) {
     const server = new WebSocket.Server({ noServer: true });
-    const cleanup = () => new Promise(resolve => server.close(resolve));
-    const broadcaster = data => {
-        const promises = sendAll(server, data);
-        return iterateAsResolved(promises);
-    };
+    const sockets = new Map();
     const listener = async (req, res) => {
         let response;
         let cleanup;
         try {
-            const result = await messageHandler(req, undefined, broadcaster);
+            const result = await messageHandler(req, sockets);
             response = result.state;
             cleanup = result.cleanup;
         }
@@ -165,8 +157,10 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
         // websocket
         else if ('onMessage' in response.body) {
             const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
+            const socket = new Socket(websocket);
+            sockets.set(socket.uuid, socket);
             const { onOpen, onMessage, onSendError, onClose } = response.body;
-            websocket.on('message', data => sendWebsocketMessages(server, websocket, onMessage(data), onSendError));
+            websocket.on('message', data => sendWebsocketMessages(socket, onMessage(data, socket.uuid), onSendError));
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
@@ -184,12 +178,13 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                     // the 'open' even is never fired when running in noServer
                     // mode, so just call onOpen straight away as the request
                     // is already opened
-                    sendWebsocketMessages(server, websocket, onOpen(), onSendError)
+                    sendWebsocketMessages(socket, onOpen(socket.uuid), onSendError)
                 ]);
             }
             if (onClose !== undefined) {
-                await onClose(...closeReason);
+                await onClose(...closeReason, socket.uuid);
             }
+            sockets.delete(socket.uuid);
         }
         // pipeline source
         else {
@@ -210,7 +205,7 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
             await cleanup(req, response);
         }
     };
-    return [listener, cleanup, broadcaster];
+    return [listener, sockets];
 }
 export function composeMessageHandlers(handlers) {
     return async (message, state, broadcast) => {

@@ -3,6 +3,7 @@
 // utils should go in server-utils
 import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
+export const CloseWebsocket = Symbol();
 export function parseCookieHeader(header, name) {
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
@@ -207,13 +208,6 @@ export function response(state = {}, cleanup) {
 export function websocketResponse(body, cleanup) {
     return response({ body }, cleanup);
 }
-export function message(data) {
-    return { tag: 'Message', data };
-}
-export function broadcast(data, self = false) {
-    return { tag: 'Broadcast', data, self };
-}
-export const close = { tag: 'Close' };
 export async function* iterateAsResolved(promises) {
     const map = new Map();
     let counter = 0;

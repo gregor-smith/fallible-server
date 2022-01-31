@@ -6,7 +6,6 @@ import type { IncomingMessage } from 'node:http'
 
 import type Keygrip from 'keygrip'
 import { error, ok, Result } from 'fallible'
-import type WebSocket from 'ws'
 
 import type {
     Cleanup,
@@ -15,9 +14,6 @@ import type {
     MessageHandlerResult,
     Method,
     ParsedContentType,
-    WebsocketCloseAction,
-    WebsocketBroadcastAction,
-    WebsocketMessageAction,
     WebsocketBody,
     RegularResponse,
     WebsocketResponse
@@ -25,6 +21,17 @@ import type {
 
 
 export { parse as parseJSONString } from 'secure-json-parse'
+
+
+export const CloseWebsocket = Symbol()
+
+
+export const enum WebsocketReadyState {
+    Connecting,
+    Open,
+    Closing,
+    Closed
+}
 
 
 export function parseCookieHeader(header: string, name: string): string | undefined {
@@ -339,19 +346,6 @@ export function response(state = {}, cleanup?: Cleanup) {
 export function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse> {
     return response({ body }, cleanup)
 }
-
-
-export function message(data: WebSocket.Data): WebsocketMessageAction {
-    return { tag: 'Message', data }
-}
-
-
-export function broadcast(data: WebSocket.Data, self = false): WebsocketBroadcastAction {
-    return { tag: 'Broadcast', data, self }
-}
-
-
-export const close: WebsocketCloseAction = { tag: 'Close' }
 
 
 export async function * iterateAsResolved<T>(

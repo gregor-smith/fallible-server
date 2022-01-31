@@ -1,12 +1,12 @@
 import WebSocket from 'ws';
 import { Result } from 'fallible';
-import type { AwaitableRequestListener, ExceptionListener, MessageHandler, RequestListenerCleanup, Response, WebsocketBroadcaster } from './types.js';
+import type { AwaitableRequestListener, ExceptionListener, MessageHandler, Response, IdentifiedWebsocket } from './types.js';
 export declare function defaultOnWebsocketSendError(_data: WebSocket.Data, { name, message }: Error): void;
 export declare type CreateRequestListenerArguments = {
     messageHandler: MessageHandler<void, Response>;
     exceptionListener?: ExceptionListener;
 };
-export declare function createRequestListener({ messageHandler, exceptionListener }: CreateRequestListenerArguments): [AwaitableRequestListener, RequestListenerCleanup, WebsocketBroadcaster];
+export declare function createRequestListener({ messageHandler, exceptionListener }: CreateRequestListenerArguments): [AwaitableRequestListener, ReadonlyMap<string, IdentifiedWebsocket>];
 export declare function composeMessageHandlers<State1, State2, State3>(handlers: [
     MessageHandler<State1, State2>,
     MessageHandler<State2, State3>
