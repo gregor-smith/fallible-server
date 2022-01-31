@@ -1,8 +1,8 @@
 /// <reference types="node" />
-import type { IncomingMessage, RequestListener } from 'http';
+import type { IncomingMessage, RequestListener } from 'node:http';
 import type WebSocket from 'ws';
 import type { Awaitable } from 'fallible';
-export type { IncomingMessage } from 'http';
+export type { IncomingMessage } from 'node:http';
 export declare type ParsedContentType = {
     type: string;
     characterSet?: string;

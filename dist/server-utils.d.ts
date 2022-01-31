@@ -1,6 +1,6 @@
 /// <reference types="node" />
-import type { ReadStream, Stats } from 'fs';
-import type { Readable } from 'stream';
+import type { ReadStream, Stats } from 'node:fs';
+import type { Readable } from 'node:stream';
 import { Awaitable, Result } from 'fallible';
 import { FileSystemError } from 'fallible-fs';
 export declare type ReadBufferStreamError = {

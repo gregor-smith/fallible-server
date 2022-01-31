@@ -1,4 +1,4 @@
-import { join as joinPath } from 'path';
+import { join as joinPath } from 'node:path';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { asyncFallible, error, ok } from 'fallible';
 import { Formidable } from 'formidable';

@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import type { IncomingMessage } from 'http';
+import type { IncomingMessage } from 'node:http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
 import type WebSocket from 'ws';

@@ -1,4 +1,4 @@
-import { pipeline } from 'stream/promises';
+import { pipeline } from 'node:stream/promises';
 import WebSocket from 'ws';
 import { ok } from 'fallible';
 import { iterateAsResolved, cookieHeader, response } from './general-utils.js';
