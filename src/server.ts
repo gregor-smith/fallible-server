@@ -14,7 +14,8 @@ import type {
     Response,
     WebsocketIterator,
     WebsocketSendErrorCallback,
-    IdentifiedWebsocket
+    IdentifiedWebsocket,
+    WebSocketData
 } from './types.js'
 import {
     cookieHeader,
@@ -30,7 +31,7 @@ function warn(message: string): void {
 
 
 export function defaultOnWebsocketSendError(
-    _data: WebSocket.Data,
+    _data: WebSocketData,
     { name, message }: Error
 ): void {
     warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
@@ -106,7 +107,7 @@ class Socket implements IdentifiedWebsocket {
         return this.wrapped.readyState as WebsocketReadyState
     }
 
-    public send(data: WebSocket.Data): Promise<Error | undefined> {
+    public send(data: WebSocketData): Promise<Error | undefined> {
         return new Promise(resolve => this.wrapped.send(data, resolve))
     }
 
@@ -139,14 +140,14 @@ export function createRequestListener({
             try {
                 if (req.aborted) {
                     if (cleanup !== undefined) {
-                        await cleanup(req)
+                        await cleanup()
                     }
                 }
                 else {
                     res.statusCode = 500
                     res.setHeader('Content-Length', 0)
                     await Promise.all([
-                        cleanup?.(req),
+                        cleanup?.(),
                         new Promise<void>(resolve => {
                             res.on('close', resolve)
                             res.end(resolve)
@@ -288,7 +289,7 @@ export function createRequestListener({
         }
 
         if (cleanup !== undefined) {
-            await cleanup(req, response)
+            await cleanup()
         }
     }
 
@@ -463,10 +464,10 @@ export function composeMessageHandlers<
 export function composeMessageHandlers<State>(
     handlers: ReadonlyArray<MessageHandler<any, any>>
 ): MessageHandler<State, any> {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast)
+            const result = await handler(message, sockets, state)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -642,10 +643,10 @@ export function composeResultMessageHandlers<
 export function composeResultMessageHandlers(
     handlers: ReadonlyArray<MessageHandler<any, Result<any, any>>>
 ): MessageHandler<any, Result<any, any>> {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast)
+            const result = await handler(message, sockets, state)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -664,10 +665,10 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
     isNext: (state: Readonly<NewState | Next>) => state is Next,
     noMatch: NewState
 ): MessageHandler<ExistingState, NewState> {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast)
+            const result = await handler(message, sockets, state)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -686,9 +687,9 @@ function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup>): 
         state,
         cleanups.length === 0
             ? undefined
-            : async (message, state) => {
+            : async () => {
                 for (let index = cleanups.length - 1; index >= 0; index--) {
-                    await cleanups[index]!(message, state)
+                    await cleanups[index]!()
                 }
             }
     )

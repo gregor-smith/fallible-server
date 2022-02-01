@@ -81,14 +81,14 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
             try {
                 if (req.aborted) {
                     if (cleanup !== undefined) {
-                        await cleanup(req);
+                        await cleanup();
                     }
                 }
                 else {
                     res.statusCode = 500;
                     res.setHeader('Content-Length', 0);
                     await Promise.all([
-                        cleanup?.(req),
+                        cleanup?.(),
                         new Promise(resolve => {
                             res.on('close', resolve);
                             res.end(resolve);
@@ -202,16 +202,16 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
             }
         }
         if (cleanup !== undefined) {
-            await cleanup(req, response);
+            await cleanup();
         }
     };
     return [listener, sockets];
 }
 export function composeMessageHandlers(handlers) {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast);
+            const result = await handler(message, sockets, state);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -221,10 +221,10 @@ export function composeMessageHandlers(handlers) {
     };
 }
 export function composeResultMessageHandlers(handlers) {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast);
+            const result = await handler(message, sockets, state);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -237,10 +237,10 @@ export function composeResultMessageHandlers(handlers) {
     };
 }
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
-    return async (message, state, broadcast) => {
+    return async (message, sockets, state) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, state, broadcast);
+            const result = await handler(message, sockets, state);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -255,9 +255,9 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
 function composeCleanupResponse(state, cleanups) {
     return response(state, cleanups.length === 0
         ? undefined
-        : async (message, state) => {
+        : async () => {
             for (let index = cleanups.length - 1; index >= 0; index--) {
-                await cleanups[index](message, state);
+                await cleanups[index]();
             }
         });
 }

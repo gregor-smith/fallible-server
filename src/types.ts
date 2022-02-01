@@ -9,6 +9,9 @@ import type { CloseWebsocket, WebsocketReadyState } from './general-utils.js'
 export type { IncomingMessage } from 'node:http'
 
 
+export type WebSocketData = WebSocket.Data
+
+
 export type ParsedContentType = {
     type: string
     characterSet?: string
@@ -60,11 +63,11 @@ export type StreamBody =
     | (() => AwaitableIterable<Buffer>)
 
 
-export type WebsocketIterator = AwaitableIterator<WebSocket.Data, typeof CloseWebsocket | void>
+export type WebsocketIterator = AwaitableIterator<WebSocketData, typeof CloseWebsocket | void>
 export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator
-export type WebsocketMessageCallback = (data: WebSocket.Data, socketUUID: string) => WebsocketIterator
+export type WebsocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebsocketIterator
 export type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
-export type WebsocketSendErrorCallback = (data: WebSocket.Data, error: Error, socketUUID: string) => Awaitable<void>
+export type WebsocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
 export type WebsocketBody = {
     onOpen?: WebsocketOpenCallback
     onMessage: WebsocketMessageCallback
@@ -93,10 +96,7 @@ export type WebsocketResponse = {
 export type Response = RegularResponse | WebsocketResponse
 
 
-export type Cleanup = (
-    message: IncomingMessage,
-    state?: Readonly<Response>
-) => Awaitable<void>
+export type Cleanup = () => Awaitable<void>
 
 
 export type MessageHandlerResult<State = Response> = {
@@ -123,6 +123,6 @@ export interface IdentifiedWebsocket {
     readonly uuid: string
     readonly readyState: WebsocketReadyState
 
-    send(data: WebSocket.Data): Promise<Error | undefined>
+    send(data: WebSocketData): Promise<Error | undefined>
     close(code?: number, reason?: string): Promise<void>
 }
