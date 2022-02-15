@@ -34,7 +34,7 @@ export declare function parseURLQueryString(url: string, { skipEmptyValues, skip
 export declare function joinURLQueryString(query: Record<string, string | number | bigint | boolean | null | undefined>): string;
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string;
-export declare function parseURLPathSegments(url: string): string[];
+export declare function parseURLPathSegments(url: string): Generator<string, void>;
 export declare function parseContentTypeHeader(header: string): ParsedContentType | undefined;
 export declare function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined;
 export declare function parseContentLengthHeader(header: string): number | undefined;

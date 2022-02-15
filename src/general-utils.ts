@@ -233,21 +233,14 @@ export function parseURLHash(url: string): string {
 
 
 export function parseURLPath(url: string): string {
-    const match = url.match(/^([^?#]+)/)?.[1]
-    return match === undefined
-        ? ''
-        : decodeURI(match)
+    return '/' + [ ...parseURLPathSegments(url) ].join('/')
 }
 
 
-export function parseURLPathSegments(url: string): string[] {
-    const segments: string[] = []
-    const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g)
-    for (let [ segment ] of matches as Iterable<[ string ]>) {
-        segment = decodeURIComponent(segment)
-        segments.push(segment)
+export function * parseURLPathSegments(url: string): Generator<string, void> {
+    for (const [ segment ] of url.matchAll(/(?<=\/)[^\/\?#]+/g) as Iterable<[ string ]>) {
+        yield decodeURIComponent(segment)
     }
-    return segments
 }
 
 
@@ -304,11 +297,8 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
 
 
 export function parseAuthorizationHeaderBearer(header: string): string | undefined {
-    const token = header.match(/^Bearer (.+)/)?.[1]
-    if (token === undefined) {
-        return
-    }
-    return token
+    // see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+    return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1]
 }
 
 

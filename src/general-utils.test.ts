@@ -52,7 +52,7 @@ describe('parseJSONString', () => {
 
     test('parses json string', () => {
         const result = parseJSONString('{"test":true}')
-        expect(result).toEqual(ok({ test: true }))
+        expect(result).toEqual({ test: true })
     })
 })
 
@@ -423,12 +423,9 @@ describe('parseURLHash', () => {
 
 describe('parseURLPath', () => {
     const base: [ string, string ][] = [
-        [ '/', '' ],
-        [ '//', '' ],
-        [ '/', '' ],
-        [ '//', '' ],
-        [ '/', '' ],
-        [ '//', '' ],
+        [ '', '/' ],
+        [ '/', '/' ],
+        [ '//', '/' ],
         [ '/aaa/bbb/ccc', '/aaa/bbb/ccc' ],
         [ '/aaa/bbb/ccc/', '/aaa/bbb/ccc' ],
         [ '//aaa/bbb///ccc', '/aaa/bbb/ccc' ],
@@ -450,10 +447,7 @@ describe('parseURLPath', () => {
 
 describe('parseURLPathSegments', () => {
     const base: [ string, string[] ][] = [
-        [ '/', [] ],
-        [ '//', [] ],
-        [ '/', [] ],
-        [ '//', [] ],
+        [ '', [] ],
         [ '/', [] ],
         [ '//', [] ],
         [ '/aaa/bbb/ccc', [ 'aaa', 'bbb', 'ccc' ] ],
@@ -469,7 +463,7 @@ describe('parseURLPathSegments', () => {
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '#aaa', path ]),
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
     ])('returns decoded path segments and ignores query and hash', (url, path) => {
-        const result = parseURLPathSegments(url)
+        const result = [ ...parseURLPathSegments(url) ]
         expect(result).toEqual(path)
     })
 })
@@ -590,18 +584,17 @@ describe('parseAuthorizationHeaderBearer', () => {
         '  bearer',
         '  bearer ',
         '  bearer  ',
-        'bearer test'
+        'bearer test',
+        'Bearer 🤔',
+        'Bearer  test'
     ])('returns undefined when header invalid', header => {
         const result = parseAuthorizationHeaderBearer(header)
         expect(result).toBeUndefined()
     })
 
-    test.each<[ string, string ]>([
-        [ 'Bearer test', 'test' ],
-        [ 'Bearer  test ',  ' test ' ]
-    ])('returns parsed value', (header, value) => {
-        const result = parseAuthorizationHeaderBearer(header)
-        expect(result).toBe(value)
+    test('returns parsed value', () => {
+        const result = parseAuthorizationHeaderBearer('Bearer Test1-._~+/')
+        expect(result).toBe('Test1-._~+/')
     })
 })
 
@@ -628,7 +621,9 @@ describe('parseMessageAuthorizationHeaderBearer', () => {
         '  bearer',
         '  bearer ',
         '  bearer  ',
-        'bearer test'
+        'bearer test',
+        'Bearer 🤔',
+        'Bearer  test'
     ])('returns invalid when header invalid', header => {
         const result = parseMessageAuthorizationHeaderBearer({
             headers: { authorization: header }
@@ -636,14 +631,11 @@ describe('parseMessageAuthorizationHeaderBearer', () => {
         expect(result).toEqual(error('Invalid'))
     })
 
-    test.each([
-        'Bearer test',
-        'Bearer  test '
-    ])('returns trimmed header', header => {
+    test('returns parsed value', () => {
         const result = parseMessageAuthorizationHeaderBearer({
-            headers: { authorization: header }
+            headers: { authorization: 'Bearer Test1-._~+/' }
         })
-        expect(result).toEqual(ok('test'))
+        expect(result).toEqual(ok('Test1-._~+/'))
     })
 })
 
@@ -695,18 +687,18 @@ describe('response', () => {
 
     test('no arguments', () => {
         const result = response()
-        expect(result).toEqual<MessageHandlerResult>({ state: {} })
+        expect(result).toEqual<typeof result>({ state: {} })
     })
 
     test('state argument', () => {
         const result = response(state)
-        expect(result).toEqual<MessageHandlerResult<string>>({ state })
+        expect(result).toEqual<typeof result>({ state })
     })
 
     test('cleanup argument', () => {
         const cleanup: Cleanup = () => {}
         const result = response(state, cleanup)
-        expect(result).toEqual<MessageHandlerResult<string>>({ state, cleanup })
+        expect(result).toEqual<typeof result>({ state, cleanup })
     })
 })
 
@@ -721,7 +713,7 @@ describe('websocketResponse', () => {
 
     test('body argument', () => {
         const result = websocketResponse(body)
-        expect(result).toEqual<MessageHandlerResult<WebsocketResponse>>({
+        expect(result).toEqual<typeof result>({
             state: { body }
         })
     })
@@ -729,7 +721,7 @@ describe('websocketResponse', () => {
     test('cleanup argument', () => {
         const cleanup: Cleanup = () => {}
         const result = websocketResponse(body, cleanup)
-        expect(result).toEqual<MessageHandlerResult<WebsocketResponse>>({
+        expect(result).toEqual<typeof result>({
             state: { body },
             cleanup
         })

@@ -126,19 +126,12 @@ export function parseURLHash(url) {
         : decodeURIComponent(match);
 }
 export function parseURLPath(url) {
-    const match = url.match(/^([^?#]+)/)?.[1];
-    return match === undefined
-        ? ''
-        : decodeURI(match);
+    return '/' + [...parseURLPathSegments(url)].join('/');
 }
-export function parseURLPathSegments(url) {
-    const segments = [];
-    const matches = url.matchAll(/(?<=\/)[^\/\?#]+/g);
-    for (let [segment] of matches) {
-        segment = decodeURIComponent(segment);
-        segments.push(segment);
+export function* parseURLPathSegments(url) {
+    for (const [segment] of url.matchAll(/(?<=\/)[^\/\?#]+/g)) {
+        yield decodeURIComponent(segment);
     }
-    return segments;
 }
 export function parseContentTypeHeader(header) {
     const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
@@ -184,11 +177,8 @@ export function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 export function parseAuthorizationHeaderBearer(header) {
-    const token = header.match(/^Bearer (.+)/)?.[1];
-    if (token === undefined) {
-        return;
-    }
-    return token;
+    // see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+    return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1];
 }
 export function parseMessageAuthorizationHeaderBearer(message) {
     const header = getMessageHeader(message, 'authorization');
