@@ -1,127 +1,97 @@
 import { join as joinPath } from 'node:path';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { asyncFallible, error, ok } from 'fallible';
-import { Formidable } from 'formidable';
+import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable';
 import sanitiseFilename from 'sanitize-filename';
 import { createReadStream, stat } from 'fallible-fs';
-export function readBufferStream(request, limit = Number.POSITIVE_INFINITY) {
-    if (request.destroyed) {
-        return error({ tag: 'StreamClosed' });
-    }
-    return new Promise(resolve => {
-        const chunks = [];
-        let length = 0;
-        const onData = (chunk) => {
-            if (!(chunk instanceof Buffer)) {
-                cleanup();
-                const result = error({ tag: 'NonBufferChunk', chunk });
-                return resolve(result);
-            }
-            if (request.destroyed) {
-                cleanup();
-                const result = error({ tag: 'StreamClosed' });
-                return resolve(result);
-            }
-            length += chunk.length;
-            if (length > limit) {
-                cleanup();
-                const result = error({ tag: 'LimitExceeded' });
-                return resolve(result);
+export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
+    let size = 0;
+    const chunks = [];
+    try {
+        for await (const chunk of stream) {
+            size += chunk.byteLength;
+            if (size > maximumSize) {
+                return error({ tag: 'MaximumSizeExceeded' });
             }
             chunks.push(chunk);
-        };
-        const onEnd = () => {
-            cleanup();
-            const buffer = Buffer.concat(chunks);
-            const result = ok(buffer);
-            resolve(result);
-        };
-        const onError = (exception) => {
-            cleanup();
-            const result = error({
-                tag: 'OtherError',
-                error: exception
-            });
-            resolve(result);
-        };
-        const onClose = () => {
-            cleanup();
-            const result = error({ tag: 'StreamClosed' });
-            resolve(result);
-        };
-        const cleanup = () => {
-            request.off('data', onData);
-            request.off('error', onError);
-            request.off('end', onEnd);
-            request.off('close', onClose);
-        };
-        request.on('data', onData);
-        request.once('end', onEnd);
-        request.once('error', onError);
-        request.once('close', onClose);
-    });
+        }
+    }
+    catch (exception) {
+        return error({ tag: 'ReadError', error: exception });
+    }
+    const buffer = Buffer.concat(chunks);
+    let text;
+    try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(buffer);
+    }
+    catch (exception) {
+        return error({ tag: 'DecodeError', error: exception });
+    }
+    let value;
+    try {
+        value = secureJSONParse(text);
+    }
+    catch {
+        return error({ tag: 'InvalidSyntax' });
+    }
+    return ok(value);
 }
-export function parseJSONStream(stream, limit) {
-    return asyncFallible(async (propagate) => {
-        const buffer = propagate(await readBufferStream(stream, limit));
-        let text;
-        try {
-            // not sure if this can throw but just in case
-            text = buffer.toString('utf-8');
-        }
-        catch (exception) {
-            return error({ tag: 'OtherError', error: exception });
-        }
-        let value;
-        try {
-            value = secureJSONParse(text);
-        }
-        catch {
-            return error({ tag: 'InvalidSyntax' });
-        }
-        return ok(value);
-    });
-}
-export function parseMultipartStream(stream, { encoding = 'utf-8', saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit } = {}) {
+// TODO: replace with async generator
+export function parseMultipartRequest(request, { encoding, saveDirectory, keepFileExtensions, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
     return new Promise(resolve => {
         new Formidable({
             enabledPlugins: ['multipart'],
             encoding,
             keepExtensions: keepFileExtensions,
             uploadDir: saveDirectory,
-            maxFieldsSize: fieldsSizeLimit,
-            maxFileSize: fileSizeLimit
-        }).parse(stream, (exception, fields, files) => {
-            if (exception === null || exception === undefined) {
-                const newFiles = {};
-                for (const [name, file] of Object.entries(files)) {
-                    newFiles[name] = {
-                        size: file.size,
-                        path: file.path,
-                        name: file.name,
-                        mimetype: file.type,
-                        dateModified: file.mtime
-                    };
-                }
-                resolve(ok({
-                    fields,
-                    files: newFiles
-                }));
-                return;
+            allowEmptyFiles: true,
+            minFileSize: minimumFileSize,
+            maxFiles: maximumFileCount,
+            maxFileSize: maximumFileSize,
+            maxTotalFileSize: maximumFileCount * maximumFileSize,
+            maxFields: maximumFieldsCount,
+            maxFieldsSize: maximumFieldsSize
+        }).parse(request, (exception, fields, files) => {
+            if (exception !== null && exception !== undefined) {
+                return resolve(error(getError(exception)));
             }
-            if (exception instanceof Error) {
-                if (/maxFieldsSize/.test(exception.message)) {
-                    resolve(error({ tag: 'FieldsTooLarge' }));
-                    return;
-                }
-                if (/maxFileSize/.test(exception.message)) {
-                    resolve(error({ tag: 'FilesTooLarge' }));
-                    return;
-                }
+            const newFiles = {};
+            for (const [name, file] of Object.entries(files)) {
+                newFiles[name] = {
+                    size: file.size,
+                    path: file.filepath,
+                    mimetype: file.mimetype,
+                    dateModified: file.lastModifiedDate
+                };
             }
-            resolve(error({ tag: 'OtherError', error: exception }));
+            resolve(ok({
+                fields,
+                files: newFiles
+            }));
         });
     });
+}
+function getError(error) {
+    new InternalFormidableError();
+    if (!(error instanceof formidableErrors.default)) {
+        return { tag: 'UnknownError', error };
+    }
+    switch (error.code) {
+        case formidableErrors.aborted:
+            return { tag: 'RequestAborted' };
+        case formidableErrors.maxFilesExceeded:
+            return { tag: 'MaximumFileCountExceeded' };
+        case formidableErrors.biggerThanMaxFileSize:
+            return { tag: 'MaximumFileSizeExceeded' };
+        case formidableErrors.maxFieldsExceeded:
+            return { tag: 'MaximumFieldsCountExceeded' };
+        case formidableErrors.maxFieldsSizeExceeded:
+            return { tag: 'MaximumFieldsSizeExceeded' };
+        case formidableErrors.smallerThanMinFileSize:
+            return { tag: 'BelowMinimumFileSize' };
+        default:
+            return { tag: 'UnknownError', error };
+    }
 }
 export function openFile(path, encoding) {
     return asyncFallible(async (propagate) => {

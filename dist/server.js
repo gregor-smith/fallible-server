@@ -2,7 +2,7 @@ import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { ok } from 'fallible';
-import { cookieHeader, response, CloseWebsocket } from './general-utils.js';
+import { cookieHeader, CloseWebsocket, response } from './general-utils.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -69,78 +69,68 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
     const server = new WebSocket.Server({ noServer: true });
     const sockets = new Map();
     const listener = async (req, res) => {
-        let response;
+        let state;
         let cleanup;
         try {
-            const result = await messageHandler(req, sockets);
-            response = result.state;
-            cleanup = result.cleanup;
+            ({ state, cleanup } = await messageHandler(req, sockets));
         }
         catch (exception) {
             exceptionListener(exception, req);
-            try {
-                if (req.aborted) {
-                    if (cleanup !== undefined) {
-                        await cleanup();
-                    }
-                }
-                else {
+            if (res.writable) {
+                try {
                     res.statusCode = 500;
                     res.setHeader('Content-Length', 0);
-                    await Promise.all([
-                        cleanup?.(),
-                        new Promise(resolve => {
-                            res.on('close', resolve);
-                            res.end(resolve);
-                        })
-                    ]);
+                    await new Promise(resolve => {
+                        res.on('close', resolve);
+                        res.end(resolve);
+                    });
                 }
-            }
-            catch (exception) {
-                exceptionListener(exception, req);
+                catch (exception) {
+                    exceptionListener(exception, req);
+                }
             }
             return;
         }
-        res.statusCode = response.status ?? 200;
-        if (typeof response.body === 'string') {
-            setResponseHeaders(res, response);
+        res.statusCode = state.status ?? 200;
+        if (typeof state.body === 'string') {
+            setResponseHeaders(res, state);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', Buffer.byteLength(response.body));
+                res.setHeader('Content-Length', Buffer.byteLength(state.body));
             }
             try {
                 await new Promise(resolve => {
                     res.on('close', resolve);
-                    res.end(response.body, 'utf-8', resolve);
+                    res.end(state.body, 'utf-8', resolve);
                 });
             }
             catch (exception) {
-                exceptionListener(exception, req, response);
+                exceptionListener(exception, req, state);
             }
         }
-        else if (response.body instanceof Buffer) {
-            setResponseHeaders(res, response);
+        else if (state.body instanceof Buffer) {
+            setResponseHeaders(res, state);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', response.body.length);
+                res.setHeader('Content-Length', state.body.length);
             }
             try {
                 await new Promise(resolve => {
                     res.on('close', resolve);
-                    res.end(response.body, resolve);
+                    res.end(state.body, resolve);
                 });
             }
             catch (exception) {
-                exceptionListener(exception, req, response);
+                exceptionListener(exception, req, state);
             }
         }
         // no body
-        else if (response.body === undefined) {
-            setResponseHeaders(res, response);
+        else if (state.body === undefined) {
+            setResponseHeaders(res, state);
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', 0);
             }
@@ -151,15 +141,15 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                 });
             }
             catch (exception) {
-                exceptionListener(exception, req, response);
+                exceptionListener(exception, req, state);
             }
         }
         // websocket
-        else if ('onMessage' in response.body) {
+        else if ('onMessage' in state.body) {
             const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
             const socket = new Socket(websocket);
             sockets.set(socket.uuid, socket);
-            const { onOpen, onMessage, onSendError, onClose } = response.body;
+            const { onOpen, onMessage, onSendError, onClose } = state.body;
             websocket.on('message', data => sendWebsocketMessages(socket, onMessage(data, socket.uuid), onSendError));
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
@@ -181,23 +171,23 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                     sendWebsocketMessages(socket, onOpen(socket.uuid), onSendError)
                 ]);
             }
+            sockets.delete(socket.uuid);
             if (onClose !== undefined) {
                 await onClose(...closeReason, socket.uuid);
             }
-            sockets.delete(socket.uuid);
         }
         // pipeline source
         else {
-            setResponseHeaders(res, response);
+            setResponseHeaders(res, state);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
             try {
-                await pipeline(response.body, res);
+                await pipeline(state.body, res);
             }
             catch (exception) {
                 if (exception?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                    exceptionListener(exception, req, response);
+                    exceptionListener(exception, req, state);
                 }
             }
         }

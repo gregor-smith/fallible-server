@@ -1,206 +1,172 @@
 import { join as joinPath } from 'node:path'
 import type { ReadStream, Stats } from 'node:fs'
-import type { Readable } from 'node:stream'
+import type { IncomingMessage } from 'node:http'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
-import { asyncFallible, Awaitable, error, ok, Result } from 'fallible'
-import { Formidable } from 'formidable'
+import { asyncFallible, error, ok, Result } from 'fallible'
+import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable'
 import sanitiseFilename from 'sanitize-filename'
 import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 
-
-export type ReadBufferStreamError =
-    | { tag: 'LimitExceeded' }
-    | { tag: 'StreamClosed' }
-    | { tag: 'NonBufferChunk', chunk: unknown }
-    | { tag: 'OtherError', error: unknown }
+import type { AwaitableIterable } from './types.js'
 
 
-export function readBufferStream(
-    request: Readable,
-    limit = Number.POSITIVE_INFINITY
-): Awaitable<Result<Buffer, ReadBufferStreamError>> {
-    if (request.destroyed) {
-        return error({ tag: 'StreamClosed' } as const)
-    }
-    return new Promise(resolve => {
-        const chunks: Buffer[] = []
-        let length = 0
+export type ParseJSONStreamError =
+    | { tag: 'MaximumSizeExceeded' }
+    | { tag: 'DecodeError', error: unknown }
+    | { tag: 'InvalidSyntax' }
+    | { tag: 'ReadError', error: unknown }
 
-        const onData = (chunk: unknown): void => {
-            if (!(chunk instanceof Buffer)) {
-                cleanup()
-                const result = error({ tag: 'NonBufferChunk', chunk } as const)
-                return resolve(result)
-            }
-            if (request.destroyed) {
-                cleanup()
-                const result = error({ tag: 'StreamClosed' } as const)
-                return resolve(result)
-            }
-            length += chunk.length
-            if (length > limit) {
-                cleanup()
-                const result = error({ tag: 'LimitExceeded' } as const)
-                return resolve(result)
+export type ParseJSONStreamOptions = {
+    maximumSize?: number
+    encoding?: BufferEncoding
+}
+
+export async function parseJSONStream(
+    stream: AwaitableIterable<Uint8Array>,
+    {
+        maximumSize = Infinity,
+        encoding = 'utf-8'
+    }: ParseJSONStreamOptions = {}
+): Promise<Result<unknown, ParseJSONStreamError>> {
+    let size = 0
+    const chunks: Uint8Array[] = []
+    try {
+        for await (const chunk of stream) {
+            size += chunk.byteLength
+            if (size > maximumSize) {
+                return error({ tag: 'MaximumSizeExceeded' } as const)
             }
             chunks.push(chunk)
         }
+    }
+    catch (exception) {
+        return error({ tag: 'ReadError', error: exception } as const)
+    }
 
-        const onEnd = (): void => {
-            cleanup()
-            const buffer = Buffer.concat(chunks)
-            const result = ok(buffer)
-            resolve(result)
-        }
+    const buffer = Buffer.concat(chunks)
+    let text: string
+    try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(buffer)
+    }
+    catch (exception) {
+        return error({ tag: 'DecodeError', error: exception } as const)
+    }
 
-        const onError = (exception: Error): void => {
-            cleanup()
-            const result = error({
-                tag: 'OtherError',
-                error: exception
-            } as const)
-            resolve(result)
-        }
+    let value: unknown
+    try {
+        value = secureJSONParse(text)
+    }
+    catch {
+        return error({ tag: 'InvalidSyntax' } as const)
+    }
 
-        const onClose = (): void => {
-            cleanup()
-            const result = error({ tag: 'StreamClosed' } as const)
-            resolve(result)
-        }
-
-        const cleanup = (): void => {
-            request.off('data', onData)
-            request.off('error', onError)
-            request.off('end', onEnd)
-            request.off('close', onClose)
-        }
-
-        request.on('data', onData)
-        request.once('end', onEnd)
-        request.once('error', onError)
-        request.once('close', onClose)
-    })
+    return ok(value)
 }
 
 
+export type ParseMultipartRequestError =
+    | { tag: 'RequestAborted' }
+    | { tag: 'BelowMinimumFileSize' }
+    | { tag: 'MaximumFileCountExceeded' }
+    | { tag: 'MaximumFileSizeExceeded' }
+    | { tag: 'MaximumFieldsCountExceeded' }
+    | { tag: 'MaximumFieldsSizeExceeded' }
+    | { tag: 'UnknownError', error: unknown }
 
-export type ParseJSONStreamError = ReadBufferStreamError | { tag: 'InvalidSyntax' }
-
-
-export function parseJSONStream(
-    stream: Readable,
-    limit?: number
-): Promise<Result<unknown, ParseJSONStreamError>> {
-    return asyncFallible(async propagate => {
-        const buffer = propagate(await readBufferStream(stream, limit))
-        let text: string
-        try {
-            // not sure if this can throw but just in case
-            text = buffer.toString('utf-8')
-        }
-        catch (exception) {
-            return error({ tag: 'OtherError', error: exception } as const)
-        }
-        let value: unknown
-        try {
-            value = secureJSONParse(text)
-        }
-        catch {
-            return error({ tag: 'InvalidSyntax' } as const)
-        }
-        return ok(value)
-    })
-}
-
-
-export type ParseMultipartStreamError =
-    | { tag: 'FilesTooLarge' }
-    | { tag: 'FieldsTooLarge' }
-    | { tag: 'OtherError', error: unknown }
-
-
-export type File = {
+export type MultipartFile = {
     size: number
     path: string
-    name: string
     mimetype: string
     dateModified: Date
 }
 
-
-export type ParsedMultipartStream = {
+export type ParsedMultipart = {
     fields: Record<string, string>
-    files: Record<string, File>
+    files: Record<string, MultipartFile>
 }
 
-
-export type ParseMultipartStreamArguments = {
+export type ParseMultipartRequestArguments = {
     encoding?: BufferEncoding
     saveDirectory?: string
     keepFileExtensions?: boolean
-    fileSizeLimit?: number
-    fieldsSizeLimit?: number
+    minimumFileSize?: number
+    maximumFileCount?: number
+    maximumFileSize?: number
+    maximumFieldsCount?: number
+    maximumFieldsSize?: number
 }
 
-
-export function parseMultipartStream(
-    stream: Readable,
+// TODO: replace with async generator
+export function parseMultipartRequest(
+    request: IncomingMessage,
     {
-        encoding = 'utf-8',
+        encoding,
         saveDirectory,
         keepFileExtensions,
-        fileSizeLimit,
-        fieldsSizeLimit
-    }: ParseMultipartStreamArguments = {}
-): Promise<Result<ParsedMultipartStream, ParseMultipartStreamError>> {
+        minimumFileSize = 0,
+        maximumFileCount = Infinity,
+        maximumFileSize = Infinity,
+        maximumFieldsCount = Infinity,
+        maximumFieldsSize = Infinity
+    }: ParseMultipartRequestArguments = {}
+): Promise<Result<ParsedMultipart, ParseMultipartRequestError>> {
     return new Promise(resolve => {
         new Formidable({
             enabledPlugins: [ 'multipart' ],
             encoding,
             keepExtensions: keepFileExtensions,
             uploadDir: saveDirectory,
-            maxFieldsSize: fieldsSizeLimit,
-            maxFileSize: fileSizeLimit
-        }).parse(stream, (exception, fields, files) => {
-            if (exception === null || exception === undefined) {
-                const newFiles: Record<string, File> = {}
-                for (const [ name, file ] of Object.entries(files)) {
-                    newFiles[name] = {
-                        size: file.size,
-                        path: file.path,
-                        name: file.name,
-                        mimetype: file.type,
-                        dateModified: file.mtime
-                    }
-                }
-                resolve(
-                    ok({
-                        fields,
-                        files: newFiles
-                    })
-                )
-                return
+            allowEmptyFiles: true,
+            minFileSize: minimumFileSize,
+            maxFiles: maximumFileCount,
+            maxFileSize: maximumFileSize,
+            maxTotalFileSize: maximumFileCount * maximumFileSize,
+            maxFields: maximumFieldsCount,
+            maxFieldsSize: maximumFieldsSize
+        }).parse(request, (exception, fields, files) => {
+            if (exception !== null && exception !== undefined) {
+                return resolve(error(getError(exception)))
             }
-            if (exception instanceof Error) {
-                if (/maxFieldsSize/.test(exception.message)) {
-                    resolve(
-                        error({ tag: 'FieldsTooLarge' } as const)
-                    )
-                    return
-                }
-                if (/maxFileSize/.test(exception.message)) {
-                    resolve(
-                        error({ tag: 'FilesTooLarge' } as const)
-                    )
-                    return
+            const newFiles: Record<string, MultipartFile> = {}
+            for (const [ name, file ] of Object.entries(files)) {
+                newFiles[name] = {
+                    size: file.size,
+                    path: file.filepath,
+                    mimetype: file.mimetype,
+                    dateModified: file.lastModifiedDate
                 }
             }
-            resolve(
-                error({ tag: 'OtherError', error: exception } as const)
-            )
+            resolve(ok({
+                fields,
+                files: newFiles
+            }))
         })
     })
+}
+
+function getError(error: unknown): ParseMultipartRequestError {
+    new InternalFormidableError()
+
+    if (!(error instanceof formidableErrors.default)) {
+        return { tag: 'UnknownError', error }
+    }
+    switch (error.code) {
+        case formidableErrors.aborted:
+            return { tag: 'RequestAborted' }
+        case formidableErrors.maxFilesExceeded:
+            return { tag: 'MaximumFileCountExceeded' }
+        case formidableErrors.biggerThanMaxFileSize:
+            return { tag: 'MaximumFileSizeExceeded' }
+        case formidableErrors.maxFieldsExceeded:
+            return { tag: 'MaximumFieldsCountExceeded' }
+        case formidableErrors.maxFieldsSizeExceeded:
+            return { tag: 'MaximumFieldsSizeExceeded' }
+        case formidableErrors.smallerThanMinFileSize:
+            return { tag: 'BelowMinimumFileSize' }
+        default:
+            return { tag: 'UnknownError', error }
+    }
 }
 
 
@@ -209,14 +175,12 @@ export type OpenedFile = {
     stats: Stats
 }
 
-
 export type OpenFileError =
     | FileSystemError
     | {
         tag: 'IsADirectory'
         exception?: FileSystemError
     }
-
 
 export function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>> {
     return asyncFallible<OpenedFile, OpenFileError>(async propagate => {
@@ -232,7 +196,6 @@ export function openFile(path: string, encoding?: BufferEncoding): Promise<Resul
         return ok({ stream, stats })
     })
 }
-
 
 export function openSanitisedFile(
     directory: string,

@@ -19,9 +19,9 @@ import type {
 } from './types.js'
 import {
     cookieHeader,
-    response,
     CloseWebsocket,
-    WebsocketReadyState
+    WebsocketReadyState,
+    response
 } from './general-utils.js'
 
 
@@ -120,88 +120,80 @@ class Socket implements IdentifiedWebsocket {
 }
 
 
-export function createRequestListener({
-    messageHandler,
-    exceptionListener = getDefaultExceptionListener()
-}: CreateRequestListenerArguments): [ AwaitableRequestListener, ReadonlyMap<string, IdentifiedWebsocket> ] {
+export function createRequestListener(
+    {
+        messageHandler,
+        exceptionListener = getDefaultExceptionListener()
+    }: CreateRequestListenerArguments
+): [ AwaitableRequestListener, ReadonlyMap<string, IdentifiedWebsocket> ] {
     const server = new WebSocket.Server({ noServer: true })
     const sockets = new Map<string, Socket>()
 
     const listener: AwaitableRequestListener = async (req, res) => {
-        let response: Readonly<Response>
+        let state: Response
         let cleanup: Cleanup | undefined
         try {
-            const result = await messageHandler(req, sockets)
-            response = result.state
-            cleanup = result.cleanup
+            ({ state, cleanup } = await messageHandler(req, sockets))
         }
         catch (exception: unknown) {
             exceptionListener(exception, req)
-            try {
-                if (req.aborted) {
-                    if (cleanup !== undefined) {
-                        await cleanup()
-                    }
-                }
-                else {
+            if (res.writable) {
+                try {
                     res.statusCode = 500
                     res.setHeader('Content-Length', 0)
-                    await Promise.all([
-                        cleanup?.(),
-                        new Promise<void>(resolve => {
-                            res.on('close', resolve)
-                            res.end(resolve)
-                        })
-                    ])
+                    await new Promise<void>(resolve => {
+                        res.on('close', resolve)
+                        res.end(resolve)
+                    })
                 }
-            }
-            catch (exception: unknown) {
-                exceptionListener(exception, req)
+                catch (exception: unknown) {
+                    exceptionListener(exception, req)
+                }
             }
             return
         }
 
-        res.statusCode = response.status ?? 200
+        res.statusCode = state.status ?? 200
 
-        if (typeof response.body === 'string') {
-            setResponseHeaders(res, response)
+        if (typeof state.body === 'string') {
+            setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8')
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', Buffer.byteLength(response.body))
+                res.setHeader('Content-Length', Buffer.byteLength(state.body))
             }
             try {
                 await new Promise<void>(resolve => {
                     res.on('close', resolve)
-                    res.end(response.body, 'utf-8', resolve)
+                    res.end(state.body, 'utf-8', resolve)
                 })
             }
             catch (exception) {
-                exceptionListener(exception, req, response)
+                exceptionListener(exception, req, state)
             }
         }
-        else if (response.body instanceof Buffer) {
-            setResponseHeaders(res, response)
+        else if (state.body instanceof Buffer) {
+            setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', response.body.length)
+                res.setHeader('Content-Length', state.body.length)
             }
             try {
                 await new Promise<void>(resolve => {
                     res.on('close', resolve)
-                    res.end(response.body, resolve)
+                    res.end(state.body, resolve)
                 })
             }
             catch (exception) {
-                exceptionListener(exception, req, response)
+                exceptionListener(exception, req, state)
             }
         }
         // no body
-        else if (response.body === undefined) {
-            setResponseHeaders(res, response)
+        else if (state.body === undefined) {
+            setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Length')) {
                 res.setHeader('Content-Length', 0)
             }
@@ -212,11 +204,11 @@ export function createRequestListener({
                 })
             }
             catch (exception) {
-                exceptionListener(exception, req, response)
+                exceptionListener(exception, req, state)
             }
         }
         // websocket
-        else if ('onMessage' in response.body) {
+        else if ('onMessage' in state.body) {
             const websocket = await new Promise<WebSocket>(resolve =>
                 server.handleUpgrade(
                     req,
@@ -228,7 +220,7 @@ export function createRequestListener({
             const socket = new Socket(websocket)
             sockets.set(socket.uuid, socket)
 
-            const { onOpen, onMessage, onSendError, onClose } = response.body
+            const { onOpen, onMessage, onSendError, onClose } = state.body
 
             websocket.on('message', data =>
                 sendWebsocketMessages(
@@ -267,23 +259,24 @@ export function createRequestListener({
                 ])
             }
 
+            sockets.delete(socket.uuid)
+
             if (onClose !== undefined) {
                 await onClose(...closeReason, socket.uuid)
             }
-            sockets.delete(socket.uuid)
         }
         // pipeline source
         else {
-            setResponseHeaders(res, response)
+            setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
             try {
-                await pipeline(response.body, res)
+                await pipeline(state.body, res)
             }
             catch (exception) {
                 if ((exception as NodeJS.ErrnoException)?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                    exceptionListener(exception, req, response)
+                    exceptionListener(exception, req, state)
                 }
             }
         }

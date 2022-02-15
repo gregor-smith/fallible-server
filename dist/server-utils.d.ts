@@ -1,51 +1,62 @@
 /// <reference types="node" />
 import type { ReadStream, Stats } from 'node:fs';
-import type { Readable } from 'node:stream';
-import { Awaitable, Result } from 'fallible';
+import type { IncomingMessage } from 'node:http';
+import { Result } from 'fallible';
 import { FileSystemError } from 'fallible-fs';
-export declare type ReadBufferStreamError = {
-    tag: 'LimitExceeded';
+import type { AwaitableIterable } from './types.js';
+export declare type ParseJSONStreamError = {
+    tag: 'MaximumSizeExceeded';
 } | {
-    tag: 'StreamClosed';
-} | {
-    tag: 'NonBufferChunk';
-    chunk: unknown;
-} | {
-    tag: 'OtherError';
+    tag: 'DecodeError';
     error: unknown;
-};
-export declare function readBufferStream(request: Readable, limit?: number): Awaitable<Result<Buffer, ReadBufferStreamError>>;
-export declare type ParseJSONStreamError = ReadBufferStreamError | {
+} | {
     tag: 'InvalidSyntax';
-};
-export declare function parseJSONStream(stream: Readable, limit?: number): Promise<Result<unknown, ParseJSONStreamError>>;
-export declare type ParseMultipartStreamError = {
-    tag: 'FilesTooLarge';
 } | {
-    tag: 'FieldsTooLarge';
-} | {
-    tag: 'OtherError';
+    tag: 'ReadError';
     error: unknown;
 };
-export declare type File = {
+export declare type ParseJSONStreamOptions = {
+    maximumSize?: number;
+    encoding?: BufferEncoding;
+};
+export declare function parseJSONStream(stream: AwaitableIterable<Uint8Array>, { maximumSize, encoding }?: ParseJSONStreamOptions): Promise<Result<unknown, ParseJSONStreamError>>;
+export declare type ParseMultipartRequestError = {
+    tag: 'RequestAborted';
+} | {
+    tag: 'BelowMinimumFileSize';
+} | {
+    tag: 'MaximumFileCountExceeded';
+} | {
+    tag: 'MaximumFileSizeExceeded';
+} | {
+    tag: 'MaximumFieldsCountExceeded';
+} | {
+    tag: 'MaximumFieldsSizeExceeded';
+} | {
+    tag: 'UnknownError';
+    error: unknown;
+};
+export declare type MultipartFile = {
     size: number;
     path: string;
-    name: string;
     mimetype: string;
     dateModified: Date;
 };
-export declare type ParsedMultipartStream = {
+export declare type ParsedMultipart = {
     fields: Record<string, string>;
-    files: Record<string, File>;
+    files: Record<string, MultipartFile>;
 };
-export declare type ParseMultipartStreamArguments = {
+export declare type ParseMultipartRequestArguments = {
     encoding?: BufferEncoding;
     saveDirectory?: string;
     keepFileExtensions?: boolean;
-    fileSizeLimit?: number;
-    fieldsSizeLimit?: number;
+    minimumFileSize?: number;
+    maximumFileCount?: number;
+    maximumFileSize?: number;
+    maximumFieldsCount?: number;
+    maximumFieldsSize?: number;
 };
-export declare function parseMultipartStream(stream: Readable, { encoding, saveDirectory, keepFileExtensions, fileSizeLimit, fieldsSizeLimit }?: ParseMultipartStreamArguments): Promise<Result<ParsedMultipartStream, ParseMultipartStreamError>>;
+export declare function parseMultipartRequest(request: IncomingMessage, { encoding, saveDirectory, keepFileExtensions, minimumFileSize, maximumFileCount, maximumFileSize, maximumFieldsCount, maximumFieldsSize }?: ParseMultipartRequestArguments): Promise<Result<ParsedMultipart, ParseMultipartRequestError>>;
 export declare type OpenedFile = {
     stream: ReadStream;
     stats: Stats;

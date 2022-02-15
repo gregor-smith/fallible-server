@@ -1,4 +1,4 @@
-import type { IncomingMessage, RequestListener } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import type WebSocket from 'ws'
 import type { Awaitable } from 'fallible'
@@ -6,7 +6,7 @@ import type { Awaitable } from 'fallible'
 import type { CloseWebsocket, WebsocketReadyState } from './general-utils.js'
 
 
-export type { IncomingMessage } from 'node:http'
+export type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>
 
 
 export type WebSocketData = WebSocket.Data
@@ -44,8 +44,10 @@ export type Cookie = {
 }
 
 
-export type AwaitableRequestListener = (..._: Parameters<RequestListener>) =>
-    Awaitable<ReturnType<RequestListener>>
+export type AwaitableRequestListener = (
+    message: IncomingMessage,
+    response: ServerResponse
+) => Awaitable<void>
 
 
 export type AwaitableIterable<T> =
@@ -53,7 +55,7 @@ export type AwaitableIterable<T> =
     | AsyncIterable<T>
 
 
-export type AwaitableIterator<Yield, Return = unknown, Next = unknown> =
+export type AwaitableIterator<Yield, Return = void, Next = unknown> =
     | Iterator<Yield, Return, Next>
     | AsyncIterator<Yield, Return, Next>
 
@@ -106,7 +108,7 @@ export type MessageHandlerResult<State = Response> = {
 
 
 export type MessageHandler<ExistingState = void, NewState = Response> = (
-    message: IncomingMessage,
+    message: Message,
     sockets: ReadonlyMap<string, IdentifiedWebsocket>,
     state: Readonly<ExistingState>
 ) => Awaitable<MessageHandlerResult<NewState>>
@@ -114,7 +116,7 @@ export type MessageHandler<ExistingState = void, NewState = Response> = (
 
 export type ExceptionListener = (
     exception: unknown,
-    message: IncomingMessage,
+    message: Message,
     state?: Readonly<Response>
 ) => void
 

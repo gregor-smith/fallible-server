@@ -1,9 +1,9 @@
 /// <reference types="node" />
-import type { IncomingMessage, RequestListener } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type WebSocket from 'ws';
 import type { Awaitable } from 'fallible';
 import type { CloseWebsocket, WebsocketReadyState } from './general-utils.js';
-export type { IncomingMessage } from 'node:http';
+export declare type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
 export declare type WebSocketData = WebSocket.Data;
 export declare type ParsedContentType = {
     type: string;
@@ -20,9 +20,9 @@ export declare type Cookie = {
     httpOnly?: boolean;
     sameSite?: 'strict' | 'lax' | 'none';
 };
-export declare type AwaitableRequestListener = (..._: Parameters<RequestListener>) => Awaitable<ReturnType<RequestListener>>;
+export declare type AwaitableRequestListener = (message: IncomingMessage, response: ServerResponse) => Awaitable<void>;
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
-export declare type AwaitableIterator<Yield, Return = unknown, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
+export declare type AwaitableIterator<Yield, Return = void, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
 export declare type StreamBody = AwaitableIterable<Buffer> | (() => AwaitableIterable<Buffer>);
 export declare type WebsocketIterator = AwaitableIterator<WebSocketData, typeof CloseWebsocket | void>;
 export declare type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator;
@@ -54,8 +54,8 @@ export declare type MessageHandlerResult<State = Response> = {
     state: State;
     cleanup?: Cleanup;
 };
-export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: IncomingMessage, sockets: ReadonlyMap<string, IdentifiedWebsocket>, state: Readonly<ExistingState>) => Awaitable<MessageHandlerResult<NewState>>;
-export declare type ExceptionListener = (exception: unknown, message: IncomingMessage, state?: Readonly<Response>) => void;
+export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, sockets: ReadonlyMap<string, IdentifiedWebsocket>, state: Readonly<ExistingState>) => Awaitable<MessageHandlerResult<NewState>>;
+export declare type ExceptionListener = (exception: unknown, message: Message, state?: Readonly<Response>) => void;
 export interface IdentifiedWebsocket {
     readonly uuid: string;
     readonly readyState: WebsocketReadyState;
