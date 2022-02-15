@@ -1,8 +1,6 @@
 /// <reference types="node" />
-import type { ReadStream, Stats } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { Result } from 'fallible';
-import { FileSystemError } from 'fallible-fs';
 import type { AwaitableIterable } from './types.js';
 export declare type ParseJSONStreamError = {
     tag: 'MaximumSizeExceeded';
@@ -57,13 +55,3 @@ export declare type ParseMultipartRequestArguments = {
     maximumFieldsSize?: number;
 };
 export declare function parseMultipartRequest(request: IncomingMessage, { encoding, saveDirectory, keepFileExtensions, minimumFileSize, maximumFileCount, maximumFileSize, maximumFieldsCount, maximumFieldsSize }?: ParseMultipartRequestArguments): Promise<Result<ParsedMultipart, ParseMultipartRequestError>>;
-export declare type OpenedFile = {
-    stream: ReadStream;
-    stats: Stats;
-};
-export declare type OpenFileError = FileSystemError | {
-    tag: 'IsADirectory';
-    exception?: FileSystemError;
-};
-export declare function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;
-export declare function openSanitisedFile(directory: string, filename: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>>;

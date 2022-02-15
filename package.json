@@ -34,10 +34,8 @@
     "@types/secure-json-parse": "^1.0.2",
     "@types/ws": "^7.4.0",
     "fallible": "link:./../fallible",
-    "fallible-fs": "link:./../fallible-fs",
     "formidable": "v3",
     "raw-body": "^2.4.1",
-    "sanitize-filename": "^1.6.3",
     "secure-json-parse": "^2.3.1",
     "ws": "^7.4.3"
   },

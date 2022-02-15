@@ -1,9 +1,6 @@
-import { join as joinPath } from 'node:path';
 import { parse as secureJSONParse } from 'secure-json-parse';
-import { asyncFallible, error, ok } from 'fallible';
+import { error, ok } from 'fallible';
 import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable';
-import sanitiseFilename from 'sanitize-filename';
-import { createReadStream, stat } from 'fallible-fs';
 export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
     let size = 0;
     const chunks = [];
@@ -92,22 +89,5 @@ function getError(error) {
         default:
             return { tag: 'UnknownError', error };
     }
-}
-export function openFile(path, encoding) {
-    return asyncFallible(async (propagate) => {
-        const stats = propagate(await stat(path));
-        // this check is necessary because createReadStream fires the ready
-        // event before the error event when trying to open a directory
-        // see https://github.com/nodejs/node/issues/31583
-        if (stats.isDirectory()) {
-            return error({ tag: 'IsADirectory' });
-        }
-        const stream = propagate(await createReadStream(path, encoding));
-        return ok({ stream, stats });
-    });
-}
-export function openSanitisedFile(directory, filename, encoding) {
-    const path = joinPath(directory, sanitiseFilename(filename));
-    return openFile(path, encoding);
 }
 //# sourceMappingURL=server-utils.js.map

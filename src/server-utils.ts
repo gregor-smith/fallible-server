@@ -1,12 +1,8 @@
-import { join as joinPath } from 'node:path'
-import type { ReadStream, Stats } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
-import { asyncFallible, error, ok, Result } from 'fallible'
+import { error, ok, Result } from 'fallible'
 import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable'
-import sanitiseFilename from 'sanitize-filename'
-import { createReadStream, FileSystemError, stat } from 'fallible-fs'
 
 import type { AwaitableIterable } from './types.js'
 
@@ -167,41 +163,4 @@ function getError(error: unknown): ParseMultipartRequestError {
         default:
             return { tag: 'UnknownError', error }
     }
-}
-
-
-export type OpenedFile = {
-    stream: ReadStream
-    stats: Stats
-}
-
-export type OpenFileError =
-    | FileSystemError
-    | {
-        tag: 'IsADirectory'
-        exception?: FileSystemError
-    }
-
-export function openFile(path: string, encoding?: BufferEncoding): Promise<Result<OpenedFile, OpenFileError>> {
-    return asyncFallible<OpenedFile, OpenFileError>(async propagate => {
-        const stats = propagate(await stat(path))
-        // this check is necessary because createReadStream fires the ready
-        // event before the error event when trying to open a directory
-        // see https://github.com/nodejs/node/issues/31583
-        if (stats.isDirectory()) {
-            return error({ tag: 'IsADirectory' } as const)
-        }
-        const stream = propagate(await createReadStream(path, encoding))
-
-        return ok({ stream, stats })
-    })
-}
-
-export function openSanitisedFile(
-    directory: string,
-    filename: string,
-    encoding?: BufferEncoding
-): Promise<Result<OpenedFile, OpenFileError>> {
-    const path = joinPath(directory, sanitiseFilename(filename))
-    return openFile(path, encoding)
 }
