@@ -1,6 +1,8 @@
 // this file should have no runtime dependencies on node-only modules as some
 // utils within are useful on both server and client. exclusively server-only
 // utils should go in server-utils
+//
+// TODO: content disposition header parser
 
 import type { IncomingMessage } from 'node:http'
 
@@ -53,13 +55,13 @@ export function parseMessageCookie(
 function cookieKeyValuePair<A extends Formattable, B extends Formattable>(
     name: A,
     value: B
-) {
-    return `${name}=${value}` as const
+): `${A}=${B}` {
+    return `${name}=${value}`
 }
 
 
-export function signatureCookieName<T extends Formattable>(name: T) {
-    return `${name}.sig` as const
+export function signatureCookieName<T extends Formattable>(name: T): `${T}.sig` {
+    return `${name}.sig`
 }
 
 
@@ -302,10 +304,8 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
 
 
 export function parseAuthorizationHeaderBearer(header: string): string | undefined {
-    const token = header.match(/^Bearer (.+)/)
-        ?.[1]
-        ?.trim()
-    if (token === undefined || token.length === 0) {
+    const token = header.match(/^Bearer (.+)/)?.[1]
+    if (token === undefined) {
         return
     }
     return token
@@ -332,7 +332,8 @@ export function parseMessageAuthorizationHeaderBearer(
 
 
 export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
-    return getMessageHeader(message, 'upgrade') === 'websocket'
+    return getMessageHeader(message, 'connection')?.toLowerCase() === 'upgrade'
+        && getMessageHeader(message, 'upgrade') === 'websocket'
 }
 
 

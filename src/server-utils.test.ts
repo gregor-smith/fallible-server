@@ -1,48 +1,34 @@
 describe('parseJSONStream', () => {
-    test.todo('returns TooLarge when stream larger than sizeLimit param')
+    test.todo('returns MaximumSizeExceeded when stream larger than maximumSize param')
 
-    test.todo('returns OtherError when stream raises unknown exception')
+    test.todo('returns ReadError when stream raises unknown exception')
 
-    test.todo('returns InvalidSyntax when JSON cannot be decoded')
+    test.todo('returns DecodeError when stream buffer cannot be decoded')
+
+    test.todo('returns InvalidSyntax when JSON cannot be parsed')
 
     test.todo('returns JSON decoded with given charset')
 })
 
 
-describe('parseMultipartStream', () => {
-    test.todo('returns FilesTooLarge when file larger than fileSizeLimit param')
+describe('parseMultipartRequest', () => {
+    test.todo('returns RequestAborted when request aborted during parsing')
 
-    test.todo('returns FieldsTooLarge when fields larger than fieldsSizeLimit param')
+    test.todo('returns BelowMinimumFileSize when individual file size lower than minimumFileSize param')
 
-    test.todo('returns OtherError when stream raises unknown exception')
+    test.todo('returns MaximumFileCountExceeded when more files than maximumFileCount param')
+
+    test.todo('returns MaximumFileSizeExceeded when individual file size larger than maximumFileSize param')
+
+    test.todo('returns MaximumFieldsCountExceeded when more fields than maximumFieldsCount param')
+
+    test.todo('returns MaximumFieldsSizeExceeded when combined fields larger than maximumFieldsSize param')
+
+    test.todo('returns UnknownError when parsing raises unknown exception')
 
     test.todo('returns files and fields decoded with given charset')
 
-    test.todo('keepFileExtensions param adds file extensions to paths')
+    test.todo('keepFileExtensions param adds file extensions to returned paths')
 
-    test.todo('saveDirectory param changes file paths')
-})
-
-
-describe('openFile', () => {
-    test.todo('propagates error from stat call')
-
-    test.todo('returns IsADirectory error before attempting to open')
-
-    test.todo('propagates error from open call')
-
-    test.todo('returns stats and stream of given path decoded with given charset')
-})
-
-
-describe('openSanitisedFile', () => {
-    test.todo('propagates error from stat call')
-
-    test.todo('returns IsADirectory error before attempting to open')
-
-    test.todo('propagates error from open call')
-
-    test.todo('returns stats and stream of given path decoded with given charset')
-
-    test.todo('returns NoSuchFileOrDirectory when illegal filename given')
+    test.todo('saveDirectory param changes returned file paths')
 })

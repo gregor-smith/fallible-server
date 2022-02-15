@@ -3,7 +3,14 @@ import type { IncomingHttpHeaders } from 'http'
 import { ok, error, Error, Ok } from 'fallible'
 import Keygrip from 'keygrip'
 
-import type { Cookie, ParsedContentType } from './types.js'
+import type {
+    Cleanup,
+    Cookie,
+    MessageHandlerResult,
+    ParsedContentType,
+    WebsocketBody,
+    WebsocketResponse
+} from './types.js'
 import {
     cookieHeader,
     signedCookieHeader,
@@ -26,9 +33,28 @@ import {
     messageIsWebSocketRequest,
     parseJSONString,
     ParseSignedMessageCookieError,
-    signatureCookieName,
-    joinURLQueryString
+    joinURLQueryString,
+    parseURLPathSegments,
+    response,
+    websocketResponse,
+    iterateAsResolved
 } from './general-utils.js'
+
+
+describe('parseJSONString', () => {
+    test.each([
+        '{',
+        '{"constructor": {}}',
+        '{"__proto__": {}}',
+    ])('throws on invalid or malicious json string', json => {
+        expect(() => parseJSONString(json)).toThrowError(SyntaxError)
+    })
+
+    test('parses json string', () => {
+        const result = parseJSONString('{"test":true}')
+        expect(result).toEqual(ok({ test: true }))
+    })
+})
 
 
 describe('parseCookieHeader', () => {
@@ -72,14 +98,6 @@ describe('parseMessageCookie', () => {
     ])('returns cookie value', (header, value) => {
         const result = parseMessageCookie({ headers: { cookie: header } }, 'test2')
         expect(result).toBe(value)
-    })
-})
-
-
-describe('signatureCookieName', () => {
-    test.each([ 'test', 'test2', true, 1, 1.23, BigInt(1) ])('appends signature suffix', name => {
-        const result = signatureCookieName(name)
-        expect(result).toBe(`${name}.sig`)
     })
 })
 
@@ -404,6 +422,33 @@ describe('parseURLHash', () => {
 
 
 describe('parseURLPath', () => {
+    const base: [ string, string ][] = [
+        [ '/', '' ],
+        [ '//', '' ],
+        [ '/', '' ],
+        [ '//', '' ],
+        [ '/', '' ],
+        [ '//', '' ],
+        [ '/aaa/bbb/ccc', '/aaa/bbb/ccc' ],
+        [ '/aaa/bbb/ccc/', '/aaa/bbb/ccc' ],
+        [ '//aaa/bbb///ccc', '/aaa/bbb/ccc' ],
+        [ '//aaa/bbb///ccc////', '/aaa/bbb/ccc' ],
+        [ '/%20aaa%20/%20bbb%20', '/ aaa / bbb ' ],
+    ]
+
+    test.each([
+        ...base,
+        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '?aaa=bbb', path ]),
+        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '#aaa', path ]),
+        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
+    ])('returns decoded path and ignores query and hash', (url, path) => {
+        const result = parseURLPath(url)
+        expect(result).toBe(path)
+    })
+})
+
+
+describe('parseURLPathSegments', () => {
     const base: [ string, string[] ][] = [
         [ '/', [] ],
         [ '//', [] ],
@@ -423,8 +468,8 @@ describe('parseURLPath', () => {
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb', path ]),
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '#aaa', path ]),
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
-    ])('returns decoded path and ignores query and hash', (url, path) => {
-        const result = parseURLPath(url)
+    ])('returns decoded path segments and ignores query and hash', (url, path) => {
+        const result = parseURLPathSegments(url)
         expect(result).toEqual(path)
     })
 })
@@ -551,12 +596,12 @@ describe('parseAuthorizationHeaderBearer', () => {
         expect(result).toBeUndefined()
     })
 
-    test.each([
-        'Bearer test',
-        'Bearer  test '
-    ])('returns trimmed header', header => {
+    test.each<[ string, string ]>([
+        [ 'Bearer test', 'test' ],
+        [ 'Bearer  test ',  ' test ' ]
+    ])('returns parsed value', (header, value) => {
         const result = parseAuthorizationHeaderBearer(header)
-        expect(result).toBe('test')
+        expect(result).toBe(value)
     })
 })
 
@@ -604,11 +649,30 @@ describe('parseMessageAuthorizationHeaderBearer', () => {
 
 
 describe('messageIsWebSocketRequest', () => {
-    test('returns true when upgrade header is websocket', () => {
+    test.each([
+        'upgrade',
+        'Upgrade'
+    ])('returns true when connection header is upgrade and upgrade header is websocket', header => {
         const result = messageIsWebSocketRequest({
-            headers: { upgrade: 'websocket' }
+            headers: {
+                connection: header,
+                upgrade: 'websocket'
+            }
         })
         expect(result).toBe(true)
+    })
+
+    test.each([
+        undefined,
+        'test'
+    ])('returns false when connection header missing or not upgrade', header => {
+        const result = messageIsWebSocketRequest({
+            headers: {
+                connection: header,
+                upgrade: 'websocket'
+            }
+        })
+        expect(result).toBe(false)
     })
 
     test.each([
@@ -616,25 +680,99 @@ describe('messageIsWebSocketRequest', () => {
         undefined
     ])('returns false when upgrade header missing or non-websocket', header => {
         const result = messageIsWebSocketRequest({
-            headers: { upgrade: header }
+            headers: {
+                connection: 'upgrade',
+                upgrade: header
+            }
         })
         expect(result).toBe(false)
     })
 })
 
 
-describe('parseJSONString', () => {
-    test.each([
-        '{',
-        '{"constructor": {}}',
-        '{"__proto__": {}}',
-    ])('returns error for invalid or malicious json string', json => {
-        const result = parseJSONString(json)
-        expect(result).toEqual(error())
+describe('response', () => {
+    const state = 'test'
+
+    test('no arguments', () => {
+        const result = response()
+        expect(result).toEqual<MessageHandlerResult>({ state: {} })
     })
 
-    test('parses json string', () => {
-        const result = parseJSONString('{"test":true}')
-        expect(result).toEqual(ok({ test: true }))
+    test('state argument', () => {
+        const result = response(state)
+        expect(result).toEqual<MessageHandlerResult<string>>({ state })
+    })
+
+    test('cleanup argument', () => {
+        const cleanup: Cleanup = () => {}
+        const result = response(state, cleanup)
+        expect(result).toEqual<MessageHandlerResult<string>>({ state, cleanup })
+    })
+})
+
+
+describe('websocketResponse', () => {
+    const body: WebsocketBody = {
+        onMessage: function * () {},
+        onClose: () => {},
+        onOpen: function * () {},
+        onSendError: () => {}
+    }
+
+    test('body argument', () => {
+        const result = websocketResponse(body)
+        expect(result).toEqual<MessageHandlerResult<WebsocketResponse>>({
+            state: { body }
+        })
+    })
+
+    test('cleanup argument', () => {
+        const cleanup: Cleanup = () => {}
+        const result = websocketResponse(body, cleanup)
+        expect(result).toEqual<MessageHandlerResult<WebsocketResponse>>({
+            state: { body },
+            cleanup
+        })
+    })
+})
+
+
+describe('iterateAsResolved', () => {
+    beforeEach(() => jest.useFakeTimers())
+    afterEach(jest.useRealTimers)
+
+    test('yields values as their promises resolve', async () => {
+        expect.assertions(5)
+
+        const createPromise = <T>(value: T, ms: number): Promise<T> =>
+            new Promise(resolve => setTimeout(() => resolve(value), ms))
+
+        const promises: Promise<string>[] = [
+            createPromise('a', 400),
+            createPromise('b', 100),
+            createPromise('c', 300),
+            createPromise('d', 200)
+        ]
+
+        const generator = iterateAsResolved(promises)
+
+        jest.advanceTimersByTime(100)
+        let result = await generator.next()
+        expect(result).toEqual<typeof result>({ done: false, value: 'b' })
+
+        jest.advanceTimersByTime(100)
+        result = await generator.next()
+        expect(result).toEqual<typeof result>({ done: false, value: 'd' })
+
+        jest.advanceTimersByTime(100)
+        result = await generator.next()
+        expect(result).toEqual<typeof result>({ done: false, value: 'c' })
+
+        jest.advanceTimersByTime(100)
+        result = await generator.next()
+        expect(result).toEqual<typeof result>({ done: false, value: 'a' })
+
+        result = await generator.next()
+        expect(result).toEqual<typeof result>({ done: true, value: undefined })
     })
 })

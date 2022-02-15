@@ -1,6 +1,8 @@
 // this file should have no runtime dependencies on node-only modules as some
 // utils within are useful on both server and client. exclusively server-only
 // utils should go in server-utils
+//
+// TODO: content disposition header parser
 import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
 export const CloseWebsocket = Symbol();
@@ -182,9 +184,8 @@ export function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 export function parseAuthorizationHeaderBearer(header) {
-    const token = header.match(/^Bearer (.+)/)?.[1]
-        ?.trim();
-    if (token === undefined || token.length === 0) {
+    const token = header.match(/^Bearer (.+)/)?.[1];
+    if (token === undefined) {
         return;
     }
     return token;
@@ -200,7 +201,8 @@ export function parseMessageAuthorizationHeaderBearer(message) {
         : ok(token);
 }
 export function messageIsWebSocketRequest(message) {
-    return getMessageHeader(message, 'upgrade') === 'websocket';
+    return getMessageHeader(message, 'connection')?.toLowerCase() === 'upgrade'
+        && getMessageHeader(message, 'upgrade') === 'websocket';
 }
 export function response(state = {}, cleanup) {
     return { state, cleanup };
