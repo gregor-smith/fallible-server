@@ -1,6 +1,7 @@
+import { TextDecoder } from 'node:util';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { error, ok } from 'fallible';
-import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable';
+import { Formidable, errors as formidableErrors } from 'formidable';
 export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
     let size = 0;
     const chunks = [];
@@ -69,7 +70,6 @@ export function parseMultipartRequest(request, { encoding, saveDirectory, keepFi
     });
 }
 function getError(error) {
-    new InternalFormidableError();
     if (!(error instanceof formidableErrors.default)) {
         return { tag: 'UnknownError', error };
     }

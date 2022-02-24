@@ -1,8 +1,9 @@
 import type { IncomingMessage } from 'node:http'
+import { TextDecoder } from 'node:util'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
 import { error, ok, Result } from 'fallible'
-import { Formidable, errors as formidableErrors, InternalFormidableError } from 'formidable'
+import { Formidable, errors as formidableErrors } from 'formidable'
 
 import type { AwaitableIterable } from './types.js'
 
@@ -142,8 +143,6 @@ export function parseMultipartRequest(
 }
 
 function getError(error: unknown): ParseMultipartRequestError {
-    new InternalFormidableError()
-
     if (!(error instanceof formidableErrors.default)) {
         return { tag: 'UnknownError', error }
     }
