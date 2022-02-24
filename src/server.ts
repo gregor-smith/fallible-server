@@ -34,7 +34,9 @@ export function defaultOnWebsocketSendError(
     _data: WebSocketData,
     { name, message }: Error
 ): void {
-    warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`)
+    warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response")
+    warn(name)
+    warn(message)
 }
 
 
@@ -84,12 +86,6 @@ async function sendWebsocketMessages(
 }
 
 
-export type CreateRequestListenerArguments = {
-    messageHandler: MessageHandler<void, Response>
-    exceptionListener?: ExceptionListener
-}
-
-
 function getDefaultExceptionListener(): ExceptionListener {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option")
     return console.error
@@ -121,10 +117,8 @@ class Socket implements IdentifiedWebsocket {
 
 
 export function createRequestListener(
-    {
-        messageHandler,
-        exceptionListener = getDefaultExceptionListener()
-    }: CreateRequestListenerArguments
+    messageHandler: MessageHandler,
+    exceptionListener = getDefaultExceptionListener()
 ): [ AwaitableRequestListener, ReadonlyMap<string, IdentifiedWebsocket> ] {
     const server = new WebSocket.Server({ noServer: true })
     const sockets = new Map<string, Socket>()
@@ -133,22 +127,21 @@ export function createRequestListener(
         let state: Response
         let cleanup: Cleanup | undefined
         try {
-            ({ state, cleanup } = await messageHandler(req, sockets))
+            ({ state, cleanup } = await messageHandler(req, undefined, sockets))
         }
         catch (exception: unknown) {
             exceptionListener(exception, req)
-            if (res.writable) {
-                try {
-                    res.statusCode = 500
-                    res.setHeader('Content-Length', 0)
-                    await new Promise<void>(resolve => {
-                        res.on('close', resolve)
-                        res.end(resolve)
-                    })
-                }
-                catch (exception: unknown) {
-                    exceptionListener(exception, req)
-                }
+            res.statusCode = 500
+            res.setHeader('Content-Length', 0)
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    res.on('close', resolve)
+                    res.on('error', reject)
+                    res.end()
+                })
+            }
+            catch (exception: unknown) {
+                exceptionListener(exception, req)
             }
             return
         }
@@ -164,27 +157,29 @@ export function createRequestListener(
                 res.setHeader('Content-Length', Buffer.byteLength(state.body))
             }
             try {
-                await new Promise<void>(resolve => {
+                await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
-                    res.end(state.body, 'utf-8', resolve)
+                    res.on('error', reject)
+                    res.end(state.body, 'utf-8')
                 })
             }
             catch (exception) {
                 exceptionListener(exception, req, state)
             }
         }
-        else if (state.body instanceof Buffer) {
+        else if (state.body instanceof Uint8Array) {
             setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', state.body.length)
+                res.setHeader('Content-Length', state.body.byteLength)
             }
             try {
-                await new Promise<void>(resolve => {
+                await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
-                    res.end(state.body, resolve)
+                    res.on('error', reject)
+                    res.end(state.body)
                 })
             }
             catch (exception) {
@@ -198,9 +193,10 @@ export function createRequestListener(
                 res.setHeader('Content-Length', 0)
             }
             try {
-                await new Promise<void>(resolve => {
+                await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
-                    res.end(resolve)
+                    res.on('error', reject)
+                    res.end()
                 })
             }
             catch (exception) {
@@ -275,9 +271,7 @@ export function createRequestListener(
                 await pipeline(state.body, res)
             }
             catch (exception) {
-                if ((exception as NodeJS.ErrnoException)?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                    exceptionListener(exception, req, state)
-                }
+                exceptionListener(exception, req, state)
             }
         }
 
@@ -457,10 +451,10 @@ export function composeMessageHandlers<
 export function composeMessageHandlers<State>(
     handlers: ReadonlyArray<MessageHandler<any, any>>
 ): MessageHandler<State, any> {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state)
+            const result = await handler(message, state, sockets)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -636,10 +630,10 @@ export function composeResultMessageHandlers<
 export function composeResultMessageHandlers(
     handlers: ReadonlyArray<MessageHandler<any, Result<any, any>>>
 ): MessageHandler<any, Result<any, any>> {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state)
+            const result = await handler(message, state, sockets)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -658,10 +652,10 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
     isNext: (state: Readonly<NewState | Next>) => state is Next,
     noMatch: NewState
 ): MessageHandler<ExistingState, NewState> {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups: Cleanup[] = []
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state)
+            const result = await handler(message, state, sockets)
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup)
             }
@@ -676,14 +670,9 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
 
 
 function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup>): MessageHandlerResult<T> {
-    return response(
-        state,
-        cleanups.length === 0
-            ? undefined
-            : async () => {
-                for (let index = cleanups.length - 1; index >= 0; index--) {
-                    await cleanups[index]!()
-                }
-            }
-    )
+    return response(state, async () => {
+        for (let index = cleanups.length - 1; index >= 0; index--) {
+            await cleanups[index]!()
+        }
+    })
 }

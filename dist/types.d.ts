@@ -5,10 +5,6 @@ import type { Awaitable } from 'fallible';
 import type { CloseWebsocket, WebsocketReadyState } from './general-utils.js';
 export declare type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
 export declare type WebSocketData = WebSocket.Data;
-export declare type ParsedContentType = {
-    type: string;
-    characterSet?: string;
-};
 export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
 export declare type Formattable = string | number | boolean | bigint | null;
 export declare type Cookie = {
@@ -40,7 +36,7 @@ export declare type RegularResponse = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>;
     headers?: Readonly<Record<string, Header>>;
     status?: number;
-    body?: string | Buffer | StreamBody;
+    body?: string | Uint8Array | StreamBody;
 };
 export declare type WebsocketResponse = {
     cookies?: undefined;
@@ -54,7 +50,7 @@ export declare type MessageHandlerResult<State = Response> = {
     state: State;
     cleanup?: Cleanup;
 };
-export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, sockets: ReadonlyMap<string, IdentifiedWebsocket>, state: Readonly<ExistingState>) => Awaitable<MessageHandlerResult<NewState>>;
+export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, state: Readonly<ExistingState>, sockets: ReadonlyMap<string, IdentifiedWebsocket>) => Awaitable<MessageHandlerResult<NewState>>;
 export declare type ExceptionListener = (exception: unknown, message: Message, state?: Readonly<Response>) => void;
 export interface IdentifiedWebsocket {
     readonly uuid: string;

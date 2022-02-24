@@ -12,12 +12,6 @@ export type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & Async
 export type WebSocketData = WebSocket.Data
 
 
-export type ParsedContentType = {
-    type: string
-    characterSet?: string
-}
-
-
 export type Method =
     | 'GET'
     | 'HEAD'
@@ -85,7 +79,7 @@ export type RegularResponse = {
     cookies?: Readonly<Record<string, Readonly<Cookie>>>
     headers?: Readonly<Record<string, Header>>
     status?: number
-    body?: string | Buffer | StreamBody
+    body?: string | Uint8Array | StreamBody
 }
 
 export type WebsocketResponse = {
@@ -109,8 +103,8 @@ export type MessageHandlerResult<State = Response> = {
 
 export type MessageHandler<ExistingState = void, NewState = Response> = (
     message: Message,
-    sockets: ReadonlyMap<string, IdentifiedWebsocket>,
-    state: Readonly<ExistingState>
+    state: Readonly<ExistingState>,
+    sockets: ReadonlyMap<string, IdentifiedWebsocket>
 ) => Awaitable<MessageHandlerResult<NewState>>
 
 

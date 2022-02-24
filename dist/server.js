@@ -7,7 +7,9 @@ function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
 export function defaultOnWebsocketSendError(_data, { name, message }) {
-    warn(`Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response. Name: '${name}'. Message: '${message}'`);
+    warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response");
+    warn(name);
+    warn(message);
 }
 function setResponseHeaders(res, { cookies, headers }) {
     if (headers !== undefined) {
@@ -65,29 +67,28 @@ class Socket {
         });
     }
 }
-export function createRequestListener({ messageHandler, exceptionListener = getDefaultExceptionListener() }) {
+export function createRequestListener(messageHandler, exceptionListener = getDefaultExceptionListener()) {
     const server = new WebSocket.Server({ noServer: true });
     const sockets = new Map();
     const listener = async (req, res) => {
         let state;
         let cleanup;
         try {
-            ({ state, cleanup } = await messageHandler(req, sockets));
+            ({ state, cleanup } = await messageHandler(req, undefined, sockets));
         }
         catch (exception) {
             exceptionListener(exception, req);
-            if (res.writable) {
-                try {
-                    res.statusCode = 500;
-                    res.setHeader('Content-Length', 0);
-                    await new Promise(resolve => {
-                        res.on('close', resolve);
-                        res.end(resolve);
-                    });
-                }
-                catch (exception) {
-                    exceptionListener(exception, req);
-                }
+            res.statusCode = 500;
+            res.setHeader('Content-Length', 0);
+            try {
+                await new Promise((resolve, reject) => {
+                    res.on('close', resolve);
+                    res.on('error', reject);
+                    res.end();
+                });
+            }
+            catch (exception) {
+                exceptionListener(exception, req);
             }
             return;
         }
@@ -101,27 +102,29 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                 res.setHeader('Content-Length', Buffer.byteLength(state.body));
             }
             try {
-                await new Promise(resolve => {
+                await new Promise((resolve, reject) => {
                     res.on('close', resolve);
-                    res.end(state.body, 'utf-8', resolve);
+                    res.on('error', reject);
+                    res.end(state.body, 'utf-8');
                 });
             }
             catch (exception) {
                 exceptionListener(exception, req, state);
             }
         }
-        else if (state.body instanceof Buffer) {
+        else if (state.body instanceof Uint8Array) {
             setResponseHeaders(res, state);
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream');
             }
             if (!res.hasHeader('Content-Length')) {
-                res.setHeader('Content-Length', state.body.length);
+                res.setHeader('Content-Length', state.body.byteLength);
             }
             try {
-                await new Promise(resolve => {
+                await new Promise((resolve, reject) => {
                     res.on('close', resolve);
-                    res.end(state.body, resolve);
+                    res.on('error', reject);
+                    res.end(state.body);
                 });
             }
             catch (exception) {
@@ -135,9 +138,10 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                 res.setHeader('Content-Length', 0);
             }
             try {
-                await new Promise(resolve => {
+                await new Promise((resolve, reject) => {
                     res.on('close', resolve);
-                    res.end(resolve);
+                    res.on('error', reject);
+                    res.end();
                 });
             }
             catch (exception) {
@@ -186,9 +190,7 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
                 await pipeline(state.body, res);
             }
             catch (exception) {
-                if (exception?.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                    exceptionListener(exception, req, state);
-                }
+                exceptionListener(exception, req, state);
             }
         }
         if (cleanup !== undefined) {
@@ -198,10 +200,10 @@ export function createRequestListener({ messageHandler, exceptionListener = getD
     return [listener, sockets];
 }
 export function composeMessageHandlers(handlers) {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state);
+            const result = await handler(message, state, sockets);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -211,10 +213,10 @@ export function composeMessageHandlers(handlers) {
     };
 }
 export function composeResultMessageHandlers(handlers) {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state);
+            const result = await handler(message, state, sockets);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -227,10 +229,10 @@ export function composeResultMessageHandlers(handlers) {
     };
 }
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
-    return async (message, sockets, state) => {
+    return async (message, state, sockets) => {
         const cleanups = [];
         for (const handler of handlers) {
-            const result = await handler(message, sockets, state);
+            const result = await handler(message, state, sockets);
             if (result.cleanup !== undefined) {
                 cleanups.push(result.cleanup);
             }
@@ -243,12 +245,10 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
     };
 }
 function composeCleanupResponse(state, cleanups) {
-    return response(state, cleanups.length === 0
-        ? undefined
-        : async () => {
-            for (let index = cleanups.length - 1; index >= 0; index--) {
-                await cleanups[index]();
-            }
-        });
+    return response(state, async () => {
+        for (let index = cleanups.length - 1; index >= 0; index--) {
+            await cleanups[index]();
+        }
+    });
 }
 //# sourceMappingURL=server.js.map
