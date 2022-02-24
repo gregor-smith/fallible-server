@@ -3,5 +3,5 @@ export default {
     moduleNameMapper: {
         '^(.*)\\.js$': '$1'
     },
-    setupFilesAfterEnv: [ 'jest-extended' ]
+    setupFilesAfterEnv: [ 'jest-extended/all' ]
 }
