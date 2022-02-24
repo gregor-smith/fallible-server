@@ -1,11 +1,18 @@
-// this file should have no runtime dependencies on node-only modules as some
-// utils within are useful on both server and client. exclusively server-only
-// utils should go in server-utils
-//
-// TODO: content disposition header parser
+// This file should have no runtime dependencies on Node modules as some utils
+// within are useful on both server and client. Exclusively server-only utils
+// should go in ./server-utils.ts
 import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
 export const CloseWebsocket = Symbol();
+export function contentDispositionHeader(type, filename) {
+    if (type === 'inline') {
+        return type;
+    }
+    if (filename !== undefined) {
+        type = `${type}; filename="${encodeURIComponent(filename)}"`;
+    }
+    return type;
+}
 export function parseCookieHeader(header, name) {
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
@@ -86,8 +93,7 @@ export function getMessageURL(message) {
 export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingValues = true } = {}) {
     const query = {};
     const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g);
-    for (const match of matches) {
-        let [, key, value] = match;
+    for (let [, key, value] of matches) {
         if (value === undefined) {
             if (skipMissingValues) {
                 continue;
@@ -177,22 +183,21 @@ export function parseMessageContentLength(message) {
     return parseContentLengthHeader(header);
 }
 export function parseAuthorizationHeaderBearer(header) {
-    // see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+    // See: https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
     return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1];
 }
 export function parseMessageAuthorizationHeaderBearer(message) {
-    const header = getMessageHeader(message, 'authorization');
-    if (header === undefined) {
+    if (message.headers.authorization === undefined) {
         return error('Missing');
     }
-    const token = parseAuthorizationHeaderBearer(header);
+    const token = parseAuthorizationHeaderBearer(message.headers.authorization);
     return token === undefined
         ? error('Invalid')
         : ok(token);
 }
 export function messageIsWebSocketRequest(message) {
-    return getMessageHeader(message, 'connection')?.toLowerCase() === 'upgrade'
-        && getMessageHeader(message, 'upgrade') === 'websocket';
+    return message.headers.connection?.toLowerCase() === 'upgrade'
+        && message.headers.upgrade === 'websocket';
 }
 export function response(state = {}, cleanup) {
     return { state, cleanup };

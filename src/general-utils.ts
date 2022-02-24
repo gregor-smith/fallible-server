@@ -1,8 +1,7 @@
-// this file should have no runtime dependencies on node-only modules as some
-// utils within are useful on both server and client. exclusively server-only
-// utils should go in server-utils
-//
-// TODO: content disposition header parser
+// This file should have no runtime dependencies on Node modules as some utils
+// within are useful on both server and client. Exclusively server-only utils
+// should go in ./server-utils.ts
+
 
 import type { IncomingMessage } from 'node:http'
 
@@ -15,7 +14,6 @@ import type {
     Formattable,
     MessageHandlerResult,
     Method,
-    ParsedContentType,
     WebsocketBody,
     RegularResponse,
     WebsocketResponse
@@ -33,6 +31,20 @@ export const enum WebsocketReadyState {
     Open,
     Closing,
     Closed
+}
+
+
+export function contentDispositionHeader(type: 'inline'): 'inline'
+export function contentDispositionHeader(type: 'attachment', filename?: undefined): 'attachment'
+export function contentDispositionHeader(type: 'attachment', filename: string): `attachment; filename="${string}"`
+export function contentDispositionHeader(type: string, filename?: string) {
+    if (type === 'inline') {
+        return type
+    }
+    if (filename !== undefined) {
+        type = `${type}; filename="${encodeURIComponent(filename)}"`
+    }
+    return type
 }
 
 
@@ -185,8 +197,7 @@ export function parseURLQueryString(
 ): Record<string, string> {
     const query: Record<string, string> = {}
     const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g)
-    for (const match of matches) {
-        let [ , key, value ] = match as [ unknown, string, string | undefined ]
+    for (let [ , key, value ] of matches as Iterable<[unknown, string, string | undefined ]>) {
         if (value === undefined) {
             if (skipMissingValues) {
                 continue
@@ -244,6 +255,12 @@ export function * parseURLPathSegments(url: string): Generator<string, void> {
 }
 
 
+export type ParsedContentType = {
+    type: string
+    characterSet?: string
+}
+
+
 export function parseContentTypeHeader(header: string): ParsedContentType | undefined {
     const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i)
     if (match === null) {
@@ -297,7 +314,7 @@ export function parseMessageContentLength(message: Pick<IncomingMessage, 'header
 
 
 export function parseAuthorizationHeaderBearer(header: string): string | undefined {
-    // see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+    // See: https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
     return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1]
 }
 
@@ -310,11 +327,10 @@ export type ParseMessageAuthorisationBearerError =
 export function parseMessageAuthorizationHeaderBearer(
     message: Pick<IncomingMessage, 'headers'>
 ): Result<string, ParseMessageAuthorisationBearerError> {
-    const header = getMessageHeader(message, 'authorization')
-    if (header === undefined) {
+    if (message.headers.authorization === undefined) {
         return error('Missing' as const)
     }
-    const token = parseAuthorizationHeaderBearer(header)
+    const token = parseAuthorizationHeaderBearer(message.headers.authorization)
     return token === undefined
         ? error('Invalid' as const)
         : ok(token)
@@ -322,8 +338,8 @@ export function parseMessageAuthorizationHeaderBearer(
 
 
 export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
-    return getMessageHeader(message, 'connection')?.toLowerCase() === 'upgrade'
-        && getMessageHeader(message, 'upgrade') === 'websocket'
+    return message.headers.connection?.toLowerCase() === 'upgrade'
+        && message.headers.upgrade === 'websocket'
 }
 
 

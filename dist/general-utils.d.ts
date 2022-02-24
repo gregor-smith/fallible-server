@@ -2,7 +2,7 @@
 import type { IncomingMessage } from 'node:http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, ParsedContentType, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
+import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
 export declare const CloseWebsocket: unique symbol;
 export declare const enum WebsocketReadyState {
@@ -11,6 +11,9 @@ export declare const enum WebsocketReadyState {
     Closing = 2,
     Closed = 3
 }
+export declare function contentDispositionHeader(type: 'inline'): 'inline';
+export declare function contentDispositionHeader(type: 'attachment', filename?: undefined): 'attachment';
+export declare function contentDispositionHeader(type: 'attachment', filename: string): `attachment; filename="${string}"`;
 export declare function parseCookieHeader(header: string, name: string): string | undefined;
 export declare function parseMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export declare function signatureCookieName<T extends Formattable>(name: T): `${T}.sig`;
@@ -35,6 +38,10 @@ export declare function joinURLQueryString(query: Record<string, string | number
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string;
 export declare function parseURLPathSegments(url: string): Generator<string, void>;
+export declare type ParsedContentType = {
+    type: string;
+    characterSet?: string;
+};
 export declare function parseContentTypeHeader(header: string): ParsedContentType | undefined;
 export declare function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined;
 export declare function parseContentLengthHeader(header: string): number | undefined;

@@ -6,10 +6,7 @@ import Keygrip from 'keygrip'
 import type {
     Cleanup,
     Cookie,
-    MessageHandlerResult,
-    ParsedContentType,
-    WebsocketBody,
-    WebsocketResponse
+    WebsocketBody
 } from './types.js'
 import {
     cookieHeader,
@@ -37,7 +34,9 @@ import {
     parseURLPathSegments,
     response,
     websocketResponse,
-    iterateAsResolved
+    iterateAsResolved,
+    ParsedContentType,
+    contentDispositionHeader
 } from './general-utils.js'
 
 
@@ -53,6 +52,24 @@ describe('parseJSONString', () => {
     test('parses json string', () => {
         const result = parseJSONString('{"test":true}')
         expect(result).toEqual({ test: true })
+    })
+})
+
+
+describe('contentDispositionHeader', () => {
+    test('inline', () => {
+        const result = contentDispositionHeader('inline')
+        expect(result).toBe<typeof result>('inline')
+    })
+
+    test('attachment without filename', () => {
+        const result = contentDispositionHeader('attachment')
+        expect(result).toBe<typeof result>('attachment')
+    })
+
+    test('attachment with filename', () => {
+        const result = contentDispositionHeader('attachment', 'test 🤔')
+        expect(result).toBe<typeof result>(`attachment; filename="test%20%F0%9F%A4%94"`)
     })
 })
 
