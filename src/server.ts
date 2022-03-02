@@ -122,19 +122,7 @@ export function createRequestListener(
         }
         catch (exception) {
             exceptionListener(exception, req)
-            res.statusCode = 500
-            res.setHeader('Content-Length', 0)
-            try {
-                await new Promise<void>((resolve, reject) => {
-                    res.on('close', resolve)
-                    res.on('error', reject)
-                    res.end()
-                })
-            }
-            catch (exception) {
-                exceptionListener(exception, req)
-            }
-            return
+            state = { status: 500 }
         }
 
         res.statusCode = state.status ?? 200

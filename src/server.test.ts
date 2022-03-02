@@ -95,7 +95,7 @@ describe('createRequestListener', () => {
             expect(response._internal.headers).toContainEntry([ 'content-length', 0 ])
             expect(exceptionListener.mock.calls).toEqual([
                 [ handlerException, response.req ],
-                [ endException, response.req ]
+                [ endException, response.req, { status: 500 } ]
             ])
         })
 
