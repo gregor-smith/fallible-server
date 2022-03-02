@@ -12,17 +12,12 @@ import type {
     MessageHandler,
     MessageHandlerResult,
     Response,
-    WebsocketIterator,
+    WebsocketIterable,
     WebsocketSendErrorCallback,
     IdentifiedWebsocket,
-    WebSocketData
+    WebsocketData
 } from './types.js'
-import {
-    cookieHeader,
-    CloseWebsocket,
-    WebsocketReadyState,
-    response
-} from './general-utils.js'
+import { cookieHeader, WebsocketReadyState, response } from './general-utils.js'
 
 
 function warn(message: string): void {
@@ -31,7 +26,7 @@ function warn(message: string): void {
 
 
 function defaultOnWebsocketSendError(
-    _data: WebSocketData,
+    _data: WebsocketData,
     { name, message }: Error
 ): void {
     warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response")
@@ -55,30 +50,30 @@ function setResponseHeaders(res: ServerResponse, { cookies, headers }: Response)
 }
 
 
+async function sendAndHandleError(
+    socket: Socket,
+    data: WebsocketData,
+    onError: WebsocketSendErrorCallback
+): Promise<void> {
+    const error = await socket.send(data)
+    if (error !== undefined) {
+        return onError(data, error, socket.uuid)
+    }
+}
+
+
 async function sendWebsocketMessages(
     socket: Socket,
-    messages: WebsocketIterator,
+    messages: WebsocketIterable,
     onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
-    while (socket.readyState === WebsocketReadyState.Open) {
-        const result = await messages.next()
-
-        if (result.done) {
-            await Promise.all(promises)
-            if (result.value === CloseWebsocket && socket.readyState <= WebsocketReadyState.Open) {
-                await socket.close()
-            }
-            return
+    for await (const message of messages) {
+        if (socket.readyState !== WebsocketReadyState.Open) {
+            break
         }
-
-        const promise = socket.send(result.value)
-            .then(error => {
-                if (error !== undefined) {
-                    return onError(result.value, error, socket.uuid)
-                }
-            })
+        const promise = sendAndHandleError(socket, message, onError)
         promises.push(promise)
     }
 
@@ -103,7 +98,7 @@ class Socket implements IdentifiedWebsocket {
         return this.wrapped.readyState as WebsocketReadyState
     }
 
-    public send(data: WebSocketData): Promise<Error | undefined> {
+    public send(data: WebsocketData): Promise<Error | undefined> {
         return new Promise(resolve => this.wrapped.send(data, resolve))
     }
 

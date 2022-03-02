@@ -23,9 +23,6 @@ import type {
 export { parse as parseJSONString } from 'secure-json-parse'
 
 
-export const CloseWebsocket = Symbol()
-
-
 export const enum WebsocketReadyState {
     Connecting,
     Open,

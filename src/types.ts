@@ -3,13 +3,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type WebSocket from 'ws'
 import type { Awaitable } from 'fallible'
 
-import type { CloseWebsocket, WebsocketReadyState } from './general-utils.js'
+import type { WebsocketReadyState } from './general-utils.js'
 
 
 export type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>
 
 
-export type WebSocketData = WebSocket.Data
+export type WebsocketData = WebSocket.Data
 
 
 export type Method =
@@ -49,21 +49,16 @@ export type AwaitableIterable<T> =
     | AsyncIterable<T>
 
 
-export type AwaitableIterator<Yield, Return = void, Next = unknown> =
-    | Iterator<Yield, Return, Next>
-    | AsyncIterator<Yield, Return, Next>
-
-
 export type StreamBody =
     | AwaitableIterable<Uint8Array>
     | (() => AwaitableIterable<Uint8Array>)
 
 
-export type WebsocketIterator = AwaitableIterator<WebSocketData, typeof CloseWebsocket | void>
-export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator
-export type WebsocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebsocketIterator
+export type WebsocketIterable = AwaitableIterable<WebsocketData>
+export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterable
+export type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterable
 export type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
-export type WebsocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
+export type WebsocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>
 export type WebsocketBody = {
     onOpen: WebsocketOpenCallback
     onMessage?: WebsocketMessageCallback
@@ -119,6 +114,6 @@ export interface IdentifiedWebsocket {
     readonly uuid: string
     readonly readyState: WebsocketReadyState
 
-    send(data: WebSocketData): Promise<Error | undefined>
+    send(data: WebsocketData): Promise<Error | undefined>
     close(code?: number, reason?: string): Promise<void>
 }
