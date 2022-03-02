@@ -49,6 +49,9 @@ export function contentDispositionHeader(type: string, filename?: string) {
 
 
 export function parseCookieHeader(header: string, name: string): string | undefined {
+    // TODO: allow double quoted values (see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1)
+    // TODO: disallow ascii control codes (see https://jkorpela.fi/chars/c0.html)
+    // TODO: check name is valid cookie (see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#attributes)
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1]
 }
 
