@@ -3,7 +3,6 @@
 // should go in ./server-utils.ts
 import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
-export const CloseWebsocket = Symbol();
 export function contentDispositionHeader(type, filename) {
     if (type === 'inline') {
         return type;
@@ -14,6 +13,9 @@ export function contentDispositionHeader(type, filename) {
     return type;
 }
 export function parseCookieHeader(header, name) {
+    // TODO: allow double quoted values (see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1)
+    // TODO: disallow ascii control codes (see https://jkorpela.fi/chars/c0.html)
+    // TODO: check name is valid cookie (see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#attributes)
     return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
 }
 export function parseMessageCookie(message, name) {
@@ -64,7 +66,7 @@ export function cookieHeader(name, { value, path, maxAge, domain, sameSite, secu
     }
     return segments.join('; ');
 }
-export function signedCookieHeader(name, cookie, keys) {
+export function cookieSignatureHeader(name, cookie, keys) {
     return cookieHeader(signatureCookieName(name), {
         ...cookie,
         value: keys.sign(cookieKeyValuePair(name, cookie.value))

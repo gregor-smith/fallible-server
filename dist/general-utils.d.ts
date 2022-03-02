@@ -4,7 +4,6 @@ import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
 import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
-export declare const CloseWebsocket: unique symbol;
 export declare const enum WebsocketReadyState {
     Connecting = 0,
     Open = 1,
@@ -21,7 +20,7 @@ export declare type ParseSignedMessageCookieError = 'ValueCookieMissing' | 'Sign
 export declare type Keys = Pick<Keygrip, 'verify'>;
 export declare function parseSignedMessageCookie(message: Pick<IncomingMessage, 'headers'>, name: string, keys: Keys): Result<string, ParseSignedMessageCookieError>;
 export declare function cookieHeader(name: string, { value, path, maxAge, domain, sameSite, secure, httpOnly }: Cookie): string;
-export declare function signedCookieHeader(name: string, cookie: Readonly<Cookie>, keys: Pick<Keygrip, 'sign'>): string;
+export declare function cookieSignatureHeader(name: string, cookie: Readonly<Cookie>, keys: Pick<Keygrip, 'sign'>): string;
 export declare function getMessageHeader(message: Pick<IncomingMessage, 'headers'>, name: string): string | undefined;
 export interface IncomingMessageIPFields {
     headers: IncomingMessage['headers'];

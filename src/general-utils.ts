@@ -133,7 +133,7 @@ export function cookieHeader(
 }
 
 
-export function signedCookieHeader(
+export function cookieSignatureHeader(
     name: string,
     cookie: Readonly<Cookie>,
     keys: Pick<Keygrip, 'sign'>

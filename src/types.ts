@@ -71,14 +71,12 @@ export type Header = Formattable | ReadonlyArray<Formattable>
 
 
 export type RegularResponse = {
-    cookies?: Readonly<Record<string, Readonly<Cookie>>>
     headers?: Readonly<Record<string, Header>>
     status?: number
     body?: string | Uint8Array | StreamBody
 }
 
 export type WebsocketResponse = {
-    cookies?: undefined
     headers?: undefined
     status?: 101
     body: Readonly<WebsocketBody>

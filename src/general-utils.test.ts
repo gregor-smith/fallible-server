@@ -10,7 +10,7 @@ import type {
 } from './types.js'
 import {
     cookieHeader,
-    signedCookieHeader,
+    cookieSignatureHeader,
     parseMessageCookie,
     getMessageHeader,
     getMessageIP,
@@ -215,7 +215,7 @@ describe('cookieHeader', () => {
 })
 
 
-describe('signedCookieHeader', () => {
+describe('cookieSignatureHeader', () => {
     test.each<[ string, Cookie, string, string ]>([
         [
             'test-cookie',
@@ -238,7 +238,7 @@ describe('signedCookieHeader', () => {
             'test-cookie-2.sig=47eK_2MpYl2oFIWr2WmPDwXWZmg; Path=/test/path; Max-Age=1337; Domain=test.domain; SameSite=lax; Secure; HttpOnly'
         ]
     ])('returns signature header signed with key', (name, cookie, key, header) => {
-        const result = signedCookieHeader(name, cookie, new Keygrip([ key ]))
+        const result = cookieSignatureHeader(name, cookie, new Keygrip([ key ]))
         expect(result).toBe(header)
     })
 })

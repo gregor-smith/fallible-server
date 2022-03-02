@@ -6,7 +6,7 @@ import { error, ok, Ok, Result } from 'fallible'
 import { Response as MockResponse } from 'mock-http'
 import WebSocket from 'ws'
 
-import { cookieHeader, response, websocketResponse } from './general-utils.js'
+import { response, websocketResponse } from './general-utils.js'
 import {
     composeMessageHandlers,
     composeResultMessageHandlers,
@@ -21,20 +21,6 @@ import { createServer } from 'node:http'
 const testEncoder = new TextEncoder()
 const testResponse = {
     status: 418,
-    cookies: {
-        'test-cookie-name': {
-            value: 'test value',
-            domain: 'test domain',
-            httpOnly: true,
-            maxAge: 12345,
-            path: 'test path',
-            sameSite: 'strict',
-            secure: true
-        },
-        'test-cookie-name-2': {
-            value: 'test value 2'
-        }
-    },
     headers: {
         'test-header': 'test header value',
         'test-header-2': 'test header value 2'
@@ -155,8 +141,8 @@ describe('createRequestListener', () => {
             expect(cleanup).toHaveBeenCalledOnce()
         })
 
-        test('writes custom status, cookies, headers', async () => {
-            expect.assertions(3)
+        test('writes custom status, headers', async () => {
+            expect.assertions(2)
 
             const [ listener ] = createRequestListener(() =>
                 response({ ...testResponse, body })
@@ -168,11 +154,6 @@ describe('createRequestListener', () => {
             expect(res._internal.headers).toContainEntries(
                 Object.entries(testResponse.headers)
             )
-            expect(res._internal.headers).toContainEntry([
-                'set-cookie',
-                Object.entries(testResponse.cookies)
-                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
-            ])
         })
 
         test('exceptionListener called when response errors', async () => {
@@ -225,8 +206,8 @@ describe('createRequestListener', () => {
             expect(cleanup).toHaveBeenCalledOnce()
         })
 
-        test.each(bodies)('writes custom status, cookies, headers', async body => {
-            expect.assertions(3)
+        test.each(bodies)('writes custom status, headers', async body => {
+            expect.assertions(2)
 
             const [ listener ] = createRequestListener(() =>
                 response({ ...testResponse, body })
@@ -238,11 +219,6 @@ describe('createRequestListener', () => {
             expect(res._internal.headers).toContainEntries(
                 Object.entries(testResponse.headers)
             )
-            expect(res._internal.headers).toContainEntry([
-                'set-cookie',
-                Object.entries(testResponse.cookies)
-                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
-            ])
         })
 
         test.each(bodies)('exceptionListener called when response errors', async body => {
@@ -286,8 +262,8 @@ describe('createRequestListener', () => {
             expect(cleanup).toHaveBeenCalledOnce()
         })
 
-        test('writes custom status, cookies, headers', async () => {
-            expect.assertions(3)
+        test('writes custom status, headers', async () => {
+            expect.assertions(2)
 
             const [ listener ] = createRequestListener(() => response(testResponse))
             const res = new MockResponse()
@@ -297,11 +273,6 @@ describe('createRequestListener', () => {
             expect(res._internal.headers).toContainEntries(
                 Object.entries(testResponse.headers)
             )
-            expect(res._internal.headers).toContainEntry([
-                'set-cookie',
-                Object.entries(testResponse.cookies)
-                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
-            ])
         })
 
         test('exceptionListener called when response errors', async () => {
@@ -376,8 +347,8 @@ describe('createRequestListener', () => {
             expect(cleanup).toHaveBeenCalledOnce()
         })
 
-        test.each(bodies)('writes custom status, cookies, headers', async body => {
-            expect.assertions(3)
+        test.each(bodies)('writes custom status, headers', async body => {
+            expect.assertions(2)
 
             const [ listener ] = createRequestListener(() =>
                 response({ ...testResponse, body })
@@ -389,11 +360,6 @@ describe('createRequestListener', () => {
             expect(res._internal.headers).toContainEntries(
                 Object.entries(testResponse.headers)
             )
-            expect(res._internal.headers).toContainEntry([
-                'set-cookie',
-                Object.entries(testResponse.cookies)
-                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
-            ])
         })
 
         const exception = new Error('test')
