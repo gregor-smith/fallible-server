@@ -1,76 +1,741 @@
-import { error, ok, Ok, Result } from 'fallible'
-import 'jest-extended'
+import { TextEncoder } from 'node:util'
+import { setTimeout } from 'node:timers/promises'
 
-import { response } from './general-utils.js'
-import { composeMessageHandlers, composeResultMessageHandlers, fallthroughMessageHandler } from './server.js'
-import type { MessageHandler } from './types.js'
+import 'jest-extended'
+import { error, ok, Ok, Result } from 'fallible'
+import { Response as MockResponse } from 'mock-http'
+import WebSocket from 'ws'
+
+import { cookieHeader, response, websocketResponse } from './general-utils.js'
+import {
+    composeMessageHandlers,
+    composeResultMessageHandlers,
+    createRequestListener,
+    fallthroughMessageHandler
+} from './server.js'
+import type { Message, MessageHandler, Response, WebsocketData, WebsocketIterable } from './types.js'
+import { Readable } from 'node:stream'
+import { createServer } from 'node:http'
+
+
+const testEncoder = new TextEncoder()
+const testResponse = {
+    status: 418,
+    cookies: {
+        'test-cookie-name': {
+            value: 'test value',
+            domain: 'test domain',
+            httpOnly: true,
+            maxAge: 12345,
+            path: 'test path',
+            sameSite: 'strict',
+            secure: true
+        },
+        'test-cookie-name-2': {
+            value: 'test value 2'
+        }
+    },
+    headers: {
+        'test-header': 'test header value',
+        'test-header-2': 'test header value 2'
+    }
+} as const
 
 
 describe('createRequestListener', () => {
+    const originalConsoleWarn = console.warn
+    const originalConsoleError = console.error
+
+    const consoleWarnMock = jest.fn<void, Parameters<Console['warn']>>()
+    const consoleErrorMock = jest.fn<void, Parameters<Console['error']>>()
+
+    beforeEach(() => {
+        console.warn = consoleWarnMock
+        console.error = consoleErrorMock
+    })
+    afterEach(() => {
+        console.warn = originalConsoleWarn
+        console.error = originalConsoleError
+        consoleWarnMock.mockReset()
+        consoleErrorMock.mockReset()
+    })
+
     describe('shared', () => {
-        test.todo('exceptionListener called and response ended when messageListener throws')
+        test('exceptionListener called and response ended when messageHandler throws', async () => {
+            expect.assertions(8)
 
-        test.todo('exceptionListener called again when ending response throws')
+            const response = new MockResponse()
+            const handlerException = new Error('test')
 
-        test.todo('default exception handler used when none given as parameter')
+            const [ listener, testSockets ] = createRequestListener(
+                (message, _, sockets) => {
+                    expect(message).toBe(response.req)
+                    expect(sockets).toBe(testSockets)
+                    throw handlerException
+                },
+                (exception, message, state) => {
+                    expect(exception).toBe(handlerException)
+                    expect(message).toBe(response.req)
+                    expect(state).toBeUndefined()
+                }
+            )
+
+            await listener(response.req, response)
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(500)
+            expect(response._internal.headers).toContainEntry([ 'content-length', 0 ])
+        })
+
+        test('exceptionListener called again when ending response throws', async () => {
+            expect.assertions(4)
+
+            const handlerException = new Error('handler error')
+            const endException = new Error('end error')
+            const response = new MockResponse({
+                onEnd: () => { response.emit('error', endException) }
+            })
+            const exceptionListener = jest.fn<void, [ unknown, Message, Response | undefined ]>()
+
+            const [ listener ] = createRequestListener(
+                () => { throw handlerException },
+                exceptionListener
+            )
+
+            await listener(response.req, response)
+
+            expect(response._internal.ended).toBeTrue()
+            expect(response.statusCode).toBe(500)
+            expect(response._internal.headers).toContainEntry([ 'content-length', 0 ])
+            expect(exceptionListener.mock.calls).toEqual([
+                [ handlerException, response.req ],
+                [ endException, response.req ]
+            ])
+        })
+
+        test('default exception handler used when none given as parameter', async () => {
+            expect.assertions(2)
+
+            const exception = new Error('test')
+            const [ listener ] = createRequestListener(() => { throw exception })
+            const response = new MockResponse()
+            await listener(response.req, response)
+
+            expect(consoleWarnMock.mock.calls).toEqual([
+                [ "fallible-server: default exception listener will be used. Consider overriding via the 'exceptionListener' option" ]
+            ])
+            expect(consoleErrorMock.mock.calls).toEqual([
+                [ exception, response.req ]
+            ])
+        })
 
         test.todo('messageHandler sockets parameter')
     })
 
     describe('string body', () => {
-        test.todo('writes default status, content type, content length')
+        const body = 'test 🤔'
 
-        test.todo('writes custom status, cookies, headers')
+        test('writes default status, content type, content length', async () => {
+            expect.assertions(5)
 
-        test.todo('exceptionListener called when response errors')
+            const cleanup = jest.fn()
+            const [ listener ] = createRequestListener(() =>
+                response({ body }, cleanup)
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
 
-        test.todo('exceptionListener called when request cancelled during response')
+            expect(res._internal.ended).toBeTrue()
+            expect(res.statusCode).toBe(200)
+            expect(res._internal.buffer.toString('utf-8')).toEqual(body)
+            expect(res._internal.headers).toContainEntries([
+                [ 'content-type', 'text/html; charset=utf-8' ],
+                [ 'content-length', Buffer.byteLength(body) ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
+
+        test('writes custom status, cookies, headers', async () => {
+            expect.assertions(3)
+
+            const [ listener ] = createRequestListener(() =>
+                response({ ...testResponse, body })
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res.statusCode).toBe(testResponse.status)
+            expect(res._internal.headers).toContainEntries(
+                Object.entries(testResponse.headers)
+            )
+            expect(res._internal.headers).toContainEntry([
+                'set-cookie',
+                Object.entries(testResponse.cookies)
+                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
+            ])
+        })
+
+        test('exceptionListener called when response errors', async () => {
+            expect.assertions(3)
+
+            const cleanup = jest.fn()
+            const exceptionListener = jest.fn()
+            const [ listener ] = createRequestListener(
+                () => response({ body }, cleanup),
+                exceptionListener
+            )
+            const exception = new Error('end error')
+            const res = new MockResponse({
+                onEnd: () => { res.emit('error', exception) }
+            })
+            await listener(res.req, res)
+
+            expect(res._internal.ended).toBeTrue()
+            expect(exceptionListener.mock.calls).toEqual([
+                [ exception, res.req, { body } ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
     })
 
-    describe('buffer body', () => {
-        test.todo('writes default status, content type, content length')
+    describe('uint8array body', () => {
+        const stringBody = 'test 🤔'
+        const bodies = [
+            Buffer.from(stringBody, 'utf-8'),
+            testEncoder.encode(stringBody)
+        ]
 
-        test.todo('writes custom status, cookies, headers')
+        test.each(bodies)('writes default status, content type, content length', async body => {
+            expect.assertions(5)
 
-        test.todo('exceptionListener called when response errors')
+            const cleanup = jest.fn()
+            const [ listener ] = createRequestListener(() =>
+                response({ body }, cleanup)
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
 
-        test.todo('exceptionListener called when request cancelled during response')
+            expect(res._internal.ended).toBeTrue()
+            expect(res.statusCode).toBe(200)
+            expect(res._internal.buffer.toString('utf-8')).toEqual(stringBody)
+            expect(res._internal.headers).toContainEntries([
+                [ 'content-type', 'application/octet-stream' ],
+                [ 'content-length', body.byteLength ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
+
+        test.each(bodies)('writes custom status, cookies, headers', async body => {
+            expect.assertions(3)
+
+            const [ listener ] = createRequestListener(() =>
+                response({ ...testResponse, body })
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res.statusCode).toBe(testResponse.status)
+            expect(res._internal.headers).toContainEntries(
+                Object.entries(testResponse.headers)
+            )
+            expect(res._internal.headers).toContainEntry([
+                'set-cookie',
+                Object.entries(testResponse.cookies)
+                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
+            ])
+        })
+
+        test.each(bodies)('exceptionListener called when response errors', async body => {
+            expect.assertions(3)
+
+            const cleanup = jest.fn()
+            const exceptionListener = jest.fn()
+            const [ listener ] = createRequestListener(
+                () => response({ body }, cleanup),
+                exceptionListener
+            )
+            const exception = new Error('end error')
+            const res = new MockResponse({
+                onEnd: () => { res.emit('error', exception) }
+            })
+            await listener(res.req, res)
+
+            expect(res._internal.ended).toBeTrue()
+            expect(exceptionListener.mock.calls).toEqual([
+                [ exception, res.req, { body } ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
     })
 
     describe('no body', () => {
-        test.todo('writes default status, content length')
+        test('writes default status, content type, content length', async () => {
+            expect.assertions(5)
 
-        test.todo('writes custom status, cookies, headers')
+            const cleanup = jest.fn()
+            const [ listener ] = createRequestListener(() =>
+                response({}, cleanup)
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
 
-        test.todo('exceptionListener called when response errors')
+            expect(res._internal.ended).toBeTrue()
+            expect(res.statusCode).toBe(200)
+            expect(res._internal.buffer).toBeEmpty()
+            expect(res._internal.headers).toContainEntry([ 'content-length', 0 ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
 
-        test.todo('exceptionListener called when request cancelled during response')
+        test('writes custom status, cookies, headers', async () => {
+            expect.assertions(3)
+
+            const [ listener ] = createRequestListener(() => response(testResponse))
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res.statusCode).toBe(testResponse.status)
+            expect(res._internal.headers).toContainEntries(
+                Object.entries(testResponse.headers)
+            )
+            expect(res._internal.headers).toContainEntry([
+                'set-cookie',
+                Object.entries(testResponse.cookies)
+                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
+            ])
+        })
+
+        test('exceptionListener called when response errors', async () => {
+            expect.assertions(3)
+
+            const cleanup = jest.fn()
+            const exceptionListener = jest.fn()
+            const [ listener ] = createRequestListener(
+                () => response({}, cleanup),
+                exceptionListener
+            )
+            const exception = new Error('end error')
+            const res = new MockResponse({
+                onEnd: () => { res.emit('error', exception) }
+            })
+            await listener(res.req, res)
+
+            expect(res._internal.ended).toBeTrue()
+            expect(exceptionListener.mock.calls).toEqual([
+                [ exception, res.req, {} ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
     })
 
     describe('stream body', () => {
-        test.todo('writes default status, content length')
+        function yieldsTenGenerator<T>(value: T): () => Generator<T, void> {
+            return function * () {
+                for (let i = 0; i < 10; i++) {
+                    yield value
+                }
+            }
+        }
 
-        test.todo('writes custom status, cookies, headers')
+        function toAsyncGenerator<T>(func: () => Generator<T>): () => AsyncGenerator<T, void> {
+            return async function * () {
+                yield * func()
+            }
+        }
 
-        test.todo('exceptionListener called when stream errors')
+        const stringBody = 'test 🤔'
+        const uint8ArrayGenerator = yieldsTenGenerator(testEncoder.encode(stringBody))
+        const bufferGenerator = yieldsTenGenerator(Buffer.from(stringBody, 'utf-8'))
+        const generators = [
+            uint8ArrayGenerator,
+            bufferGenerator,
+            toAsyncGenerator(uint8ArrayGenerator),
+            toAsyncGenerator(bufferGenerator)
+        ]
+        const bodies = [
+            ...generators,
+            ...generators.map(generator => generator()),
+            ...generators.map(generator => Readable.from(generator()))
+        ]
+
+        test.each(bodies)('writes default status, content length', async body => {
+            expect.assertions(5)
+
+            const cleanup = jest.fn()
+            const [ listener ] = createRequestListener(() =>
+                response({ body }, cleanup)
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res._internal.ended).toBeTrue()
+            expect(res.statusCode).toBe(200)
+            expect(res._internal.buffer.toString('utf-8')).toEqual(stringBody.repeat(10))
+            expect(res._internal.headers).toContainEntry(
+                [ 'content-type', 'application/octet-stream' ]
+            )
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
+
+        test.each(bodies)('writes custom status, cookies, headers', async body => {
+            expect.assertions(3)
+
+            const [ listener ] = createRequestListener(() =>
+                response({ ...testResponse, body })
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res.statusCode).toBe(testResponse.status)
+            expect(res._internal.headers).toContainEntries(
+                Object.entries(testResponse.headers)
+            )
+            expect(res._internal.headers).toContainEntry([
+                'set-cookie',
+                Object.entries(testResponse.cookies)
+                    .map(([ name, cookie ]) => cookieHeader(name, cookie))
+            ])
+        })
+
+        const exception = new Error('test')
+
+        function errorGenerator<T>(func: () => Generator<T>): () => Generator<T, void> {
+            return function * () {
+                yield * func()
+                throw exception
+            }
+        }
+
+        const errorUint8ArrayGenerator = errorGenerator(uint8ArrayGenerator)
+        const errorBufferGenerator = errorGenerator(bufferGenerator)
+        const errorGenerators = [
+            errorUint8ArrayGenerator,
+            errorBufferGenerator,
+            toAsyncGenerator(errorUint8ArrayGenerator),
+            toAsyncGenerator(errorBufferGenerator)
+        ]
+        const errorBodies = [
+            ...errorGenerators,
+            ...errorGenerators.map(generator => generator()),
+            ...errorGenerators.map(generator => Readable.from(generator()))
+        ]
+        test.each(errorBodies)('exceptionListener called when stream errors', async body => {
+            expect.assertions(6)
+
+            const cleanup = jest.fn()
+            const exceptionListener = jest.fn()
+            const [ listener ] = createRequestListener(
+                () => response({ body }, cleanup),
+                exceptionListener
+            )
+            const res = new MockResponse()
+            await listener(res.req, res)
+
+            expect(res._internal.ended).toBeTrue()
+            expect(res.statusCode).toBe(200)
+            expect(res._internal.buffer.toString('utf-8')).toEqual(stringBody.repeat(10))
+            expect(res._internal.headers).toContainEntry(
+                [ 'content-type', 'application/octet-stream' ]
+            )
+            expect(exceptionListener.mock.calls).toEqual([
+                [ exception, res.req, { body } ]
+            ])
+            expect(cleanup).toHaveBeenCalledOnce()
+        })
 
         test.todo('exceptionListener called when response errors')
-
-        test.todo('exceptionListener called when request cancelled during response')
     })
 
     describe('websockets', () => {
-        test.todo('onOpen called, onClose called, messages sent and received')
+        const server = createServer()
 
-        test.todo('ignores status, cookies, headers')
+        beforeAll(done => {
+            server.listen(0, '127.0.0.1', done)
+        })
+        afterEach(() => {
+            server.removeAllListeners('request')
+        })
+        afterAll(done => {
+            server.close(done)
+        })
 
-        test.todo('returning CloseWebsocket from onOpen closes connection')
+        function connectWebsocket(): WebSocket {
+            const addressInfo = server.address()
+            if (addressInfo === null || typeof addressInfo !== 'object') {
+                throw new Error(`Invalid server address: ${addressInfo}`)
+            }
+            const uri = `ws://${addressInfo.address}:${addressInfo.port}`
+            return new WebSocket(uri)
+        }
 
-        test.todo('returning CloseWebsocket from onMessage closes connection')
+        test('onOpen called, onClose called, messages sent and received', async () => {
+            expect.assertions(7)
 
-        test.todo('stops sending messages if socket closes during generator')
+            const messages: WebsocketData[] = []
+            let uuid: string | undefined
 
-        test.todo('onSendError called and socket closed on unknown send error')
+            const onOpen = jest.fn<WebsocketIterable, [ string ]>(function * (u) {
+                uuid = u
+                yield 'server open'
+                yield 'server open 2'
+            })
+            const onClose = jest.fn<void, [ number, string, string ]>()
+            const onMessage = jest.fn<WebsocketIterable, [ WebsocketData, string ]>(function * (message) {
+                yield 'server message'
+                yield `server echo: ${message}`
+            })
+
+            await new Promise<void>(resolve => {
+                // Simply listening for the client close event is not enough,
+                // as the server request listener has not yet returned at that
+                // point. We get around this by both listening for the client
+                // close event and using the messageHandler's cleanup callback.
+                // Conveniently, this also tests that the cleanup called, as
+                // this test would fail with a timeout error otherwise.
+                let done = false
+
+                function waitForOtherToFinish(): void {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
+
+                const [ listener ] = createRequestListener(() =>
+                    websocketResponse(
+                        { onOpen, onMessage, onClose },
+                        waitForOtherToFinish
+                    )
+                )
+                server.addListener('request', listener)
+
+                const client = connectWebsocket()
+                client.on('open', () => client.send('client open'))
+                client.on('message', message => {
+                    messages.push(message)
+                    if (messages.length >= 4) {
+                        client.close(4321, 'client close')
+                    }
+                })
+                client.on('close', waitForOtherToFinish)
+            })
+
+            expect(uuid).not.toBeUndefined()
+            expect(onOpen).toHaveBeenCalledOnce()
+            expect(onOpen).toHaveBeenCalledBefore(onMessage)
+            expect(onMessage.mock.calls).toEqual([ [ 'client open', uuid ] ])
+            expect(messages).toEqual([
+                'server open',
+                'server open 2',
+                'server message',
+                'server echo: client open'
+            ])
+            expect(onClose).toHaveBeenCalledAfter(onMessage)
+            expect(onClose.mock.calls).toEqual([ [ 4321, 'client close', uuid ] ])
+        })
+
+        test('closing using uuid passed to onOpen', async () => {
+            expect.assertions(1)
+
+            const closeInfo = await new Promise<[ number, string ]>(resolve => {
+                let serverDone = false
+                let clientCloseInfo: [ number, string ] | undefined
+
+                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                    websocketResponse(
+                        {
+                            onOpen: function * (uuid) {
+                                return sockets.get(uuid)
+                                    ?.close(4321, 'server close')
+                            }
+                        },
+                        () => {
+                            if (clientCloseInfo === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseInfo)
+                            }
+                        }
+                    )
+                )
+                server.addListener('request', listener)
+
+                const client = connectWebsocket()
+                client.on('close', (...args) => {
+                    if (serverDone) {
+                        resolve(args)
+                    }
+                    else {
+                        clientCloseInfo = args
+                    }
+                })
+            })
+
+            expect(closeInfo).toEqual([ 4321, 'server close' ])
+        })
+
+        test('closing using uuid passed to onMessage', async () => {
+            expect.assertions(2)
+
+            const messages: WebsocketData[] = []
+
+            const closeInfo = await new Promise<[ number, string ]>(resolve => {
+                let serverDone = false
+                let clientCloseInfo: [ number, string ] | undefined
+
+                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                    websocketResponse(
+                        {
+                            onOpen: function * () {},
+                            onMessage: async function * (message, uuid) {
+                                messages.push(message)
+                                await sockets.get(uuid)?.close(4321, 'server close')
+                            }
+                        },
+                        () => {
+                            if (clientCloseInfo === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseInfo)
+                            }
+                        }
+                    )
+                )
+                server.addListener('request', listener)
+
+                const client = connectWebsocket()
+                client.on('open', () => client.send('client open'))
+                client.on('close', (...args) => {
+                    if (serverDone) {
+                        resolve(args)
+                    }
+                    else {
+                        clientCloseInfo = args
+                    }
+                })
+            })
+
+            expect(messages).toEqual([ 'client open' ])
+            expect(closeInfo).toEqual([ 4321, 'server close' ])
+        })
+
+        test('stops sending messages if socket closes during generator', async () => {
+            expect.assertions(2)
+
+            const messages: WebsocketData[] = []
+            const onClose = jest.fn<void, [ number, string, string ]>()
+
+            await new Promise<void>(resolve => {
+                let done = false
+
+                function waitForOtherToFinish() {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
+
+                const [ listener ] = createRequestListener(() =>
+                    websocketResponse(
+                        {
+                            onOpen: async function * () {
+                                yield 'server open'
+                                await setTimeout(5)
+                                yield 'should be unreachable'
+                            },
+                            onClose
+                        },
+                        waitForOtherToFinish
+                    )
+                )
+                server.addListener('request', listener)
+
+                const client = connectWebsocket()
+                client.on('message', message => {
+                    messages.push(message)
+                    client.close(4321, 'client close')
+                })
+                client.on('close', waitForOtherToFinish)
+            })
+
+            expect(messages).toEqual([ 'server open' ])
+            expect(onClose.mock.calls).toEqual([
+                [ 4321, 'client close', expect.any(String) ]
+            ])
+        })
+
+        test('onSendError called on unknown send error', async () => {
+            expect.assertions(5)
+
+            const onSendError = jest.fn<void, [ WebsocketData, Error, string ]>(() => {})
+            const onMessage = jest.fn<void, [ string ]>()
+            const exception = new Error('test')
+            const sendSpy = jest.spyOn(WebSocket.prototype, 'send')
+                // The wrong overload is inferred so the second
+                // parameter must be typed as any
+                .mockImplementation((_, callback: any) => callback(exception))
+
+            let uuid: string | undefined
+
+            const closeInfo = await new Promise<[ number, string ]>(resolve => {
+                let serverDone = false
+                let clientCloseInfo: [ number, string ] | undefined
+
+                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                    websocketResponse(
+                        {
+                            onOpen: async function * (u) {
+                                uuid = u
+                                yield 'a'
+                                yield 'b'
+                                yield 'c'
+                                await sockets.get(uuid)?.close(4321, 'server close')
+                            },
+                            onSendError
+                        },
+                        () => {
+                            if (clientCloseInfo === undefined) {
+                                serverDone = true
+                            }
+                            else {
+                                resolve(clientCloseInfo)
+                            }
+                        }
+                    )
+                )
+                server.addListener('request', listener)
+
+                const client = connectWebsocket()
+                client.on('message', onMessage)
+                client.on('close', (...args) => {
+                    if (serverDone) {
+                        resolve(args)
+                    }
+                    else {
+                        clientCloseInfo = args
+                    }
+                })
+            })
+
+            expect(uuid).not.toBeUndefined()
+            expect(onMessage).not.toHaveBeenCalled()
+            expect(sendSpy.mock.calls).toEqual([
+                [ 'a', expect.any(Function) ],
+                [ 'b', expect.any(Function) ],
+                [ 'c', expect.any(Function) ],
+            ])
+            expect(onSendError.mock.calls).toEqual([
+                [ 'a', exception, uuid ],
+                [ 'b', exception, uuid ],
+                [ 'c', exception, uuid ]
+            ])
+            expect(closeInfo).toEqual([ 4321, 'server close' ])
+        })
     })
 })
 
