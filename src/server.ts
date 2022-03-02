@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http'
-import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
+import { Readable } from 'node:stream'
 
 import WebSocket from 'ws'
 import { ok, Result } from 'fallible'
@@ -30,7 +30,7 @@ function warn(message: string): void {
 }
 
 
-export function defaultOnWebsocketSendError(
+function defaultOnWebsocketSendError(
     _data: WebSocketData,
     { name, message }: Error
 ): void {
@@ -129,7 +129,7 @@ export function createRequestListener(
         try {
             ({ state, cleanup } = await messageHandler(req, undefined, sockets))
         }
-        catch (exception: unknown) {
+        catch (exception) {
             exceptionListener(exception, req)
             res.statusCode = 500
             res.setHeader('Content-Length', 0)
@@ -140,7 +140,7 @@ export function createRequestListener(
                     res.end()
                 })
             }
-            catch (exception: unknown) {
+            catch (exception) {
                 exceptionListener(exception, req)
             }
             return
@@ -204,7 +204,7 @@ export function createRequestListener(
             }
         }
         // websocket
-        else if ('onMessage' in state.body) {
+        else if ('onOpen' in state.body) {
             const websocket = await new Promise<WebSocket>(resolve =>
                 server.handleUpgrade(
                     req,
@@ -218,42 +218,33 @@ export function createRequestListener(
 
             const { onOpen, onMessage, onSendError, onClose } = state.body
 
-            websocket.on('message', data =>
-                sendWebsocketMessages(
-                    socket,
-                    onMessage(data, socket.uuid),
-                    onSendError
+            if (onMessage !== undefined) {
+                websocket.on('message', data =>
+                    sendWebsocketMessages(
+                        socket,
+                        onMessage(data, socket.uuid),
+                        onSendError
+                    )
                 )
-            )
+            }
 
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
 
-            let closeReason: [ number, string ]
-            if (onOpen === undefined) {
-                closeReason = await new Promise<[ number, string ]>(resolve =>
-                    // can't just call onClose here in this callback because
-                    // it's potentially async and as such needs to be awaited
-                    // before the final cleanup is called
+            const [ closeReason, ] = await Promise.all([
+                new Promise<[ number, string ]>(resolve =>
                     websocket.on('close', (...args) => resolve(args))
+                ),
+                // the 'open' even is never fired when running in noServer
+                // mode, so just call onOpen straight away as the request
+                // is already opened
+                sendWebsocketMessages(
+                    socket,
+                    onOpen(socket.uuid),
+                    onSendError
                 )
-            }
-            else {
-                [ closeReason, ] = await Promise.all([
-                    new Promise<[ number, string ]>(resolve =>
-                        websocket.on('close', (...args) => resolve(args))
-                    ),
-                    // the 'open' even is never fired when running in noServer
-                    // mode, so just call onOpen straight away as the request
-                    // is already opened
-                    sendWebsocketMessages(
-                        socket,
-                        onOpen(socket.uuid),
-                        onSendError
-                    )
-                ])
-            }
+            ])
 
             sockets.delete(socket.uuid)
 
@@ -261,14 +252,32 @@ export function createRequestListener(
                 await onClose(...closeReason, socket.uuid)
             }
         }
-        // pipeline source
+        // iterable
         else {
             setResponseHeaders(res, state)
             if (!res.hasHeader('Content-Type')) {
                 res.setHeader('Content-Type', 'application/octet-stream')
             }
+            const iterable = typeof state.body === 'function'
+                ? state.body()
+                : state.body
+            const stream = iterable instanceof Readable
+                ? iterable
+                : Readable.from(iterable, { objectMode: false })
             try {
-                await pipeline(state.body, res)
+                await new Promise<void>((resolve, reject) => {
+                    const errorHandler = (error: unknown): void => {
+                        res.off('error', errorHandler)
+                        stream.off('error', errorHandler)
+                        stream.unpipe(res)
+                        res.end()
+                        reject(error)
+                    }
+                    res.on('close', resolve)
+                    res.once('error', errorHandler)
+                    stream.once('error', errorHandler)
+                    stream.pipe(res)
+                })
             }
             catch (exception) {
                 exceptionListener(exception, req, state)

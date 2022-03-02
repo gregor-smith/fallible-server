@@ -55,8 +55,8 @@ export type AwaitableIterator<Yield, Return = void, Next = unknown> =
 
 
 export type StreamBody =
-    | AwaitableIterable<Buffer>
-    | (() => AwaitableIterable<Buffer>)
+    | AwaitableIterable<Uint8Array>
+    | (() => AwaitableIterable<Uint8Array>)
 
 
 export type WebsocketIterator = AwaitableIterator<WebSocketData, typeof CloseWebsocket | void>
@@ -65,8 +65,8 @@ export type WebsocketMessageCallback = (data: WebSocketData, socketUUID: string)
 export type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
 export type WebsocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
 export type WebsocketBody = {
-    onOpen?: WebsocketOpenCallback
-    onMessage: WebsocketMessageCallback
+    onOpen: WebsocketOpenCallback
+    onMessage?: WebsocketMessageCallback
     onClose?: WebsocketCloseCallback
     onSendError?: WebsocketSendErrorCallback
 }
