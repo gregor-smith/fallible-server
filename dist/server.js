@@ -19,11 +19,6 @@ function setResponseHeaders(res, headers) {
         }
     }
 }
-function setDefaultHeader(res, name, value) {
-    if (!res.hasHeader(name)) {
-        res.setHeader(name, value);
-    }
-}
 async function sendAndHandleError(socket, data, onError) {
     const error = await socket.send(data);
     if (error !== undefined) {
@@ -74,25 +69,13 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         catch (exception) {
             exceptionListener(exception, req);
-            res.statusCode = 500;
-            res.setHeader('Content-Length', 0);
-            try {
-                await new Promise((resolve, reject) => {
-                    res.on('close', resolve);
-                    res.on('error', reject);
-                    res.end();
-                });
-            }
-            catch (exception) {
-                exceptionListener(exception, req);
-            }
-            return;
+            state = { status: 500 };
         }
         res.statusCode = state.status ?? 200;
         if (typeof state.body === 'string') {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Content-Length', Buffer.byteLength(state.body));
             setResponseHeaders(res, state.headers);
-            setDefaultHeader(res, 'Content-Type', 'text/html; charset=utf-8');
-            setDefaultHeader(res, 'Content-Length', Buffer.byteLength(state.body));
             try {
                 await new Promise((resolve, reject) => {
                     res.on('close', resolve);
@@ -105,9 +88,9 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             }
         }
         else if (state.body instanceof Uint8Array) {
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Length', state.body.byteLength);
             setResponseHeaders(res, state.headers);
-            setDefaultHeader(res, 'Content-Type', 'application/octet-stream');
-            setDefaultHeader(res, 'Content-Length', state.body.byteLength);
             try {
                 await new Promise((resolve, reject) => {
                     res.on('close', resolve);
@@ -121,8 +104,8 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // no body
         else if (state.body === undefined) {
+            res.setHeader('Content-Length', 0);
             setResponseHeaders(res, state.headers);
-            setDefaultHeader(res, 'Content-Length', 0);
             try {
                 await new Promise((resolve, reject) => {
                     res.on('close', resolve);
@@ -160,8 +143,8 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // iterable
         else {
+            res.setHeader('Content-Type', 'application/octet-stream');
             setResponseHeaders(res, state.headers);
-            setDefaultHeader(res, 'Content-Type', 'application/octet-stream');
             const iterable = typeof state.body === 'function'
                 ? state.body()
                 : state.body;
