@@ -46,13 +46,6 @@ function setResponseHeaders(res: ServerResponse, headers: Record<string, Header>
 }
 
 
-function setDefaultHeader(res: ServerResponse, name: string, value: string | number): void {
-    if (!res.hasHeader(name)) {
-        res.setHeader(name, value)
-    }
-}
-
-
 async function sendAndHandleError(
     socket: Socket,
     data: WebsocketData,
@@ -147,9 +140,9 @@ export function createRequestListener(
         res.statusCode = state.status ?? 200
 
         if (typeof state.body === 'string') {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.setHeader('Content-Length', Buffer.byteLength(state.body))
             setResponseHeaders(res, state.headers)
-            setDefaultHeader(res, 'Content-Type', 'text/html; charset=utf-8')
-            setDefaultHeader(res, 'Content-Length', Buffer.byteLength(state.body))
             try {
                 await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
@@ -162,9 +155,9 @@ export function createRequestListener(
             }
         }
         else if (state.body instanceof Uint8Array) {
+            res.setHeader('Content-Type', 'application/octet-stream')
+            res.setHeader('Content-Length', state.body.byteLength)
             setResponseHeaders(res, state.headers)
-            setDefaultHeader(res, 'Content-Type', 'application/octet-stream')
-            setDefaultHeader(res, 'Content-Length', state.body.byteLength)
             try {
                 await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
@@ -178,8 +171,8 @@ export function createRequestListener(
         }
         // no body
         else if (state.body === undefined) {
+            res.setHeader('Content-Length', 0)
             setResponseHeaders(res, state.headers)
-            setDefaultHeader(res, 'Content-Length', 0)
             try {
                 await new Promise<void>((resolve, reject) => {
                     res.on('close', resolve)
@@ -242,8 +235,8 @@ export function createRequestListener(
         }
         // iterable
         else {
+            res.setHeader('Content-Type', 'application/octet-stream')
             setResponseHeaders(res, state.headers)
-            setDefaultHeader(res, 'Content-Type', 'application/octet-stream')
             const iterable = typeof state.body === 'function'
                 ? state.body()
                 : state.body
