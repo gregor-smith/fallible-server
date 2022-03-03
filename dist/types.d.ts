@@ -42,7 +42,7 @@ export declare type WebsocketResponse = {
     body: Readonly<WebsocketBody>;
 };
 export declare type Response = RegularResponse | WebsocketResponse;
-export declare type Cleanup = () => Awaitable<void>;
+export declare type Cleanup = (state: Readonly<Response>) => Awaitable<void>;
 export declare type MessageHandlerResult<State = Response> = {
     state: State;
     cleanup?: Cleanup;

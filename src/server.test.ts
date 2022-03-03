@@ -13,7 +13,14 @@ import {
     createRequestListener,
     fallthroughMessageHandler
 } from './server.js'
-import type { Message, MessageHandler, Response, WebsocketData, WebsocketIterable } from './types.js'
+import type {
+    Message,
+    MessageHandler,
+    Response,
+    WebsocketData,
+    WebsocketIterable,
+    WebsocketResponse
+} from './types.js'
 import { Readable } from 'node:stream'
 import { createServer } from 'node:http'
 
@@ -114,8 +121,6 @@ describe('createRequestListener', () => {
                 [ exception, response.req ]
             ])
         })
-
-        test.todo('messageHandler sockets parameter')
     })
 
     describe('string body', () => {
@@ -125,9 +130,8 @@ describe('createRequestListener', () => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
-            const [ listener ] = createRequestListener(() =>
-                response({ body }, cleanup)
-            )
+            const state: Response = { body }
+            const [ listener ] = createRequestListener(() => response(state, cleanup))
             const res = new MockResponse()
             await listener(res.req, res)
 
@@ -138,7 +142,7 @@ describe('createRequestListener', () => {
                 [ 'content-type', 'text/html; charset=utf-8' ],
                 [ 'content-length', Buffer.byteLength(body) ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test('writes custom status, headers', async () => {
@@ -160,9 +164,10 @@ describe('createRequestListener', () => {
             expect.assertions(3)
 
             const cleanup = jest.fn()
+            const state: Response = { body }
             const exceptionListener = jest.fn()
             const [ listener ] = createRequestListener(
-                () => response({ body }, cleanup),
+                () => response(state, cleanup),
                 exceptionListener
             )
             const exception = new Error('end error')
@@ -173,9 +178,9 @@ describe('createRequestListener', () => {
 
             expect(res._internal.ended).toBeTrue()
             expect(exceptionListener.mock.calls).toEqual([
-                [ exception, res.req, { body } ]
+                [ exception, res.req, state ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
     })
 
@@ -190,9 +195,8 @@ describe('createRequestListener', () => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
-            const [ listener ] = createRequestListener(() =>
-                response({ body }, cleanup)
-            )
+            const state: Response = { body }
+            const [ listener ] = createRequestListener(() => response(state, cleanup))
             const res = new MockResponse()
             await listener(res.req, res)
 
@@ -203,7 +207,7 @@ describe('createRequestListener', () => {
                 [ 'content-type', 'application/octet-stream' ],
                 [ 'content-length', body.byteLength ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test.each(bodies)('writes custom status, headers', async body => {
@@ -225,9 +229,10 @@ describe('createRequestListener', () => {
             expect.assertions(3)
 
             const cleanup = jest.fn()
+            const state: Response = { body }
             const exceptionListener = jest.fn()
             const [ listener ] = createRequestListener(
-                () => response({ body }, cleanup),
+                () => response(state, cleanup),
                 exceptionListener
             )
             const exception = new Error('end error')
@@ -238,9 +243,9 @@ describe('createRequestListener', () => {
 
             expect(res._internal.ended).toBeTrue()
             expect(exceptionListener.mock.calls).toEqual([
-                [ exception, res.req, { body } ]
+                [ exception, res.req, state ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
     })
 
@@ -249,9 +254,8 @@ describe('createRequestListener', () => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
-            const [ listener ] = createRequestListener(() =>
-                response({}, cleanup)
-            )
+            const state: Response = {}
+            const [ listener ] = createRequestListener(() => response(state, cleanup))
             const res = new MockResponse()
             await listener(res.req, res)
 
@@ -259,7 +263,7 @@ describe('createRequestListener', () => {
             expect(res.statusCode).toBe(200)
             expect(res._internal.buffer).toBeEmpty()
             expect(res._internal.headers).toContainEntry([ 'content-length', 0 ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test('writes custom status, headers', async () => {
@@ -279,9 +283,10 @@ describe('createRequestListener', () => {
             expect.assertions(3)
 
             const cleanup = jest.fn()
+            const state: Response = {}
             const exceptionListener = jest.fn()
             const [ listener ] = createRequestListener(
-                () => response({}, cleanup),
+                () => response(state, cleanup),
                 exceptionListener
             )
             const exception = new Error('end error')
@@ -292,9 +297,9 @@ describe('createRequestListener', () => {
 
             expect(res._internal.ended).toBeTrue()
             expect(exceptionListener.mock.calls).toEqual([
-                [ exception, res.req, {} ]
+                [ exception, res.req, state ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
     })
 
@@ -332,9 +337,8 @@ describe('createRequestListener', () => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
-            const [ listener ] = createRequestListener(() =>
-                response({ body }, cleanup)
-            )
+            const state: Response = { body }
+            const [ listener ] = createRequestListener(() => response(state, cleanup))
             const res = new MockResponse()
             await listener(res.req, res)
 
@@ -344,7 +348,7 @@ describe('createRequestListener', () => {
             expect(res._internal.headers).toContainEntry(
                 [ 'content-type', 'application/octet-stream' ]
             )
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test.each(bodies)('writes custom status, headers', async body => {
@@ -388,9 +392,10 @@ describe('createRequestListener', () => {
             expect.assertions(6)
 
             const cleanup = jest.fn()
+            const state: Response = { body }
             const exceptionListener = jest.fn()
             const [ listener ] = createRequestListener(
-                () => response({ body }, cleanup),
+                () => response(state, cleanup),
                 exceptionListener
             )
             const res = new MockResponse()
@@ -403,9 +408,9 @@ describe('createRequestListener', () => {
                 [ 'content-type', 'application/octet-stream' ]
             )
             expect(exceptionListener.mock.calls).toEqual([
-                [ exception, res.req, { body } ]
+                [ exception, res.req, state ]
             ])
-            expect(cleanup).toHaveBeenCalledOnce()
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test.todo('exceptionListener called when response errors')
@@ -434,7 +439,7 @@ describe('createRequestListener', () => {
         }
 
         test('onOpen called, onClose called, messages sent and received', async () => {
-            expect.assertions(7)
+            expect.assertions(8)
 
             const messages: WebsocketData[] = []
             let uuid: string | undefined
@@ -449,14 +454,15 @@ describe('createRequestListener', () => {
                 yield 'server message'
                 yield `server echo: ${message}`
             })
+            const state: WebsocketResponse = { body: { onOpen, onMessage, onClose } }
+
+            const cleanup = jest.fn()
 
             await new Promise<void>(resolve => {
                 // Simply listening for the client close event is not enough,
                 // as the server request listener has not yet returned at that
                 // point. We get around this by both listening for the client
                 // close event and using the messageHandler's cleanup callback.
-                // Conveniently, this also tests that the cleanup called, as
-                // this test would fail with a timeout error otherwise.
                 let done = false
 
                 function waitForOtherToFinish(): void {
@@ -469,9 +475,9 @@ describe('createRequestListener', () => {
                 }
 
                 const [ listener ] = createRequestListener(() =>
-                    websocketResponse(
-                        { onOpen, onMessage, onClose },
-                        waitForOtherToFinish
+                    response(
+                        state,
+                        cleanup.mockImplementationOnce(waitForOtherToFinish)
                     )
                 )
                 server.addListener('request', listener)
@@ -499,6 +505,7 @@ describe('createRequestListener', () => {
             ])
             expect(onClose).toHaveBeenCalledAfter(onMessage)
             expect(onClose.mock.calls).toEqual([ [ 4321, 'client close', uuid ] ])
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
         test('closing using uuid passed to onOpen', async () => {
@@ -511,9 +518,8 @@ describe('createRequestListener', () => {
                 const [ listener ] = createRequestListener((_message, _state, sockets) =>
                     websocketResponse(
                         {
-                            onOpen: function * (uuid) {
-                                return sockets.get(uuid)
-                                    ?.close(4321, 'server close')
+                            onOpen: async function * (uuid) {
+                                await sockets.get(uuid)?.close(4321, 'server close')
                             }
                         },
                         () => {
@@ -755,11 +761,12 @@ describe('composeMessageHandlers', () => {
 
         const composed = composeMessageHandlers([ a, b, c, d ])
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
-        await cleanup?.()
+        const state: Response = { body: 'test' }
+        await cleanup?.(state)
 
-        expect(aCleanup).toHaveBeenCalledOnce()
-        expect(bCleanup).toHaveBeenCalledOnce()
-        expect(dCleanup).toHaveBeenCalledOnce()
+        expect(aCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(bCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
         expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
     })
@@ -839,11 +846,12 @@ describe('composeResultMessageHandlers', () => {
 
         const composed = composeResultMessageHandlers([ a, b, c, d ])
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
-        await cleanup?.()
+        const state: Response = { body: 'test' }
+        await cleanup?.(state)
 
-        expect(aCleanup).toHaveBeenCalledOnce()
-        expect(bCleanup).toHaveBeenCalledOnce()
-        expect(dCleanup).toHaveBeenCalledOnce()
+        expect(aCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(bCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
         expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
     })
@@ -872,11 +880,12 @@ describe('composeResultMessageHandlers', () => {
 
         const composed = composeResultMessageHandlers([ a, b, c, d, e ])
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
-        await cleanup?.()
+        const state: Response = { body: 'test' }
+        await cleanup?.(state)
 
-        expect(aCleanup).toHaveBeenCalledOnce()
-        expect(bCleanup).toHaveBeenCalledOnce()
-        expect(dCleanup).toHaveBeenCalledOnce()
+        expect(aCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(bCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
         expect(eCleanup).not.toHaveBeenCalled()
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
         expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
@@ -946,11 +955,12 @@ describe('fallthroughMessageHandler', () => {
             5
         )
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
-        await cleanup?.()
+        const state: Response = { body: 'test' }
+        await cleanup?.(state)
 
-        expect(aCleanup).toHaveBeenCalledOnce()
-        expect(bCleanup).toHaveBeenCalledOnce()
-        expect(dCleanup).toHaveBeenCalledOnce()
+        expect(aCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(bCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
         expect(eCleanup).not.toHaveBeenCalled()
         expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
         expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
@@ -973,10 +983,11 @@ describe('fallthroughMessageHandler', () => {
             4
         )
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
-        await cleanup?.()
+        const state: Response = { body: 'test' }
+        await cleanup?.(state)
 
-        expect(aCleanup).toHaveBeenCalledOnce()
-        expect(cCleanup).toHaveBeenCalledOnce()
+        expect(aCleanup.mock.calls).toEqual([ [ state ] ])
+        expect(cCleanup.mock.calls).toEqual([ [ state ] ])
         expect(aCleanup).toHaveBeenCalledAfter(cCleanup)
     })
 })

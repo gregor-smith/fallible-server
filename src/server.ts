@@ -252,7 +252,7 @@ export function createRequestListener(
         }
 
         if (cleanup !== undefined) {
-            await cleanup()
+            await cleanup(state)
         }
     }
 
@@ -646,9 +646,9 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
 
 
 function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup>): MessageHandlerResult<T> {
-    return response(state, async () => {
+    return response(state, async state => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index]!()
+            await cleanups[index]!(state)
         }
     })
 }

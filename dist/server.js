@@ -171,7 +171,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             }
         }
         if (cleanup !== undefined) {
-            await cleanup();
+            await cleanup(state);
         }
     };
     return [listener, sockets];
@@ -222,9 +222,9 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
     };
 }
 function composeCleanupResponse(state, cleanups) {
-    return response(state, async () => {
+    return response(state, async (state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index]();
+            await cleanups[index](state);
         }
     });
 }

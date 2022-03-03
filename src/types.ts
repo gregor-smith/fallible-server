@@ -85,7 +85,7 @@ export type WebsocketResponse = {
 export type Response = RegularResponse | WebsocketResponse
 
 
-export type Cleanup = () => Awaitable<void>
+export type Cleanup = (state: Readonly<Response>) => Awaitable<void>
 
 
 export type MessageHandlerResult<State = Response> = {
