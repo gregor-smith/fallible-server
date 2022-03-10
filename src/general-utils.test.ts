@@ -36,7 +36,8 @@ import {
     websocketResponse,
     iterateAsResolved,
     ParsedContentType,
-    contentDispositionHeader
+    contentDispositionHeader,
+    URLParser
 } from './general-utils.js'
 
 
@@ -329,8 +330,21 @@ describe('getMessageURL', () => {
 })
 
 
+describe('joinURLQueryString', () => {
+    test.each<[ Record<string, string | number | bigint | boolean | null | undefined>, string ]>([
+        [ {}, '' ],
+        [ { aaa: undefined }, '' ],
+        [ { aaa: '111', bbb: 222, ccc: null, ddd: true }, '?aaa=111&bbb=222&ccc=null&ddd=true' ],
+        [ { aaa: false, bbb: undefined, ccc: BigInt('333') }, '?aaa=false&ccc=333' ],
+    ])('joins url params', (params, joined) => {
+        const result = joinURLQueryString(params)
+        expect(result).toBe(joined)
+    })
+})
+
+
 describe('parseURLQueryString', () => {
-    const shared: [ string, Record<string, string> ][] = [
+    test.each([
         [ '/', {} ],
         [ '/aaa/bbb/ccc', {} ],
         [ '/aaa/bbb/ccc/', {} ],
@@ -355,67 +369,16 @@ describe('parseURLQueryString', () => {
         // ? and & should interchangeable even though it's technically
         // incorrect, just to keep shit from exploding
         [ '/?aaa=bbb?ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ],
-        [ '/&aaa=bbb&ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ]
-    ]
-
-    test.each([
-        ...shared,
+        [ '/&aaa=bbb&ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ],
         [ '/?aaa&bbb=ccc&ddd', { bbb: 'ccc' } ],
         [ '/?aaa=&bbb=ccc&ddd=', { bbb: 'ccc' } ],
         [ '/?aaa&bbb=ccc&ddd#', { bbb: 'ccc' } ],
         [ '/?aaa=&bbb=ccc&ddd=#', { bbb: 'ccc' } ]
     ])('returns record with empty and missing values skipped and rest decoded', (url, query) => {
-        const result = parseURLQueryString(url)
+        let result = parseURLQueryString(url)
         expect(result).toEqual(query)
-    })
-
-    test.each([
-        ...shared,
-        [ '/?aaa&bbb=ccc&ddd', { bbb: 'ccc' } ],
-        [ '/?aaa=&bbb=ccc&ddd=', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa&bbb=ccc&ddd#', { bbb: 'ccc' } ],
-        [ '/?aaa=&bbb=ccc&ddd=#', { aaa: '', bbb: 'ccc', ddd: '' } ]
-    ])('empty values present when skipEmptyValues false', (url, query) => {
-        const result = parseURLQueryString(url, { skipEmptyValues: false })
+        result = new URLParser(url).query()
         expect(result).toEqual(query)
-    })
-
-    test.each([
-        ...shared,
-        [ '/?aaa&bbb=ccc&ddd', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa=&bbb=ccc&ddd=', { bbb: 'ccc' } ],
-        [ '/?aaa&bbb=ccc&ddd#', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa=&bbb=ccc&ddd=#', { bbb: 'ccc' } ]
-    ])('missing values present when skipMissingValues false', (url, query) => {
-        const result = parseURLQueryString(url, { skipMissingValues: false })
-        expect(result).toEqual(query)
-    })
-
-    test.each([
-        ...shared,
-        [ '/?aaa&bbb=ccc&ddd', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa=&bbb=ccc&ddd=', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa&bbb=ccc&ddd#', { aaa: '', bbb: 'ccc', ddd: '' } ],
-        [ '/?aaa=&bbb=ccc&ddd=#', { aaa: '', bbb: 'ccc', ddd: '' } ]
-    ])('empty and missing values present when skipEmptyValues and skipMissingValues false', (url, query) => {
-        const result = parseURLQueryString(url, {
-            skipEmptyValues: false,
-            skipMissingValues: false
-        })
-        expect(result).toEqual(query)
-    })
-})
-
-
-describe('joinURLQueryString', () => {
-    test.each<[ Record<string, string | number | bigint | boolean | null | undefined>, string ]>([
-        [ {}, '' ],
-        [ { aaa: undefined }, '' ],
-        [ { aaa: '111', bbb: 222, ccc: null, ddd: true }, '?aaa=111&bbb=222&ccc=null&ddd=true' ],
-        [ { aaa: false, bbb: undefined, ccc: BigInt('333') }, '?aaa=false&ccc=333' ],
-    ])('joins url params', (params, joined) => {
-        const result = joinURLQueryString(params)
-        expect(result).toBe(joined)
     })
 })
 
@@ -432,7 +395,9 @@ describe('parseURLHash', () => {
         [ '/?aaa=bbb#test', 'test' ],
         [ '/#%20test%20', ' test ' ]
     ])('returns decoded hash', (url, hash) => {
-        const result = parseURLHash(url)
+        let result = parseURLHash(url)
+        expect(result).toBe(hash)
+        result = new URLParser(url).hash()
         expect(result).toBe(hash)
     })
 })
@@ -456,7 +421,9 @@ describe('parseURLPath', () => {
         ...base.map<[ string, string ]>(([ url, path ]) => [ url + '#aaa', path ]),
         ...base.map<[ string, string ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
     ])('returns decoded path and ignores query and hash', (url, path) => {
-        const result = parseURLPath(url)
+        let result = parseURLPath(url)
+        expect(result).toBe(path)
+        result = new URLParser(url).path()
         expect(result).toBe(path)
     })
 })
@@ -480,7 +447,9 @@ describe('parseURLPathSegments', () => {
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '#aaa', path ]),
         ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
     ])('returns decoded path segments and ignores query and hash', (url, path) => {
-        const result = [ ...parseURLPathSegments(url) ]
+        let result: ReadonlyArray<string> = [ ...parseURLPathSegments(url) ]
+        expect(result).toEqual(path)
+        result = new URLParser(url).segments()
         expect(result).toEqual(path)
     })
 })
@@ -704,7 +673,7 @@ describe('response', () => {
 
     test('no arguments', () => {
         const result = response()
-        expect(result).toEqual<typeof result>({ state: {} })
+        expect(result).toEqual<typeof result>({ state: undefined })
     })
 
     test('state argument', () => {

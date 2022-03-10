@@ -47,7 +47,7 @@ export declare type MessageHandlerResult<State = Response> = {
     state: State;
     cleanup?: Cleanup;
 };
-export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, state: Readonly<ExistingState>, sockets: ReadonlyMap<string, IdentifiedWebsocket>) => Awaitable<MessageHandlerResult<NewState>>;
+export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, state: Readonly<ExistingState>, sockets: SocketMap) => Awaitable<MessageHandlerResult<NewState>>;
 export declare type ExceptionListener = (exception: unknown, message: Message, state?: Readonly<Response>) => void;
 export interface IdentifiedWebsocket {
     readonly uuid: string;
@@ -55,3 +55,4 @@ export interface IdentifiedWebsocket {
     send(data: WebsocketData): Promise<Error | undefined>;
     close(code?: number, reason?: string): Promise<void>;
 }
+export declare type SocketMap = ReadonlyMap<string, IdentifiedWebsocket>;

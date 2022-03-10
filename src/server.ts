@@ -16,7 +16,8 @@ import type {
     WebsocketSendErrorCallback,
     IdentifiedWebsocket,
     WebsocketData,
-    Header
+    Header,
+    SocketMap
 } from './types.js'
 import { WebsocketReadyState, response } from './general-utils.js'
 
@@ -84,24 +85,26 @@ function getDefaultExceptionListener(): ExceptionListener {
 
 
 class Socket implements IdentifiedWebsocket {
-    public readonly uuid = randomUUID()
+    #underlying: WebSocket
 
-    public constructor(
-        private readonly wrapped: WebSocket
-    ) {}
+    readonly uuid = randomUUID()
 
-    public get readyState(): WebsocketReadyState {
-        return this.wrapped.readyState as WebsocketReadyState
+    constructor(underlying: WebSocket) {
+        this.#underlying = underlying
     }
 
-    public send(data: WebsocketData): Promise<Error | undefined> {
-        return new Promise(resolve => this.wrapped.send(data, resolve))
+    get readyState(): WebsocketReadyState {
+        return this.#underlying.readyState as WebsocketReadyState
     }
 
-    public close(code?: number, reason?: string): Promise<void> {
+    send(data: WebsocketData): Promise<Error | undefined> {
+        return new Promise(resolve => this.#underlying.send(data, resolve))
+    }
+
+    close(code?: number, reason?: string): Promise<void> {
         return new Promise(resolve => {
-            this.wrapped.on('close', () => resolve())
-            this.wrapped.close(code, reason)
+            this.#underlying.on('close', () => resolve())
+            this.#underlying.close(code, reason)
         })
     }
 }
@@ -110,7 +113,7 @@ class Socket implements IdentifiedWebsocket {
 export function createRequestListener(
     messageHandler: MessageHandler,
     exceptionListener = getDefaultExceptionListener()
-): [ AwaitableRequestListener, ReadonlyMap<string, IdentifiedWebsocket> ] {
+): [ AwaitableRequestListener, SocketMap ] {
     const server = new WebSocket.Server({ noServer: true })
     const sockets = new Map<string, Socket>()
 
@@ -129,7 +132,7 @@ export function createRequestListener(
 
         if (typeof state.body === 'string') {
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.setHeader('Content-Length', Buffer.byteLength(state.body))
+            res.setHeader('Content-Length', Buffer.byteLength(state.body, 'utf-8'))
             setResponseHeaders(res, state.headers)
             try {
                 await new Promise<void>((resolve, reject) => {

@@ -41,20 +41,21 @@ function getDefaultExceptionListener() {
     return console.error;
 }
 class Socket {
-    constructor(wrapped) {
-        this.wrapped = wrapped;
-        this.uuid = randomUUID();
+    #underlying;
+    uuid = randomUUID();
+    constructor(underlying) {
+        this.#underlying = underlying;
     }
     get readyState() {
-        return this.wrapped.readyState;
+        return this.#underlying.readyState;
     }
     send(data) {
-        return new Promise(resolve => this.wrapped.send(data, resolve));
+        return new Promise(resolve => this.#underlying.send(data, resolve));
     }
     close(code, reason) {
         return new Promise(resolve => {
-            this.wrapped.on('close', () => resolve());
-            this.wrapped.close(code, reason);
+            this.#underlying.on('close', () => resolve());
+            this.#underlying.close(code, reason);
         });
     }
 }
@@ -74,7 +75,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         res.statusCode = state.status ?? 200;
         if (typeof state.body === 'string') {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.setHeader('Content-Length', Buffer.byteLength(state.body));
+            res.setHeader('Content-Length', Buffer.byteLength(state.body, 'utf-8'));
             setResponseHeaders(res, state.headers);
             try {
                 await new Promise((resolve, reject) => {

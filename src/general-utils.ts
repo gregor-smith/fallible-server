@@ -15,7 +15,6 @@ import type {
     MessageHandlerResult,
     Method,
     WebsocketBody,
-    RegularResponse,
     WebsocketResponse
 } from './types.js'
 
@@ -191,32 +190,6 @@ export function getMessageURL(message: Pick<IncomingMessage, 'url'>): string {
 }
 
 
-export function parseURLQueryString(
-    url: string,
-    { skipEmptyValues = true, skipMissingValues = true } = {}
-): Record<string, string> {
-    const query: Record<string, string> = {}
-    const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g)
-    for (let [ , key, value ] of matches as Iterable<[unknown, string, string | undefined ]>) {
-        if (value === undefined) {
-            if (skipMissingValues) {
-                continue
-            }
-            value = ''
-        }
-        else if (value.length === 0 && skipEmptyValues) {
-            continue
-        }
-        else {
-            value = decodeURIComponent(value)
-        }
-        key = decodeURIComponent(key)
-        query[key] = value
-    }
-    return query
-}
-
-
 export function joinURLQueryString(
     query: Record<string, string | number | bigint | boolean | null | undefined>
 ): string {
@@ -235,6 +208,21 @@ export function joinURLQueryString(
 }
 
 
+export function parseURLQueryString(url: string): Record<string, string> {
+    const query: Record<string, string> = {}
+    const matches = url.matchAll(/[\?&]([^\?&#=]+)=([^\?&#]+)(?=$|[\?&#])/g)
+    for (let [ , key, value ] of matches as Iterable<[unknown, string, string | undefined ]>) {
+        if (value === undefined || value.length === 0) {
+            continue
+        }
+        key = decodeURIComponent(key)
+        value = decodeURIComponent(value)
+        query[key] = value
+    }
+    return query
+}
+
+
 export function parseURLHash(url: string): string {
     const match = url.match(/#(.+)/)?.[1]
     return match === undefined
@@ -243,14 +231,46 @@ export function parseURLHash(url: string): string {
 }
 
 
+function joinURLPathSegments(segments: ReadonlyArray<string>): string {
+    return '/' + segments.join('/')
+}
+
+
 export function parseURLPath(url: string): string {
-    return '/' + [ ...parseURLPathSegments(url) ].join('/')
+    const segments = [ ...parseURLPathSegments(url) ]
+    return joinURLPathSegments(segments)
 }
 
 
 export function * parseURLPathSegments(url: string): Generator<string, void> {
     for (const [ segment ] of url.matchAll(/(?<=\/)[^\/\?#]+/g) as Iterable<[ string ]>) {
         yield decodeURIComponent(segment)
+    }
+}
+
+
+export class URLParser {
+    #hash: string | undefined
+    #path: string | undefined
+    #segments: ReadonlyArray<string> | undefined
+    #query: Readonly<Record<string, string>> | undefined
+
+    constructor(readonly full: string) {}
+
+    hash(): string {
+        return this.#hash ??= parseURLHash(this.full)
+    }
+
+    path(): string {
+        return this.#path ??= joinURLPathSegments(this.segments())
+    }
+
+    segments(): ReadonlyArray<string> {
+        return this.#segments ??= [ ...parseURLPathSegments(this.full) ]
+    }
+
+    query(): Readonly<Record<string, string>> {
+        return this.#query ??= parseURLQueryString(this.full)
     }
 }
 
@@ -343,9 +363,9 @@ export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'header
 }
 
 
-export function response(): MessageHandlerResult<RegularResponse>
+export function response<T extends void>(state?: T): MessageHandlerResult<T>
 export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>
-export function response(state = {}, cleanup?: Cleanup) {
+export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
     return { state, cleanup }
 }
 

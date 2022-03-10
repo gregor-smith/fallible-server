@@ -97,7 +97,7 @@ export type MessageHandlerResult<State = Response> = {
 export type MessageHandler<ExistingState = void, NewState = Response> = (
     message: Message,
     state: Readonly<ExistingState>,
-    sockets: ReadonlyMap<string, IdentifiedWebsocket>
+    sockets: SocketMap
 ) => Awaitable<MessageHandlerResult<NewState>>
 
 
@@ -115,3 +115,5 @@ export interface IdentifiedWebsocket {
     send(data: WebsocketData): Promise<Error | undefined>
     close(code?: number, reason?: string): Promise<void>
 }
+
+export type SocketMap = ReadonlyMap<string, IdentifiedWebsocket>

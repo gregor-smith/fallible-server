@@ -133,12 +133,38 @@ export function parseURLHash(url) {
         ? ''
         : decodeURIComponent(match);
 }
+function joinURLPathSegments(segments) {
+    return '/' + segments.join('/');
+}
 export function parseURLPath(url) {
-    return '/' + [...parseURLPathSegments(url)].join('/');
+    const segments = [...parseURLPathSegments(url)];
+    return joinURLPathSegments(segments);
 }
 export function* parseURLPathSegments(url) {
     for (const [segment] of url.matchAll(/(?<=\/)[^\/\?#]+/g)) {
         yield decodeURIComponent(segment);
+    }
+}
+export class URLParser {
+    full;
+    #hash;
+    #path;
+    #segments;
+    #query;
+    constructor(full) {
+        this.full = full;
+    }
+    hash() {
+        return this.#hash ??= parseURLHash(this.full);
+    }
+    path() {
+        return this.#path ??= joinURLPathSegments(this.segments());
+    }
+    segments() {
+        return this.#segments ??= [...parseURLPathSegments(this.full)];
+    }
+    query() {
+        return this.#query ??= parseURLQueryString(this.full);
     }
 }
 export function parseContentTypeHeader(header) {
@@ -201,7 +227,7 @@ export function messageIsWebSocketRequest(message) {
     return message.headers.connection?.toLowerCase() === 'upgrade'
         && message.headers.upgrade === 'websocket';
 }
-export function response(state = {}, cleanup) {
+export function response(state, cleanup) {
     return { state, cleanup };
 }
 export function websocketResponse(body, cleanup) {

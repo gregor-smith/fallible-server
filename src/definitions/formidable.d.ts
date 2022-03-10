@@ -25,7 +25,7 @@ declare module 'formidable' {
     }
 
     class InternalFormidableError extends Error {
-        public code: number
+        code: number
     }
 
     // The FormidableError.js module exports the FormidableError class by
@@ -63,8 +63,8 @@ declare module 'formidable' {
     export type FormidableError = InternalFormidableError
 
     export class Formidable {
-        public constructor(options: FormidableOptions)
-        public parse(
+        constructor(options: FormidableOptions)
+        parse(
             message: IncomingMessage,
             callback: (
                 exception: unknown,

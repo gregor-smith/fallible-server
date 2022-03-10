@@ -2,7 +2,7 @@
 import type { IncomingMessage } from 'node:http';
 import type Keygrip from 'keygrip';
 import { Result } from 'fallible';
-import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, WebsocketBody, RegularResponse, WebsocketResponse } from './types.js';
+import type { Cleanup, Cookie, Formattable, MessageHandlerResult, Method, WebsocketBody, WebsocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
 export declare const enum WebsocketReadyState {
     Connecting = 0,
@@ -37,6 +37,15 @@ export declare function joinURLQueryString(query: Record<string, string | number
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string;
 export declare function parseURLPathSegments(url: string): Generator<string, void>;
+export declare class URLParser {
+    #private;
+    readonly full: string;
+    constructor(full: string);
+    hash(): string;
+    path(): string;
+    segments(): ReadonlyArray<string>;
+    query(): Readonly<Record<string, string>>;
+}
 export declare type ParsedContentType = {
     type: string;
     characterSet?: string;
@@ -49,7 +58,7 @@ export declare function parseAuthorizationHeaderBearer(header: string): string |
 export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
 export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;
 export declare function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean;
-export declare function response(): MessageHandlerResult<RegularResponse>;
+export declare function response<T extends void>(state?: T): MessageHandlerResult<T>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
 export declare function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse>;
 export declare function iterateAsResolved<T>(promises: Iterable<PromiseLike<T>>): AsyncGenerator<T, void, unknown>;
