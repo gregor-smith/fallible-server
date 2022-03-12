@@ -81,9 +81,7 @@ export type ParseSignedMessageCookieError =
     | 'SignatureCookieMissing'
     | 'SignatureInvalid'
 
-
 export type Keys = Pick<Keygrip, 'verify'>
-
 
 export function parseSignedMessageCookie(
     message: Pick<IncomingMessage, 'headers'>,
@@ -280,7 +278,6 @@ export type ParsedContentType = {
     characterSet?: string
 }
 
-
 export function parseContentTypeHeader(header: string): ParsedContentType | undefined {
     const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i)
     if (match === null) {
@@ -324,12 +321,18 @@ export function parseContentLengthHeader(header: string): number | undefined {
 }
 
 
-export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined {
-    const header = message.headers['content-length']
-    if (header === undefined) {
-        return
+export type ParseMessageContentLengthError =
+    | 'Missing'
+    | 'Invalid'
+
+export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): Result<number, ParseMessageContentLengthError> {
+    if (message.headers['content-length'] === undefined) {
+        return error('Missing' as const)
     }
-    return parseContentLengthHeader(header)
+    const length = parseContentLengthHeader(message.headers['content-length'])
+    return length === undefined
+        ? error('Invalid' as const)
+        : ok(length)
 }
 
 
@@ -342,7 +345,6 @@ export function parseAuthorizationHeaderBearer(header: string): string | undefin
 export type ParseMessageAuthorisationBearerError =
     | 'Missing'
     | 'Invalid'
-
 
 export function parseMessageAuthorizationHeaderBearer(
     message: Pick<IncomingMessage, 'headers'>

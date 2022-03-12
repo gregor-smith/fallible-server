@@ -532,23 +532,23 @@ describe('parseContentLengthHeader', () => {
 
 
 describe('parseMessageContentLength', () => {
-    test('returns undefined when header missing', () => {
+    test('returns missing when header missing', () => {
         const result = parseMessageContentLength({ headers: {} })
-        expect(result).toBeUndefined()
+        expect(result).toEqual(error('Missing'))
     })
 
-    test.each([ '', ' ', 'test', '1.1' ])('returns undefined when header not an integer', header => {
+    test.each([ '', ' ', 'test', '1.1' ])('returns invalid when header not an integer', header => {
         const result = parseMessageContentLength({
             headers: { 'content-length': header }
         })
-        expect(result).toBeUndefined()
+        expect(result).toEqual(error('Invalid'))
     })
 
     test.each([ '1', ' 2 ' ])('returns parsed integer', header => {
         const result = parseMessageContentLength({
             headers: { 'content-length': header }
         })
-        expect(result).toBe(Number(header))
+        expect(result).toEqual(ok(Number(header)))
     })
 })
 
