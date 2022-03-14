@@ -12,7 +12,6 @@ export type ParseJSONStreamError =
     | { tag: 'MaximumSizeExceeded' }
     | { tag: 'DecodeError', error: unknown }
     | { tag: 'InvalidSyntax' }
-    | { tag: 'ReadError', error: unknown }
 
 export type ParseJSONStreamOptions = {
     maximumSize?: number
@@ -28,17 +27,12 @@ export async function parseJSONStream(
 ): Promise<Result<unknown, ParseJSONStreamError>> {
     let size = 0
     const chunks: Uint8Array[] = []
-    try {
-        for await (const chunk of stream) {
-            size += chunk.byteLength
-            if (size > maximumSize) {
-                return error({ tag: 'MaximumSizeExceeded' } as const)
-            }
-            chunks.push(chunk)
+    for await (const chunk of stream) {
+        size += chunk.byteLength
+        if (size > maximumSize) {
+            return error({ tag: 'MaximumSizeExceeded' } as const)
         }
-    }
-    catch (exception) {
-        return error({ tag: 'ReadError', error: exception } as const)
+        chunks.push(chunk)
     }
 
     const buffer = Buffer.concat(chunks)
@@ -63,10 +57,12 @@ export async function parseJSONStream(
 
 
 export type ParseMultipartRequestError =
+    | { tag: 'InvalidMultipartContentTypeHeader' }
     | { tag: 'RequestAborted' }
     | { tag: 'BelowMinimumFileSize' }
     | { tag: 'MaximumFileCountExceeded' }
     | { tag: 'MaximumFileSizeExceeded' }
+    | { tag: 'MaximumTotalFileSizeExceeded' }
     | { tag: 'MaximumFieldsCountExceeded' }
     | { tag: 'MaximumFieldsSizeExceeded' }
     | { tag: 'UnknownError', error: unknown }
@@ -147,12 +143,16 @@ function getError(error: unknown): ParseMultipartRequestError {
         return { tag: 'UnknownError', error }
     }
     switch (error.code) {
+        case formidableErrors.malformedMultipart:
+            return { tag: 'InvalidMultipartContentTypeHeader' }
         case formidableErrors.aborted:
             return { tag: 'RequestAborted' }
         case formidableErrors.maxFilesExceeded:
             return { tag: 'MaximumFileCountExceeded' }
         case formidableErrors.biggerThanMaxFileSize:
             return { tag: 'MaximumFileSizeExceeded' }
+        case formidableErrors.biggerThanTotalMaxFileSize:
+            return { tag: 'MaximumTotalFileSizeExceeded' }
         case formidableErrors.maxFieldsExceeded:
             return { tag: 'MaximumFieldsCountExceeded' }
         case formidableErrors.maxFieldsSizeExceeded:

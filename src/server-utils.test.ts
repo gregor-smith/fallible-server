@@ -1,8 +1,6 @@
 describe('parseJSONStream', () => {
     test.todo('returns MaximumSizeExceeded when stream larger than maximumSize param')
 
-    test.todo('returns ReadError when stream raises unknown exception')
-
     test.todo('returns DecodeError when stream buffer cannot be decoded')
 
     test.todo('returns InvalidSyntax when JSON cannot be parsed')
@@ -12,6 +10,8 @@ describe('parseJSONStream', () => {
 
 
 describe('parseMultipartRequest', () => {
+    test.todo('returns InvalidMultipartContentTypeHeader when content type header invalid')
+
     test.todo('returns RequestAborted when request aborted during parsing')
 
     test.todo('returns BelowMinimumFileSize when individual file size lower than minimumFileSize param')
@@ -19,6 +19,8 @@ describe('parseMultipartRequest', () => {
     test.todo('returns MaximumFileCountExceeded when more files than maximumFileCount param')
 
     test.todo('returns MaximumFileSizeExceeded when individual file size larger than maximumFileSize param')
+
+    test.todo('returns MaximumTotalFileSizeExceeded when combined file size larger than maximumFileSize param * maximumFileCount param')
 
     test.todo('returns MaximumFieldsCountExceeded when more fields than maximumFieldsCount param')
 

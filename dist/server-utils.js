@@ -5,17 +5,12 @@ import { Formidable, errors as formidableErrors } from 'formidable';
 export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
     let size = 0;
     const chunks = [];
-    try {
-        for await (const chunk of stream) {
-            size += chunk.byteLength;
-            if (size > maximumSize) {
-                return error({ tag: 'MaximumSizeExceeded' });
-            }
-            chunks.push(chunk);
+    for await (const chunk of stream) {
+        size += chunk.byteLength;
+        if (size > maximumSize) {
+            return error({ tag: 'MaximumSizeExceeded' });
         }
-    }
-    catch (exception) {
-        return error({ tag: 'ReadError', error: exception });
+        chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
     let text;
@@ -74,12 +69,16 @@ function getError(error) {
         return { tag: 'UnknownError', error };
     }
     switch (error.code) {
+        case formidableErrors.malformedMultipart:
+            return { tag: 'InvalidMultipartContentTypeHeader' };
         case formidableErrors.aborted:
             return { tag: 'RequestAborted' };
         case formidableErrors.maxFilesExceeded:
             return { tag: 'MaximumFileCountExceeded' };
         case formidableErrors.biggerThanMaxFileSize:
             return { tag: 'MaximumFileSizeExceeded' };
+        case formidableErrors.biggerThanTotalMaxFileSize:
+            return { tag: 'MaximumTotalFileSizeExceeded' };
         case formidableErrors.maxFieldsExceeded:
             return { tag: 'MaximumFieldsCountExceeded' };
         case formidableErrors.maxFieldsSizeExceeded:

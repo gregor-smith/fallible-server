@@ -9,9 +9,6 @@ export declare type ParseJSONStreamError = {
     error: unknown;
 } | {
     tag: 'InvalidSyntax';
-} | {
-    tag: 'ReadError';
-    error: unknown;
 };
 export declare type ParseJSONStreamOptions = {
     maximumSize?: number;
@@ -19,6 +16,8 @@ export declare type ParseJSONStreamOptions = {
 };
 export declare function parseJSONStream(stream: AwaitableIterable<Uint8Array>, { maximumSize, encoding }?: ParseJSONStreamOptions): Promise<Result<unknown, ParseJSONStreamError>>;
 export declare type ParseMultipartRequestError = {
+    tag: 'InvalidMultipartContentTypeHeader';
+} | {
     tag: 'RequestAborted';
 } | {
     tag: 'BelowMinimumFileSize';
@@ -26,6 +25,8 @@ export declare type ParseMultipartRequestError = {
     tag: 'MaximumFileCountExceeded';
 } | {
     tag: 'MaximumFileSizeExceeded';
+} | {
+    tag: 'MaximumTotalFileSizeExceeded';
 } | {
     tag: 'MaximumFieldsCountExceeded';
 } | {
