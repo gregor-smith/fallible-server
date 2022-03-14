@@ -218,4 +218,23 @@ function composeCleanupResponse(state, cleanups) {
         }
     });
 }
+export class MessageHandlerComposer {
+    #handler;
+    constructor(handler) {
+        this.#handler = handler;
+    }
+    intoHandler(other) {
+        const handler = composeMessageHandlers(this.#handler, other);
+        return new MessageHandlerComposer(handler);
+    }
+    get() {
+        return this.#handler;
+    }
+}
+export class ResultMessageHandlerComposer extends MessageHandlerComposer {
+    intoResultHandler(other) {
+        const handler = composeResultMessageHandlers(this.get(), other);
+        return new ResultMessageHandlerComposer(handler);
+    }
+}
 //# sourceMappingURL=server.js.map

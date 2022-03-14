@@ -327,3 +327,34 @@ function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup | u
         }
     })
 }
+
+
+export class MessageHandlerComposer<ExistingState, NewState> {
+    readonly #handler: MessageHandler<ExistingState, NewState>
+
+    constructor(handler: MessageHandler<ExistingState, NewState>) {
+        this.#handler = handler
+    }
+
+    intoHandler<State>(
+        other: MessageHandler<NewState, State>
+    ): MessageHandlerComposer<ExistingState, State> {
+        const handler = composeMessageHandlers(this.#handler, other)
+        return new MessageHandlerComposer(handler)
+    }
+
+    get(): MessageHandler<ExistingState, NewState> {
+        return this.#handler
+    }
+}
+
+
+export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
+        extends MessageHandlerComposer<ExistingState, Result<NewState, Error>> {
+    intoResultHandler<State, ErrorB>(
+        other: MessageHandler<NewState, Result<State, Error | ErrorB>>
+    ): ResultMessageHandlerComposer<ExistingState, State, Error | ErrorB> {
+        const handler = composeResultMessageHandlers(this.get(), other)
+        return new ResultMessageHandlerComposer(handler)
+    }
+}
