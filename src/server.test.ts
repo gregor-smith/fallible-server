@@ -714,39 +714,33 @@ describe('createRequestListener', () => {
 
 describe('composeMessageHandlers', () => {
     test('handlers called in order with message, sockets and each successive state', async () => {
-        expect.assertions(11)
+        expect.assertions(8)
 
         const testMessage = Symbol() as any
         const testSockets = Symbol() as any
 
-        const a: MessageHandler<void, number> = (message, state, sockets) => {
-            expect(message).toBe(testMessage)
-            expect(state).toBeUndefined()
-            expect(sockets).toBe(testSockets)
-            return response(1)
-        }
-        const b: MessageHandler<number, number> = (message, state, sockets) => {
+        const a: MessageHandler<number, number> = (message, state, sockets) => {
             expect(message).toBe(testMessage)
             expect(state).toBe(1)
             expect(sockets).toBe(testSockets)
             return response(2)
         }
-        const c: MessageHandler<number, number> = (message, state, sockets) => {
+        const b: MessageHandler<number, number> = (message, state, sockets) => {
             expect(message).toBe(testMessage)
             expect(state).toBe(2)
             expect(sockets).toBe(testSockets)
             return response(3)
         }
 
-        const composed = composeMessageHandlers([ a, b, c ])
-        const { state, cleanup } = await composed(testMessage, undefined, testSockets)
+        const composed = composeMessageHandlers(a, b)
+        const { state, cleanup } = await composed(testMessage, 1, testSockets)
 
         expect(cleanup).toBeFunction()
         expect(state).toBe(3)
     })
 
     test('cleanup calls handler cleanups in reverse order', async () => {
-        expect.assertions(5)
+        expect.assertions(3)
 
         const aCleanup = jest.fn<void, []>()
         const a: MessageHandler<void, null> = () => response(null, aCleanup)
@@ -754,52 +748,40 @@ describe('composeMessageHandlers', () => {
         const bCleanup = jest.fn<void, []>()
         const b: MessageHandler<null, null> = () => response(null, bCleanup)
 
-        const c: MessageHandler<null, null> = () => response(null)
-
-        const dCleanup = jest.fn<void, []>()
-        const d: MessageHandler<null, null> = () => response(null, dCleanup)
-
-        const composed = composeMessageHandlers([ a, b, c, d ])
+        const composed = composeMessageHandlers(a, b)
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
         const state: Response = { body: 'test' }
         await cleanup?.(state)
 
         expect(aCleanup.mock.calls).toEqual([ [ state ] ])
         expect(bCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
-        expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
+        expect(bCleanup).toHaveBeenCalledBefore(aCleanup)
     })
 })
 
 
 describe('composeResultMessageHandlers', () => {
     test('handlers called in order with message, sockets and each successive state', async () => {
-        expect.assertions(11)
+        expect.assertions(8)
 
         const testMessage = Symbol() as any
         const testSockets = Symbol() as any
-        const a: MessageHandler<void, Ok<number>> = (message, state, sockets) => {
-            expect(message).toBe(testMessage)
-            expect(state).toBeUndefined()
-            expect(sockets).toBe(testSockets)
-            return response(ok(1))
-        }
-        const b: MessageHandler<number, Ok<number>> = (message, state, sockets) => {
+
+        const a: MessageHandler<number, Ok<number>> = (message, state, sockets) => {
             expect(message).toBe(testMessage)
             expect(state).toBe(1)
             expect(sockets).toBe(testSockets)
             return response(ok(2))
         }
-        const c: MessageHandler<number, Ok<number>> = (message, state, sockets) => {
+        const b: MessageHandler<number, Ok<number>> = (message, state, sockets) => {
             expect(message).toBe(testMessage)
             expect(state).toBe(2)
             expect(sockets).toBe(testSockets)
             return response(ok(3))
         }
 
-        const composed = composeResultMessageHandlers([ a, b, c ])
-        const { state, cleanup } = await composed(testMessage, undefined, testSockets)
+        const composed = composeResultMessageHandlers(a, b)
+        const { state, cleanup } = await composed(testMessage, 1, testSockets)
 
         expect(cleanup).toBeFunction()
         expect(state).toEqual(ok(3))
@@ -808,26 +790,20 @@ describe('composeResultMessageHandlers', () => {
     test('error response from composed handler is returned immediately', async () => {
         expect.assertions(2)
 
-        const testMessage = Symbol() as any
-        const testSockets = Symbol() as any
-        const a: MessageHandler<void, Result<number, string>> = () =>
-            response(ok(1))
-        const b: MessageHandler<number, Result<number, string>> = () =>
-            response(ok(2))
-        const c: MessageHandler<number, Result<number, string>> = () =>
+        const a: MessageHandler<number, Result<number, string>> = () =>
             response(error('test'))
-        const d: MessageHandler<number, Result<number, string>> = () =>
-            response(ok(4))
+        const b: MessageHandler<number, Result<number, string>> = () =>
+            response(ok(3))
 
-        const composed = composeResultMessageHandlers([ a, b, c, d ])
-        const { state, cleanup } = await composed(testMessage, undefined, testSockets)
+        const composed = composeResultMessageHandlers(a, b)
+        const { state, cleanup } = await composed(undefined as any, 1, undefined as any)
 
-        expect(cleanup).toBeFunction()
+        expect(cleanup).toBeUndefined()
         expect(state).toEqual(error('test'))
     })
 
     test('cleanup calls handler cleanups in reverse order', async () => {
-        expect.assertions(5)
+        expect.assertions(3)
 
         const aCleanup = jest.fn<void, []>()
         const a: MessageHandler<void, Result<void, unknown>> = () =>
@@ -837,58 +813,34 @@ describe('composeResultMessageHandlers', () => {
         const b: MessageHandler<void, Result<void, unknown>> = () =>
             response(ok(), bCleanup)
 
-        const c: MessageHandler<void, Result<void, unknown>> = () =>
-            response(ok())
-
-        const dCleanup = jest.fn<void, []>()
-        const d: MessageHandler<void, Result<void, unknown>> = () =>
-            response(ok(), dCleanup)
-
-        const composed = composeResultMessageHandlers([ a, b, c, d ])
+        const composed = composeResultMessageHandlers(a, b)
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
         const state: Response = { body: 'test' }
         await cleanup?.(state)
 
         expect(aCleanup.mock.calls).toEqual([ [ state ] ])
         expect(bCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
-        expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
+        expect(bCleanup).toHaveBeenCalledBefore(aCleanup)
     })
 
     test('error response cleanup calls only previous cleanups in reverse order', async () => {
-        expect.assertions(6)
+        expect.assertions(2)
 
         const aCleanup = jest.fn<void, []>()
         const a: MessageHandler<void, Result<void, unknown>> = () =>
-            response(ok(), aCleanup)
+            response(error(), aCleanup)
 
         const bCleanup = jest.fn<void, []>()
         const b: MessageHandler<void, Result<void, unknown>> = () =>
             response(ok(), bCleanup)
 
-        const c: MessageHandler<void, Result<void, unknown>> = () =>
-            response(ok())
-
-        const dCleanup = jest.fn<void, []>()
-        const d: MessageHandler<void, Result<void, unknown>> = () =>
-            response(error(), dCleanup)
-
-        const eCleanup = jest.fn<void, []>()
-        const e: MessageHandler<void, Result<void, unknown>> = () =>
-            response(ok(), eCleanup)
-
-        const composed = composeResultMessageHandlers([ a, b, c, d, e ])
+        const composed = composeResultMessageHandlers(a, b)
         const { cleanup } = await composed(undefined as any, undefined, undefined as any)
         const state: Response = { body: 'test' }
         await cleanup?.(state)
 
         expect(aCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(bCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(dCleanup.mock.calls).toEqual([ [ state ] ])
-        expect(eCleanup).not.toHaveBeenCalled()
-        expect(aCleanup).toHaveBeenCalledAfter(bCleanup)
-        expect(bCleanup).toHaveBeenCalledAfter(dCleanup)
+        expect(bCleanup).not.toHaveBeenCalled()
     })
 })
 

@@ -29,11 +29,8 @@ export interface IncomingMessageIPFields {
 export declare function getMessageIP(message: IncomingMessageIPFields, useXForwardedFor?: boolean): string | undefined;
 export declare function getMessageMethod(message: Pick<IncomingMessage, 'method'>): Method;
 export declare function getMessageURL(message: Pick<IncomingMessage, 'url'>): string;
-export declare function parseURLQueryString(url: string, { skipEmptyValues, skipMissingValues }?: {
-    skipEmptyValues?: boolean | undefined;
-    skipMissingValues?: boolean | undefined;
-}): Record<string, string>;
 export declare function joinURLQueryString(query: Record<string, string | number | bigint | boolean | null | undefined>): string;
+export declare function parseURLQueryString(url: string): Record<string, string>;
 export declare function parseURLHash(url: string): string;
 export declare function parseURLPath(url: string): string;
 export declare function parseURLPathSegments(url: string): Generator<string, void>;
@@ -53,7 +50,8 @@ export declare type ParsedContentType = {
 export declare function parseContentTypeHeader(header: string): ParsedContentType | undefined;
 export declare function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined;
 export declare function parseContentLengthHeader(header: string): number | undefined;
-export declare function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): number | undefined;
+export declare type ParseMessageContentLengthError = 'Missing' | 'Invalid';
+export declare function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): Result<number, ParseMessageContentLengthError>;
 export declare function parseAuthorizationHeaderBearer(header: string): string | undefined;
 export declare type ParseMessageAuthorisationBearerError = 'Missing' | 'Invalid';
 export declare function parseMessageAuthorizationHeaderBearer(message: Pick<IncomingMessage, 'headers'>): Result<string, ParseMessageAuthorisationBearerError>;

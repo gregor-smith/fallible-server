@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import WebSocket from 'ws';
-import { ok } from 'fallible';
 import { response } from './general-utils.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
@@ -177,43 +176,12 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
     };
     return [listener, sockets];
 }
-export function composeMessageHandlers(handlers) {
-    return async (message, state, sockets) => {
-        const cleanups = [];
-        for (const handler of handlers) {
-            const result = await handler(message, state, sockets);
-            if (result.cleanup !== undefined) {
-                cleanups.push(result.cleanup);
-            }
-            state = result.state;
-        }
-        return composeCleanupResponse(state, cleanups);
-    };
-}
-export function composeResultMessageHandlers(handlers) {
-    return async (message, state, sockets) => {
-        const cleanups = [];
-        for (const handler of handlers) {
-            const result = await handler(message, state, sockets);
-            if (result.cleanup !== undefined) {
-                cleanups.push(result.cleanup);
-            }
-            if (!result.state.ok) {
-                return composeCleanupResponse(result.state, cleanups);
-            }
-            state = result.state.value;
-        }
-        return composeCleanupResponse(ok(state), cleanups);
-    };
-}
 export function fallthroughMessageHandler(handlers, isNext, noMatch) {
     return async (message, state, sockets) => {
         const cleanups = [];
         for (const handler of handlers) {
             const result = await handler(message, state, sockets);
-            if (result.cleanup !== undefined) {
-                cleanups.push(result.cleanup);
-            }
+            cleanups.push(result.cleanup);
             if (isNext(result.state)) {
                 continue;
             }
@@ -222,10 +190,31 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
         return composeCleanupResponse(noMatch, cleanups);
     };
 }
+export function composeMessageHandlers(a, b) {
+    return async (message, state, sockets) => {
+        const resultA = await a(message, state, sockets);
+        const resultB = await b(message, resultA.state, sockets);
+        return composeCleanupResponse(resultB.state, [resultA.cleanup, resultB.cleanup]);
+    };
+}
+export function composeResultMessageHandlers(a, b) {
+    return async (message, state, sockets) => {
+        const resultA = await a(message, state, sockets);
+        if (!resultA.state.ok) {
+            return resultA;
+        }
+        const resultB = await b(message, resultA.state.value, sockets);
+        return composeCleanupResponse(resultB.state, [resultA.cleanup, resultB.cleanup]);
+    };
+}
 function composeCleanupResponse(state, cleanups) {
     return response(state, async (state) => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
-            await cleanups[index](state);
+            const cleanup = cleanups[index];
+            if (cleanup === undefined) {
+                continue;
+            }
+            await cleanup(state);
         }
     });
 }

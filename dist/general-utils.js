@@ -92,27 +92,6 @@ export function getMessageMethod(message) {
 export function getMessageURL(message) {
     return message.url ?? '/';
 }
-export function parseURLQueryString(url, { skipEmptyValues = true, skipMissingValues = true } = {}) {
-    const query = {};
-    const matches = url.matchAll(/[\?&]([^\?&#=]+)(?:=([^\?&#]*))?(?=$|[\?&#])/g);
-    for (let [, key, value] of matches) {
-        if (value === undefined) {
-            if (skipMissingValues) {
-                continue;
-            }
-            value = '';
-        }
-        else if (value.length === 0 && skipEmptyValues) {
-            continue;
-        }
-        else {
-            value = decodeURIComponent(value);
-        }
-        key = decodeURIComponent(key);
-        query[key] = value;
-    }
-    return query;
-}
 export function joinURLQueryString(query) {
     const pairs = [];
     for (let [key, value] of Object.entries(query)) {
@@ -126,6 +105,19 @@ export function joinURLQueryString(query) {
     return pairs.length === 0
         ? ''
         : ('?' + pairs.join('&'));
+}
+export function parseURLQueryString(url) {
+    const query = {};
+    const matches = url.matchAll(/[\?&]([^\?&#=]+)=([^\?&#]+)(?=$|[\?&#])/g);
+    for (let [, key, value] of matches) {
+        if (value === undefined || value.length === 0) {
+            continue;
+        }
+        key = decodeURIComponent(key);
+        value = decodeURIComponent(value);
+        query[key] = value;
+    }
+    return query;
 }
 export function parseURLHash(url) {
     const match = url.match(/#(.+)/)?.[1];
@@ -204,11 +196,13 @@ export function parseContentLengthHeader(header) {
     return length;
 }
 export function parseMessageContentLength(message) {
-    const header = message.headers['content-length'];
-    if (header === undefined) {
-        return;
+    if (message.headers['content-length'] === undefined) {
+        return error('Missing');
     }
-    return parseContentLengthHeader(header);
+    const length = parseContentLengthHeader(message.headers['content-length']);
+    return length === undefined
+        ? error('Invalid')
+        : ok(length);
 }
 export function parseAuthorizationHeaderBearer(header) {
     // See: https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
