@@ -48,15 +48,18 @@ export type AwaitableIterable<T> =
     | Iterable<T>
     | AsyncIterable<T>
 
+export type AwaitableIterator<Yield, Return = void, Next = unknown> =
+    | Iterator<Yield, Return, Next>
+    | AsyncIterator<Yield, Return, Next>
 
-export type StreamBody =
-    | AwaitableIterable<Uint8Array>
-    | (() => AwaitableIterable<Uint8Array>)
 
-
-export type WebsocketIterable = AwaitableIterable<WebsocketData>
-export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterable
-export type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterable
+export type WebsocketCloseInfo = {
+    code: number
+    reason?: string
+}
+export type WebsocketIterator = AwaitableIterator<WebsocketData, WebsocketCloseInfo | void>
+export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator
+export type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterator
 export type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
 export type WebsocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>
 export type WebsocketBody = {
@@ -68,6 +71,11 @@ export type WebsocketBody = {
 
 
 export type Header = Formattable | ReadonlyArray<Formattable>
+
+
+export type StreamBody =
+    | AwaitableIterable<Uint8Array>
+    | (() => AwaitableIterable<Uint8Array>)
 
 
 export type RegularResponse = {

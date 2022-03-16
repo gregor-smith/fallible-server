@@ -12,7 +12,7 @@ import type {
     MessageHandler,
     MessageHandlerResult,
     Response,
-    WebsocketIterable,
+    WebsocketIterator,
     WebsocketSendErrorCallback,
     IdentifiedWebsocket,
     WebsocketData,
@@ -61,20 +61,30 @@ async function sendAndHandleError(
 
 async function sendWebsocketMessages(
     socket: Socket,
-    messages: WebsocketIterable,
+    messages: WebsocketIterator,
     onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
-    for await (const message of messages) {
+    while (true) {
+        const result = await messages.next()
+
         if (socket.readyState !== WebsocketReadyState.Open) {
-            break
+            await Promise.all(promises)
+            return
         }
-        const promise = sendAndHandleError(socket, message, onError)
+
+        if (result.done) {
+            await Promise.all(promises)
+            if (result.value === undefined) {
+                return
+            }
+            return socket.close(result.value.code, result.value.reason)
+        }
+
+        const promise = sendAndHandleError(socket, result.value, onError)
         promises.push(promise)
     }
-
-    await Promise.all(promises)
 }
 
 

@@ -15,12 +15,13 @@ import {
     MessageHandlerComposer,
     ResultMessageHandlerComposer
 } from './server.js'
-import type {
+import {
     Message,
     MessageHandler,
     Response,
+    WebsocketCloseInfo,
     WebsocketData,
-    WebsocketIterable,
+    WebsocketIterator,
     WebsocketResponse
 } from './types.js'
 import { Readable } from 'node:stream'
@@ -446,13 +447,13 @@ describe('createRequestListener', () => {
             const messages: WebsocketData[] = []
             let uuid: string | undefined
 
-            const onOpen = jest.fn<WebsocketIterable, [ string ]>(function * (u) {
+            const onOpen = jest.fn<WebsocketIterator, [ string ]>(function * (u) {
                 uuid = u
                 yield 'server open'
                 yield 'server open 2'
             })
             const onClose = jest.fn<void, [ number, string, string ]>()
-            const onMessage = jest.fn<WebsocketIterable, [ WebsocketData, string ]>(function * (message) {
+            const onMessage = jest.fn<WebsocketIterator, [ WebsocketData, string ]>(function * (message) {
                 yield 'server message'
                 yield `server echo: ${message}`
             })
@@ -510,26 +511,29 @@ describe('createRequestListener', () => {
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test('closing using uuid passed to onOpen', async () => {
+        test.each<WebsocketCloseInfo>([
+            { code: 4321 },
+            { code: 4321, reason: 'server close' }
+        ])('returning close info from onOpen closes socket', async closeInfo => {
             expect.assertions(1)
 
-            const closeInfo = await new Promise<[ number, string ]>(resolve => {
+            const closeArgs = await new Promise<[ number, string ]>(resolve => {
                 let serverDone = false
-                let clientCloseInfo: [ number, string ] | undefined
+                let clientCloseArgs: [ number, string ] | undefined
 
-                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                const [ listener ] = createRequestListener(() =>
                     websocketResponse(
                         {
-                            onOpen: async function * (uuid) {
-                                await sockets.get(uuid)?.close(4321, 'server close')
+                            onOpen: function * () {
+                                return closeInfo
                             }
                         },
                         () => {
-                            if (clientCloseInfo === undefined) {
+                            if (clientCloseArgs === undefined) {
                                 serverDone = true
                             }
                             else {
-                                resolve(clientCloseInfo)
+                                resolve(clientCloseArgs)
                             }
                         }
                     )
@@ -542,38 +546,41 @@ describe('createRequestListener', () => {
                         resolve(args)
                     }
                     else {
-                        clientCloseInfo = args
+                        clientCloseArgs = args
                     }
                 })
             })
 
-            expect(closeInfo).toEqual([ 4321, 'server close' ])
+            expect(closeArgs).toEqual([ closeInfo.code, closeInfo.reason ?? '' ])
         })
 
-        test('closing using uuid passed to onMessage', async () => {
+        test.each<WebsocketCloseInfo>([
+            { code: 4321 },
+            { code: 4321, reason: 'server close' }
+        ])('returning close info from onMessage closes socket', async closeInfo => {
             expect.assertions(2)
 
             const messages: WebsocketData[] = []
 
-            const closeInfo = await new Promise<[ number, string ]>(resolve => {
+            const closeArgs = await new Promise<[ number, string ]>(resolve => {
                 let serverDone = false
-                let clientCloseInfo: [ number, string ] | undefined
+                let clientCloseArgs: [ number, string ] | undefined
 
-                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                const [ listener ] = createRequestListener(() =>
                     websocketResponse(
                         {
                             onOpen: function * () {},
-                            onMessage: async function * (message, uuid) {
+                            onMessage: function * (message) {
                                 messages.push(message)
-                                await sockets.get(uuid)?.close(4321, 'server close')
+                                return closeInfo
                             }
                         },
                         () => {
-                            if (clientCloseInfo === undefined) {
+                            if (clientCloseArgs === undefined) {
                                 serverDone = true
                             }
                             else {
-                                resolve(clientCloseInfo)
+                                resolve(clientCloseArgs)
                             }
                         }
                     )
@@ -587,13 +594,13 @@ describe('createRequestListener', () => {
                         resolve(args)
                     }
                     else {
-                        clientCloseInfo = args
+                        clientCloseArgs = args
                     }
                 })
             })
 
             expect(messages).toEqual([ 'client open' ])
-            expect(closeInfo).toEqual([ 4321, 'server close' ])
+            expect(closeArgs).toEqual([ closeInfo.code, closeInfo.reason ?? '' ])
         })
 
         test('stops sending messages if socket closes during generator', async () => {
@@ -644,7 +651,7 @@ describe('createRequestListener', () => {
         })
 
         test('onSendError called on unknown send error', async () => {
-            expect.assertions(5)
+            expect.assertions(4)
 
             const onSendError = jest.fn<void, [ WebsocketData, Error, string ]>(() => {})
             const onMessage = jest.fn<void, [ string ]>()
@@ -656,11 +663,19 @@ describe('createRequestListener', () => {
 
             let uuid: string | undefined
 
-            const closeInfo = await new Promise<[ number, string ]>(resolve => {
-                let serverDone = false
-                let clientCloseInfo: [ number, string ] | undefined
+            await new Promise<void>(resolve => {
+                let done = false
 
-                const [ listener ] = createRequestListener((_message, _state, sockets) =>
+                function waitForOtherToFinish() {
+                    if (done) {
+                        resolve()
+                    }
+                    else {
+                        done = true
+                    }
+                }
+
+                const [ listener ] = createRequestListener(() =>
                     websocketResponse(
                         {
                             onOpen: async function * (u) {
@@ -668,32 +683,18 @@ describe('createRequestListener', () => {
                                 yield 'a'
                                 yield 'b'
                                 yield 'c'
-                                await sockets.get(uuid)?.close(4321, 'server close')
+                                return { code: 1000 }
                             },
                             onSendError
                         },
-                        () => {
-                            if (clientCloseInfo === undefined) {
-                                serverDone = true
-                            }
-                            else {
-                                resolve(clientCloseInfo)
-                            }
-                        }
+                        waitForOtherToFinish
                     )
                 )
                 server.addListener('request', listener)
 
                 const client = connectWebsocket()
                 client.on('message', onMessage)
-                client.on('close', (...args) => {
-                    if (serverDone) {
-                        resolve(args)
-                    }
-                    else {
-                        clientCloseInfo = args
-                    }
-                })
+                client.on('close', waitForOtherToFinish)
             })
 
             expect(uuid).not.toBeUndefined()
@@ -708,7 +709,6 @@ describe('createRequestListener', () => {
                 [ 'b', exception, uuid ],
                 [ 'c', exception, uuid ]
             ])
-            expect(closeInfo).toEqual([ 4321, 'server close' ])
         })
     })
 })

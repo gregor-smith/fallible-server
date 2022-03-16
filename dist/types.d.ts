@@ -18,10 +18,14 @@ export declare type Cookie = {
 };
 export declare type AwaitableRequestListener = (message: IncomingMessage, response: ServerResponse) => Awaitable<void>;
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
-export declare type StreamBody = AwaitableIterable<Uint8Array> | (() => AwaitableIterable<Uint8Array>);
-export declare type WebsocketIterable = AwaitableIterable<WebsocketData>;
-export declare type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterable;
-export declare type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterable;
+export declare type AwaitableIterator<Yield, Return = void, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
+export declare type WebsocketCloseInfo = {
+    code: number;
+    reason?: string;
+};
+export declare type WebsocketIterator = AwaitableIterator<WebsocketData, WebsocketCloseInfo | void>;
+export declare type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator;
+export declare type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterator;
 export declare type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>;
 export declare type WebsocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>;
 export declare type WebsocketBody = {
@@ -31,6 +35,7 @@ export declare type WebsocketBody = {
     onSendError?: WebsocketSendErrorCallback;
 };
 export declare type Header = Formattable | ReadonlyArray<Formattable>;
+export declare type StreamBody = AwaitableIterable<Uint8Array> | (() => AwaitableIterable<Uint8Array>);
 export declare type RegularResponse = {
     headers?: Readonly<Record<string, Header>>;
     status?: number;
