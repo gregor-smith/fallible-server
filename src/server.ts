@@ -47,22 +47,9 @@ function setResponseHeaders(res: ServerResponse, headers: Record<string, Header>
 }
 
 
-async function sendAndHandleError(
-    socket: Socket,
-    data: WebsocketData,
-    onError: WebsocketSendErrorCallback
-): Promise<void> {
-    const error = await socket.send(data)
-    if (error !== undefined) {
-        return onError(data, error, socket.uuid)
-    }
-}
-
-
 async function sendWebsocketMessages(
     socket: Socket,
-    messages: WebsocketIterator,
-    onError: WebsocketSendErrorCallback = defaultOnWebsocketSendError
+    messages: WebsocketIterator
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
@@ -82,7 +69,7 @@ async function sendWebsocketMessages(
             return socket.close(result.value.code, result.value.reason)
         }
 
-        const promise = sendAndHandleError(socket, result.value, onError)
+        const promise = socket.send(result.value)
         promises.push(promise)
     }
 }
@@ -96,19 +83,29 @@ function getDefaultExceptionListener(): ExceptionListener {
 
 class Socket implements IdentifiedWebsocket {
     #underlying: WebSocket
+    #onSendError: WebsocketSendErrorCallback
 
     readonly uuid = randomUUID()
 
-    constructor(underlying: WebSocket) {
+    constructor(
+        underlying: WebSocket,
+        onSendError: WebsocketSendErrorCallback
+    ) {
         this.#underlying = underlying
+        this.#onSendError = onSendError
     }
 
     get readyState(): WebsocketReadyState {
         return this.#underlying.readyState as WebsocketReadyState
     }
 
-    send(data: WebsocketData): Promise<globalThis.Error | undefined> {
-        return new Promise(resolve => this.#underlying.send(data, resolve))
+    async send(data: WebsocketData): Promise<void> {
+        const error = await new Promise<globalThis.Error | undefined>(resolve =>
+            this.#underlying.send(data, resolve)
+        )
+        if (error !== undefined) {
+            await this.#onSendError(data, error, this.uuid)
+        }
     }
 
     close(code?: number, reason?: string): Promise<void> {
@@ -195,17 +192,19 @@ export function createRequestListener(
                     resolve
                 )
             )
-            const socket = new Socket(websocket)
-            sockets.set(socket.uuid, socket)
-
             const { onOpen, onMessage, onSendError, onClose } = state.body
+
+            const socket = new Socket(
+                websocket,
+                onSendError ?? defaultOnWebsocketSendError
+            )
+            sockets.set(socket.uuid, socket)
 
             if (onMessage !== undefined) {
                 websocket.on('message', data =>
                     sendWebsocketMessages(
                         socket,
-                        onMessage(data, socket.uuid),
-                        onSendError
+                        onMessage(data, socket.uuid)
                     )
                 )
             }
@@ -223,8 +222,7 @@ export function createRequestListener(
                 // is already opened
                 sendWebsocketMessages(
                     socket,
-                    onOpen(socket.uuid),
-                    onSendError
+                    onOpen(socket.uuid)
                 )
             ])
 

@@ -18,13 +18,7 @@ function setResponseHeaders(res, headers) {
         }
     }
 }
-async function sendAndHandleError(socket, data, onError) {
-    const error = await socket.send(data);
-    if (error !== undefined) {
-        return onError(data, error, socket.uuid);
-    }
-}
-async function sendWebsocketMessages(socket, messages, onError = defaultOnWebsocketSendError) {
+async function sendWebsocketMessages(socket, messages) {
     const promises = [];
     while (true) {
         const result = await messages.next();
@@ -39,7 +33,7 @@ async function sendWebsocketMessages(socket, messages, onError = defaultOnWebsoc
             }
             return socket.close(result.value.code, result.value.reason);
         }
-        const promise = sendAndHandleError(socket, result.value, onError);
+        const promise = socket.send(result.value);
         promises.push(promise);
     }
 }
@@ -49,15 +43,20 @@ function getDefaultExceptionListener() {
 }
 class Socket {
     #underlying;
+    #onSendError;
     uuid = randomUUID();
-    constructor(underlying) {
+    constructor(underlying, onSendError) {
         this.#underlying = underlying;
+        this.#onSendError = onSendError;
     }
     get readyState() {
         return this.#underlying.readyState;
     }
-    send(data) {
-        return new Promise(resolve => this.#underlying.send(data, resolve));
+    async send(data) {
+        const error = await new Promise(resolve => this.#underlying.send(data, resolve));
+        if (error !== undefined) {
+            await this.#onSendError(data, error, this.uuid);
+        }
     }
     close(code, reason) {
         return new Promise(resolve => {
@@ -128,11 +127,11 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         // websocket
         else if ('onOpen' in state.body) {
             const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-            const socket = new Socket(websocket);
-            sockets.set(socket.uuid, socket);
             const { onOpen, onMessage, onSendError, onClose } = state.body;
+            const socket = new Socket(websocket, onSendError ?? defaultOnWebsocketSendError);
+            sockets.set(socket.uuid, socket);
             if (onMessage !== undefined) {
-                websocket.on('message', data => sendWebsocketMessages(socket, onMessage(data, socket.uuid), onSendError));
+                websocket.on('message', data => sendWebsocketMessages(socket, onMessage(data, socket.uuid)));
             }
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
@@ -142,7 +141,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 // the 'open' even is never fired when running in noServer
                 // mode, so just call onOpen straight away as the request
                 // is already opened
-                sendWebsocketMessages(socket, onOpen(socket.uuid), onSendError)
+                sendWebsocketMessages(socket, onOpen(socket.uuid))
             ]);
             sockets.delete(socket.uuid);
             if (onClose !== undefined) {

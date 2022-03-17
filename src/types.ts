@@ -120,7 +120,7 @@ export interface IdentifiedWebsocket {
     readonly uuid: string
     readonly readyState: WebsocketReadyState
 
-    send(data: WebsocketData): Promise<Error | undefined>
+    send(data: WebsocketData): Promise<void>
     close(code?: number, reason?: string): Promise<void>
 }
 
