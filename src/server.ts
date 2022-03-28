@@ -117,6 +117,18 @@ class Socket implements IdentifiedWebsocket {
 }
 
 
+/**
+ * Creates a callback intended to be added as a listener to the `request` event
+ * of a Node `http` `Server`.
+ * @param messageHandler
+ * A function which takes a Node `http` `IncomingMessage` and returns a `Response`
+ * @param exceptionListener
+ * A function called if the message handler throws or if the `ServerResponse`
+ * fires an `error` event when writing.
+ * If not given, prints a warning and `console.error` is used.
+ * @returns
+ * The callback, and a map of all active WebSockets identified by UUIDs.
+ */
 export function createRequestListener(
     messageHandler: MessageHandler,
     exceptionListener = getDefaultExceptionListener()
@@ -226,6 +238,8 @@ export function createRequestListener(
                 )
             ])
 
+            // TODO: keep track of sendWebsocketMessages promises and await here
+
             sockets.delete(socket.uuid)
 
             if (onClose !== undefined) {
@@ -271,9 +285,25 @@ export function createRequestListener(
 }
 
 
+/**
+ * Composes an array of message handlers into one. This new handler calls each
+ * of the given handlers in the array until one of them returns a state of
+ * type `NewState`, which is returned. If all of them return a state of type
+ * `Next`, the state from the given fallback handler is returned instead. Any
+ * cleanup functions returned by handlers are combined so that invocation
+ * executes them in reverse order. Useful for implementing routing.
+ * @param handlers
+ * Array of handlers that can return responses of either NewState or Next
+ * @param fallback
+ * A handler that can only return NewState, used if all of the previous
+ * handlers return `NewState`
+ * @param isNext
+ * A type guard used to identify whether the state returned from a handler is
+ * of type `Next`
+ */
 export function fallthroughMessageHandler<ExistingState, NewState, Next>(
     handlers: ReadonlyArray<MessageHandler<ExistingState, NewState | Next>>,
-    noMatch: MessageHandler<ExistingState, NewState>,
+    fallback: MessageHandler<ExistingState, NewState>,
     isNext: (state: Readonly<NewState | Next>) => state is Next
 ): MessageHandler<ExistingState, NewState> {
     return async (message, state, sockets) => {
@@ -286,41 +316,57 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
             }
             return composeCleanupResponse(result.state, cleanups)
         }
-        const result = await noMatch(message, state, sockets)
+        const result = await fallback(message, state, sockets)
         cleanups.push(result.cleanup)
         return composeCleanupResponse(result.state, cleanups)
     }
 }
 
 
+/**
+ * Chains together two message handlers into one. The state returned from the
+ * first handler is passed to the second handler. Any cleanup functions
+ * returned are combined so that the second handler's cleanup is called before
+ * the first's.
+ */
 export function composeMessageHandlers<StateA, StateB, StateC>(
-    a: MessageHandler<StateA, StateB>,
-    b: MessageHandler<StateB, StateC>
+    firstHandler: MessageHandler<StateA, StateB>,
+    secondHandler: MessageHandler<StateB, StateC>
 ): MessageHandler<StateA, StateC> {
     return async (message, state, sockets) => {
-        const resultA = await a(message, state, sockets)
-        const resultB = await b(message, resultA.state, sockets)
+        const firstResult = await firstHandler(message, state, sockets)
+        const secondResult = await secondHandler(message, firstResult.state, sockets)
         return composeCleanupResponse(
-            resultB.state,
-            [ resultA.cleanup, resultB.cleanup ]
+            secondResult.state,
+            [ firstResult.cleanup, secondResult.cleanup ]
         )
     }
 }
 
 
+/**
+ * Chains together two message handlers that return `Result` states. If the
+ * first handler returns a state of `Error`, it is immediately returned. If it
+ * returns `Ok`, its value is passed as the state the second handler. Any
+ * cleanup functions returned are combined so that the second handler's cleanup
+ * is called before the first's.
+ * @param firstHandler
+ * @param secondHandler
+ * @returns
+ */
 export function composeResultMessageHandlers<StateA, StateB, StateC, ErrorA, ErrorB>(
-    a: MessageHandler<StateA, Result<StateB, ErrorA>>,
-    b: MessageHandler<StateB, Result<StateC, ErrorA | ErrorB>>
+    firstHandler: MessageHandler<StateA, Result<StateB, ErrorA>>,
+    secondHandler: MessageHandler<StateB, Result<StateC, ErrorA | ErrorB>>
 ): MessageHandler<StateA, Result<StateC, ErrorA | ErrorB>> {
     return async (message, state, sockets) => {
-        const resultA = await a(message, state, sockets)
-        if (!resultA.state.ok) {
-            return resultA as MessageHandlerResult<Error<ErrorA>>
+        const firstResult = await firstHandler(message, state, sockets)
+        if (!firstResult.state.ok) {
+            return firstResult as MessageHandlerResult<Error<ErrorA>>
         }
-        const resultB = await b(message, resultA.state.value, sockets)
+        const secondResult = await secondHandler(message, firstResult.state.value, sockets)
         return composeCleanupResponse(
-            resultB.state,
-            [ resultA.cleanup, resultB.cleanup ]
+            secondResult.state,
+            [ firstResult.cleanup, secondResult.cleanup ]
         )
     }
 }
@@ -339,6 +385,20 @@ function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup | u
 }
 
 
+/**
+ * An alternative to `composeMessageHandlers`. Much more elegant when chaining
+ * many handlers together. Immutable.
+ *
+ * The following are equivalent:
+ * ```
+ * new MessageHandlerComposer(a)
+ *      .intoHandler(b)
+ *      .intoHandler(c)
+ *      .build()
+ *
+ * composeMessageHandlers(composeMessageHandlers(a, b), c)
+ * ```
+ */
 export class MessageHandlerComposer<ExistingState, NewState> {
     readonly #handler: MessageHandler<ExistingState, NewState>
 
@@ -359,6 +419,20 @@ export class MessageHandlerComposer<ExistingState, NewState> {
 }
 
 
+/**
+ * An alternative to `composeResultMessageHandlers`. Much more elegant when
+ * chaining many handlers together. Immutable.
+ *
+ * The following are equivalent:
+ * ```
+ * new ResultMessageHandlerComposer(a)
+ *      .intoResultHandler(b)
+ *      .intoHandler(c)
+ *      .build()
+ *
+ * composeMessageHandlers(composeResultMessageHandlers(a, b), c)
+ * ```
+ */
 export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
         extends MessageHandlerComposer<ExistingState, Result<NewState, Error>> {
     intoResultHandler<State, ErrorB>(
