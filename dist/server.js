@@ -60,7 +60,7 @@ class Socket {
     }
     close(code, reason) {
         return new Promise(resolve => {
-            this.#underlying.on('close', () => resolve());
+            this.#underlying.on('close', resolve);
             this.#underlying.close(code, reason);
         });
     }
@@ -183,7 +183,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
     };
     return [listener, sockets];
 }
-export function fallthroughMessageHandler(handlers, isNext, noMatch) {
+export function fallthroughMessageHandler(handlers, noMatch, isNext) {
     return async (message, state, sockets) => {
         const cleanups = [];
         for (const handler of handlers) {
@@ -194,7 +194,9 @@ export function fallthroughMessageHandler(handlers, isNext, noMatch) {
             }
             return composeCleanupResponse(result.state, cleanups);
         }
-        return composeCleanupResponse(noMatch, cleanups);
+        const result = await noMatch(message, state, sockets);
+        cleanups.push(result.cleanup);
+        return composeCleanupResponse(result.state, cleanups);
     };
 }
 export function composeMessageHandlers(a, b) {
@@ -234,13 +236,13 @@ export class MessageHandlerComposer {
         const handler = composeMessageHandlers(this.#handler, other);
         return new MessageHandlerComposer(handler);
     }
-    get() {
+    build() {
         return this.#handler;
     }
 }
 export class ResultMessageHandlerComposer extends MessageHandlerComposer {
     intoResultHandler(other) {
-        const handler = composeResultMessageHandlers(this.get(), other);
+        const handler = composeResultMessageHandlers(this.build(), other);
         return new ResultMessageHandlerComposer(handler);
     }
 }

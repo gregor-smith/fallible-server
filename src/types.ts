@@ -121,7 +121,7 @@ export interface IdentifiedWebsocket {
     readonly readyState: WebsocketReadyState
 
     send(data: WebsocketData): Promise<void>
-    close(code?: number, reason?: string): Promise<void>
+    close(code: number, reason?: string): Promise<void>
 }
 
 export type SocketMap = ReadonlyMap<string, IdentifiedWebsocket>

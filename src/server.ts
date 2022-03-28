@@ -110,7 +110,7 @@ class Socket implements IdentifiedWebsocket {
 
     close(code?: number, reason?: string): Promise<void> {
         return new Promise(resolve => {
-            this.#underlying.on('close', () => resolve())
+            this.#underlying.on('close', resolve)
             this.#underlying.close(code, reason)
         })
     }
@@ -273,8 +273,8 @@ export function createRequestListener(
 
 export function fallthroughMessageHandler<ExistingState, NewState, Next>(
     handlers: ReadonlyArray<MessageHandler<ExistingState, NewState | Next>>,
-    isNext: (state: Readonly<NewState | Next>) => state is Next,
-    noMatch: NewState
+    noMatch: MessageHandler<ExistingState, NewState>,
+    isNext: (state: Readonly<NewState | Next>) => state is Next
 ): MessageHandler<ExistingState, NewState> {
     return async (message, state, sockets) => {
         const cleanups: (Cleanup | undefined)[] = []
@@ -286,7 +286,9 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
             }
             return composeCleanupResponse(result.state, cleanups)
         }
-        return composeCleanupResponse(noMatch, cleanups)
+        const result = await noMatch(message, state, sockets)
+        cleanups.push(result.cleanup)
+        return composeCleanupResponse(result.state, cleanups)
     }
 }
 
@@ -351,7 +353,7 @@ export class MessageHandlerComposer<ExistingState, NewState> {
         return new MessageHandlerComposer(handler)
     }
 
-    get(): MessageHandler<ExistingState, NewState> {
+    build(): MessageHandler<ExistingState, NewState> {
         return this.#handler
     }
 }
@@ -362,7 +364,7 @@ export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
     intoResultHandler<State, ErrorB>(
         other: MessageHandler<NewState, Result<State, Error | ErrorB>>
     ): ResultMessageHandlerComposer<ExistingState, State, Error | ErrorB> {
-        const handler = composeResultMessageHandlers(this.get(), other)
+        const handler = composeResultMessageHandlers(this.build(), other)
         return new ResultMessageHandlerComposer(handler)
     }
 }
