@@ -1,24 +1,11 @@
-import type { ServerResponse } from 'node:http'
+import type http from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { Readable } from 'node:stream'
+import stream from 'node:stream'
 
 import WebSocket from 'ws'
-import type { Error, Result } from 'fallible'
+import type * as fallible from 'fallible'
 
-import type {
-    AwaitableRequestListener,
-    Cleanup,
-    ExceptionListener,
-    MessageHandler,
-    MessageHandlerResult,
-    Response,
-    WebsocketIterator,
-    WebsocketSendErrorCallback,
-    IdentifiedWebsocket,
-    WebsocketData,
-    Header,
-    SocketMap
-} from './types.js'
+import type * as types from './types.js'
 import { WebsocketReadyState, response } from './general-utils.js'
 
 
@@ -28,8 +15,8 @@ function warn(message: string): void {
 
 
 function defaultOnWebsocketSendError(
-    _data: WebsocketData,
-    { name, message }: globalThis.Error
+    _data: types.WebsocketData,
+    { name, message }: Error
 ): void {
     warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response")
     warn(name)
@@ -37,7 +24,10 @@ function defaultOnWebsocketSendError(
 }
 
 
-function setResponseHeaders(res: ServerResponse, headers: Record<string, Header> | undefined): void {
+function setResponseHeaders(
+    res: http.ServerResponse,
+    headers: Record<string, types.Header> | undefined
+): void {
     if (headers !== undefined) {
         for (const [ name, value ] of Object.entries(headers)) {
             const header = Array.isArray(value) ? value.map(String) : String(value)
@@ -49,7 +39,7 @@ function setResponseHeaders(res: ServerResponse, headers: Record<string, Header>
 
 async function sendWebsocketMessages(
     socket: Socket,
-    messages: WebsocketIterator
+    messages: types.WebsocketIterator
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
@@ -75,21 +65,21 @@ async function sendWebsocketMessages(
 }
 
 
-function getDefaultExceptionListener(): ExceptionListener {
+function getDefaultExceptionListener(): types.ExceptionListener {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option")
     return console.error
 }
 
 
-class Socket implements IdentifiedWebsocket {
+class Socket implements types.IdentifiedWebsocket {
     #underlying: WebSocket
-    #onSendError: WebsocketSendErrorCallback
+    #onSendError: types.WebsocketSendErrorCallback
 
     readonly uuid = randomUUID()
 
     constructor(
         underlying: WebSocket,
-        onSendError: WebsocketSendErrorCallback
+        onSendError: types.WebsocketSendErrorCallback
     ) {
         this.#underlying = underlying
         this.#onSendError = onSendError
@@ -99,8 +89,8 @@ class Socket implements IdentifiedWebsocket {
         return this.#underlying.readyState as WebsocketReadyState
     }
 
-    async send(data: WebsocketData): Promise<void> {
-        const error = await new Promise<globalThis.Error | undefined>(resolve =>
+    async send(data: types.WebsocketData): Promise<void> {
+        const error = await new Promise<Error | undefined>(resolve =>
             this.#underlying.send(data, resolve)
         )
         if (error !== undefined) {
@@ -119,26 +109,36 @@ class Socket implements IdentifiedWebsocket {
 
 /**
  * Creates a callback intended to be added as a listener to the `request` event
- * of a Node `http` `Server`.
+ * of an {@link http.Server}.
  * @param messageHandler
- * A function which takes a Node `http` `IncomingMessage` and returns a `Response`
+ * A function that takes an {@link http.IncomingMessage IncomingMessage} and
+ * returns a {@link types.MessageHandlerResult MessageHandlerResult}. The
+ * result may include a {@link types.Cleanup cleanup} function, which is always
+ * called after the request has ended, regardless of whether any exceptions
+ * occurred. The `Content-Type` header is set by default depending on type of
+ * the {@link types.Response response} body: `string` bodies default to
+ * `text/html; charset=utf8` while {@link Uint8Array} and
+ * {@link types.StreamBody stream} bodies default to `application/octet-stream`.
+ * The 'Content-Length' header is also set for all except stream and WebSocket
+ * bodies.
+ *
  * @param exceptionListener
- * A function called if the message handler throws or if the `ServerResponse`
- * fires an `error` event when writing.
- * If not given, prints a warning and `console.error` is used.
+ * A function called when the message handler throws or the
+ * {@link http.ServerResponse ServerResponse} fires an `error` event. If not
+ * given, a warning is printed and {@link console.error} is used.
  * @returns
  * The callback, and a map of all active WebSockets identified by UUIDs.
  */
 export function createRequestListener(
-    messageHandler: MessageHandler,
+    messageHandler: types.MessageHandler,
     exceptionListener = getDefaultExceptionListener()
-): [ AwaitableRequestListener, SocketMap ] {
+): [ types.AwaitableRequestListener, types.SocketMap ] {
     const server = new WebSocket.Server({ noServer: true })
     const sockets = new Map<string, Socket>()
 
-    const listener: AwaitableRequestListener = async (req, res) => {
-        let state: Response
-        let cleanup: Cleanup | undefined
+    const listener: types.AwaitableRequestListener = async (req, res) => {
+        let state: types.Response
+        let cleanup: types.Cleanup | undefined
         try {
             ({ state, cleanup } = await messageHandler(req, undefined, sockets))
         }
@@ -196,6 +196,8 @@ export function createRequestListener(
         }
         // websocket
         else if ('onOpen' in state.body) {
+            // TODO: subclass WebSocket.Server and override the handleUpgrade
+            // implementation with one that throws rather than ending the socket
             const websocket = await new Promise<WebSocket>(resolve =>
                 server.handleUpgrade(
                     req,
@@ -204,6 +206,7 @@ export function createRequestListener(
                     resolve
                 )
             )
+
             const { onOpen, onMessage, onSendError, onClose } = state.body
 
             const socket = new Socket(
@@ -253,22 +256,22 @@ export function createRequestListener(
             const iterable = typeof state.body === 'function'
                 ? state.body()
                 : state.body
-            const stream = iterable instanceof Readable
+            const readable = iterable instanceof stream.Readable
                 ? iterable
-                : Readable.from(iterable, { objectMode: false })
+                : stream.Readable.from(iterable, { objectMode: false })
             try {
                 await new Promise<void>((resolve, reject) => {
                     const errorHandler = (error: unknown): void => {
                         res.off('error', errorHandler)
-                        stream.off('error', errorHandler)
-                        stream.unpipe(res)
+                        readable.off('error', errorHandler)
+                        readable.unpipe(res)
                         res.end()
                         reject(error)
                     }
                     res.on('close', resolve)
                     res.once('error', errorHandler)
-                    stream.once('error', errorHandler)
-                    stream.pipe(res)
+                    readable.once('error', errorHandler)
+                    readable.pipe(res)
                 })
             }
             catch (exception) {
@@ -302,12 +305,12 @@ export function createRequestListener(
  * of type `Next`
  */
 export function fallthroughMessageHandler<ExistingState, NewState, Next>(
-    handlers: ReadonlyArray<MessageHandler<ExistingState, NewState | Next>>,
-    fallback: MessageHandler<ExistingState, NewState>,
+    handlers: ReadonlyArray<types.MessageHandler<ExistingState, NewState | Next>>,
+    fallback: types.MessageHandler<ExistingState, NewState>,
     isNext: (state: Readonly<NewState | Next>) => state is Next
-): MessageHandler<ExistingState, NewState> {
+): types.MessageHandler<ExistingState, NewState> {
     return async (message, state, sockets) => {
-        const cleanups: (Cleanup | undefined)[] = []
+        const cleanups: (types.Cleanup | undefined)[] = []
         for (const handler of handlers) {
             const result = await handler(message, state, sockets)
             cleanups.push(result.cleanup)
@@ -330,9 +333,9 @@ export function fallthroughMessageHandler<ExistingState, NewState, Next>(
  * the first's.
  */
 export function composeMessageHandlers<StateA, StateB, StateC>(
-    firstHandler: MessageHandler<StateA, StateB>,
-    secondHandler: MessageHandler<StateB, StateC>
-): MessageHandler<StateA, StateC> {
+    firstHandler: types.MessageHandler<StateA, StateB>,
+    secondHandler: types.MessageHandler<StateB, StateC>
+): types.MessageHandler<StateA, StateC> {
     return async (message, state, sockets) => {
         const firstResult = await firstHandler(message, state, sockets)
         const secondResult = await secondHandler(message, firstResult.state, sockets)
@@ -345,23 +348,21 @@ export function composeMessageHandlers<StateA, StateB, StateC>(
 
 
 /**
- * Chains together two message handlers that return `Result` states. If the
- * first handler returns a state of `Error`, it is immediately returned. If it
- * returns `Ok`, its value is passed as the state the second handler. Any
- * cleanup functions returned are combined so that the second handler's cleanup
- * is called before the first's.
- * @param firstHandler
- * @param secondHandler
- * @returns
+ * Chains together two message handlers that return
+ * {@link fallible.Result Result} states. If the first handler returns a state
+ * of {@link fallible.Error Error}, it is immediately returned. If it returns
+ * {@link fallible.Ok Ok}, its value is passed as the state the second handler.
+ * Any cleanup functions returned are combined so that the second handler's
+ * cleanup is called before the first's.
  */
 export function composeResultMessageHandlers<StateA, StateB, StateC, ErrorA, ErrorB>(
-    firstHandler: MessageHandler<StateA, Result<StateB, ErrorA>>,
-    secondHandler: MessageHandler<StateB, Result<StateC, ErrorA | ErrorB>>
-): MessageHandler<StateA, Result<StateC, ErrorA | ErrorB>> {
+    firstHandler: types.MessageHandler<StateA, fallible.Result<StateB, ErrorA>>,
+    secondHandler: types.MessageHandler<StateB, fallible.Result<StateC, ErrorA | ErrorB>>
+): types.MessageHandler<StateA, fallible.Result<StateC, ErrorA | ErrorB>> {
     return async (message, state, sockets) => {
         const firstResult = await firstHandler(message, state, sockets)
         if (!firstResult.state.ok) {
-            return firstResult as MessageHandlerResult<Error<ErrorA>>
+            return firstResult as types.MessageHandlerResult<fallible.Error<ErrorA>>
         }
         const secondResult = await secondHandler(message, firstResult.state.value, sockets)
         return composeCleanupResponse(
@@ -372,7 +373,10 @@ export function composeResultMessageHandlers<StateA, StateB, StateC, ErrorA, Err
 }
 
 
-function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup | undefined>): MessageHandlerResult<T> {
+function composeCleanupResponse<T>(
+    state: T,
+    cleanups: ReadonlyArray<types.Cleanup | undefined>
+): types.MessageHandlerResult<T> {
     return response(state, async state => {
         for (let index = cleanups.length - 1; index >= 0; index--) {
             const cleanup = cleanups[index]
@@ -386,11 +390,11 @@ function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup | u
 
 
 /**
- * An alternative to `composeMessageHandlers`. Much more elegant when chaining
- * many handlers together. Immutable.
+ * An alternative to {@link composeMessageHandlers}. Much more elegant when
+ * chaining many handlers together. Immutable.
  *
  * The following are equivalent:
- * ```
+ * ```typescript
  * new MessageHandlerComposer(a)
  *      .intoHandler(b)
  *      .intoHandler(c)
@@ -400,31 +404,31 @@ function composeCleanupResponse<T>(state: T, cleanups: ReadonlyArray<Cleanup | u
  * ```
  */
 export class MessageHandlerComposer<ExistingState, NewState> {
-    readonly #handler: MessageHandler<ExistingState, NewState>
+    readonly #handler: types.MessageHandler<ExistingState, NewState>
 
-    constructor(handler: MessageHandler<ExistingState, NewState>) {
+    constructor(handler: types.MessageHandler<ExistingState, NewState>) {
         this.#handler = handler
     }
 
     intoHandler<State>(
-        other: MessageHandler<NewState, State>
+        other: types.MessageHandler<NewState, State>
     ): MessageHandlerComposer<ExistingState, State> {
         const handler = composeMessageHandlers(this.#handler, other)
         return new MessageHandlerComposer(handler)
     }
 
-    build(): MessageHandler<ExistingState, NewState> {
+    build(): types.MessageHandler<ExistingState, NewState> {
         return this.#handler
     }
 }
 
 
 /**
- * An alternative to `composeResultMessageHandlers`. Much more elegant when
- * chaining many handlers together. Immutable.
+ * An alternative to {@link composeResultMessageHandlers}. Much more elegant
+ * when chaining many handlers together. Immutable.
  *
  * The following are equivalent:
- * ```
+ * ```typescript
  * new ResultMessageHandlerComposer(a)
  *      .intoResultHandler(b)
  *      .intoHandler(c)
@@ -434,9 +438,9 @@ export class MessageHandlerComposer<ExistingState, NewState> {
  * ```
  */
 export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
-        extends MessageHandlerComposer<ExistingState, Result<NewState, Error>> {
+        extends MessageHandlerComposer<ExistingState, fallible.Result<NewState, Error>> {
     intoResultHandler<State, ErrorB>(
-        other: MessageHandler<NewState, Result<State, Error | ErrorB>>
+        other: types.MessageHandler<NewState, fallible.Result<State, Error | ErrorB>>
     ): ResultMessageHandlerComposer<ExistingState, State, Error | ErrorB> {
         const handler = composeResultMessageHandlers(this.build(), other)
         return new ResultMessageHandlerComposer(handler)

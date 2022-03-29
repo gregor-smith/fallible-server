@@ -12,7 +12,6 @@ import {
     cookieHeader,
     cookieSignatureHeader,
     parseMessageCookie,
-    getMessageHeader,
     getMessageIP,
     getMessageMethod,
     getMessageURL,
@@ -245,18 +244,6 @@ describe('cookieSignatureHeader', () => {
 })
 
 
-describe('getMessageHeader', () => {
-    test.each<[ IncomingHttpHeaders, string | undefined ]>([
-        [ {}, undefined ],
-        [ { 'test-header': 'test value' }, 'test value' ],
-        [ { 'test-header': [ 'test value' ] }, 'test value' ]
-    ])('returns first value if array, otherwise whole header', (headers, header) => {
-        const result = getMessageHeader({ headers }, 'test-header')
-        expect(result).toBe(header)
-    })
-})
-
-
 describe('getMessageIP', () => {
     test('returns socket remote address when useXForwardedFor false', () => {
         const remoteAddress = 'test socket remote address'
@@ -303,16 +290,27 @@ describe('getMessageIP', () => {
 
 describe('getMessageMethod', () => {
     test.each([
-        'post',
-        'get',
-    ])('returns uppercase method', method => {
+        'GET',
+        'HEAD',
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+        'TRACE',
+        'OPTIONS',
+        'CONNECT',
+    ])('returns method', method => {
         const result = getMessageMethod({ method })
-        expect(result).toBe(method.toUpperCase())
+        expect(result).toEqual<typeof result>(ok(method))
     })
 
-    test('returns GET when method undefined', () => {
-        const result = getMessageMethod({})
-        expect(result).toBe('GET')
+    test.each([
+        undefined,
+        'get',
+        'TEST'
+    ])('returns error when method unrecognised or undefined', method => {
+        const result = getMessageMethod({ method })
+        expect(result).toEqual<typeof result>(error(method))
     })
 })
 

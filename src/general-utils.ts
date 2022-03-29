@@ -147,17 +147,6 @@ export function cookieSignatureHeader(
 }
 
 
-export function getMessageHeader(
-    message: Pick<IncomingMessage, 'headers'>,
-    name: string
-): string | undefined {
-    const header = message.headers[name]
-    return Array.isArray(header)
-        ? header[0]
-        : header
-}
-
-
 export interface IncomingMessageIPFields {
     headers: IncomingMessage['headers']
     socket: Pick<IncomingMessage['socket'], 'remoteAddress'>
@@ -171,20 +160,13 @@ export function getMessageIP(
     if (!useXForwardedFor) {
         return message.socket.remoteAddress
     }
-    return getMessageHeader(message, 'x-forwarded-for')
-        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)
+    let header = message.headers['x-forwarded-for']
+    if (Array.isArray(header)) {
+        header = header[0]
+    }
+    return header?.match(/^\s*([^\s]+)\s*(?:,|$)/)
         ?.[1]
         ?? message.socket.remoteAddress
-}
-
-
-export function getMessageMethod(message: Pick<IncomingMessage, 'method'>): Method {
-    return message.method?.toUpperCase() as Method | undefined ?? 'GET'
-}
-
-
-export function getMessageURL(message: Pick<IncomingMessage, 'url'>): string {
-    return message.url ?? '/'
 }
 
 
