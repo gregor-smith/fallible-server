@@ -1,5 +1,4 @@
 import type { IncomingMessage } from 'node:http'
-import { TextDecoder } from 'node:util'
 
 import { parse as secureJSONParse } from 'secure-json-parse'
 import { error, ok, Result } from 'fallible'
@@ -14,9 +13,18 @@ export type ParseJSONStreamError =
     | { tag: 'InvalidSyntax' }
 
 export type ParseJSONStreamOptions = {
+    /**
+     * Limits the maximum size of the stream; if this limit is exceeded,
+     * an {@link ParseJSONStreamError error} is returned. By default unlimited.
+     */
     maximumSize?: number
+    /**
+     * Defaults to `utf-8`. If decoding fails, an
+     * {@link ParseJSONStreamError error} is returned
+     */
     encoding?: BufferEncoding
 }
+
 
 export async function parseJSONStream(
     stream: AwaitableIterable<Uint8Array>,
@@ -80,13 +88,41 @@ export type ParsedMultipart = {
 }
 
 export type ParseMultipartRequestArguments = {
+    /** Encoding of fields; defaults to `utf-8` */
     encoding?: BufferEncoding
+    /** Defaults to the OS temp dir */
     saveDirectory?: string
+    /** Defaults to false */
     keepFileExtensions?: boolean
+    /**
+     * The minimum size of each individual file in the body; if any file is
+     * smaller in size, an {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
     minimumFileSize?: number
+    /**
+     * The maximum number of files in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
     maximumFileCount?: number
+    /**
+     * The maximum size of each individual file in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
     maximumFileSize?: number
+    /**
+     * The maximum number of fields in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
     maximumFieldsCount?: number
+    /**
+     * The maximum total size of fields in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
     maximumFieldsSize?: number
 }
 
@@ -94,9 +130,9 @@ export type ParseMultipartRequestArguments = {
 export function parseMultipartRequest(
     request: IncomingMessage,
     {
-        encoding,
+        encoding = 'utf-8',
         saveDirectory,
-        keepFileExtensions,
+        keepFileExtensions = false,
         minimumFileSize = 0,
         maximumFileCount = Infinity,
         maximumFileSize = Infinity,
