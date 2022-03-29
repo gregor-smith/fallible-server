@@ -11,12 +11,7 @@ import type {
 import {
     cookieHeader,
     cookieSignatureHeader,
-    parseMessageCookie,
     getMessageIP,
-    getMessageMethod,
-    getMessageURL,
-    parseMessageContentLength,
-    parseMessageContentType,
     parseURLHash,
     parseURLQueryString,
     parseSignedMessageCookie,
@@ -25,8 +20,7 @@ import {
     parseContentTypeHeader,
     parseContentLengthHeader,
     parseAuthorizationHeaderBearer,
-    parseMessageAuthorizationHeaderBearer,
-    messageIsWebSocketRequest,
+    messageIsLikelyWebSocketRequest,
     parseJSONString,
     ParseSignedMessageCookieError,
     joinURLQueryString,
@@ -94,50 +88,15 @@ describe('parseCookieHeader', () => {
 })
 
 
-describe('parseMessageCookie', () => {
-    test('returns undefined when cookie header missing', () => {
-        const result = parseMessageCookie({ headers: {} }, 'test')
-        expect(result).toBeUndefined()
-    })
-
-    test.each([
-        'test',
-        'test=value',
-        'test=value; test2=value2; test3=value3'
-    ])('returns undefined when name missing from cookie header', header => {
-        const result = parseMessageCookie({ headers: { cookie: header } }, 'test4')
-        expect(result).toBeUndefined()
-    })
-
-    test.each([
-        [ 'test=value; test2=value2; test3=value3', 'value2' ],
-        [ 'test2=value', 'value' ]
-    ])('returns cookie value', (header, value) => {
-        const result = parseMessageCookie({ headers: { cookie: header } }, 'test2')
-        expect(result).toBe(value)
-    })
-})
-
-
 describe('parseSignedMessageCookie', () => {
-    test('returns ValueCookieMissing when cookie header missing', () => {
-        const result = parseSignedMessageCookie(
-            { headers: {} },
-            'test',
-            new Keygrip([ 'test key' ])
-        )
-        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
-            error('ValueCookieMissing')
-        )
-    })
-
     test.each([
+        '',
         'test',
         'test=value',
         'test=value; test2=value2; test3=value3'
     ])('returns ValueCookieMissing when name missing from cookie header', header => {
         const result = parseSignedMessageCookie(
-            { headers: { cookie: header } },
+            header,
             'test4',
             new Keygrip([ 'test key' ])
         )
@@ -151,7 +110,7 @@ describe('parseSignedMessageCookie', () => {
         'test=value; test2=value2; test3=value3'
     ])('returns SignatureCookieMissing when signature name missing from cookie header', header => {
         const result = parseSignedMessageCookie(
-            { headers: { cookie: header } },
+            header,
             'test',
             new Keygrip([ 'test key' ])
         )
@@ -165,7 +124,7 @@ describe('parseSignedMessageCookie', () => {
         [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2' ]
     ])('returns SignatureInvalid when signature does not match', (header, name) => {
         const result = parseSignedMessageCookie(
-            { headers: { cookie: header } },
+            header,
             name,
             new Keygrip([ 'invalid key' ])
         )
@@ -179,7 +138,7 @@ describe('parseSignedMessageCookie', () => {
         [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2', 'value2', 'test key 2' ]
     ])('returns cookie value', (header, name, value, key) => {
         const result = parseSignedMessageCookie(
-            { headers: { cookie: header } },
+            header,
             name,
             new Keygrip([ key ])
         )
@@ -288,52 +247,12 @@ describe('getMessageIP', () => {
 })
 
 
-describe('getMessageMethod', () => {
-    test.each([
-        'GET',
-        'HEAD',
-        'POST',
-        'PUT',
-        'PATCH',
-        'DELETE',
-        'TRACE',
-        'OPTIONS',
-        'CONNECT',
-    ])('returns method', method => {
-        const result = getMessageMethod({ method })
-        expect(result).toEqual<typeof result>(ok(method))
-    })
-
-    test.each([
-        undefined,
-        'get',
-        'TEST'
-    ])('returns error when method unrecognised or undefined', method => {
-        const result = getMessageMethod({ method })
-        expect(result).toEqual<typeof result>(error(method))
-    })
-})
-
-
-describe('getMessageURL', () => {
-    test.each([ '/', '/test' ])('returns URL', url => {
-        const result = getMessageURL({ url })
-        expect(result).toBe(url)
-    })
-
-    test("returns '/' when url undefined", () => {
-        const result = getMessageURL({})
-        expect(result).toBe('/')
-    })
-})
-
-
 describe('joinURLQueryString', () => {
     test.each<[ Record<string, string | number | bigint | boolean | null | undefined>, string ]>([
         [ {}, '' ],
         [ { aaa: undefined }, '' ],
         [ { aaa: '111', bbb: 222, ccc: null, ddd: true }, '?aaa=111&bbb=222&ccc=null&ddd=true' ],
-        [ { aaa: false, bbb: undefined, ccc: BigInt('333') }, '?aaa=false&ccc=333' ],
+        [ { aaa: false, bbb: undefined, ccc: 333n }, '?aaa=false&ccc=333' ],
     ])('joins url params', (params, joined) => {
         const result = joinURLQueryString(params)
         expect(result).toBe(joined)
@@ -480,42 +399,6 @@ describe('parseContentTypeHeader', () => {
 })
 
 
-describe('parseMessageContentType', () => {
-    test('returns undefined when no content-type header', () => {
-        const result = parseMessageContentType({ headers: {} })
-        expect(result).toBeUndefined()
-    })
-
-    test.each([
-        '',
-        ' '
-    ])('returns undefined when content-type header empty', header => {
-        const result = parseMessageContentType({
-            headers: { 'content-type': header }
-        })
-        expect(result).toBeUndefined()
-    })
-
-    test.each<[ string, ParsedContentType ]>([
-        [ 'test/type', { type: 'test/type' } ],
-        [ 'Test/Type', { type: 'test/type' } ],
-        [ ' test/type ', { type: 'test/type' } ],
-        [ 'test/type;charset=utf-8', { type: 'test/type', characterSet: 'utf-8' } ],
-        [ 'Test/Type;Charset=UTF-8', { type: 'test/type', characterSet: 'utf-8' } ],
-        [ ' test/type ; charset = utf-8 ', { type: 'test/type', characterSet: 'utf-8' } ],
-        [ 'test/type;charset="utf-8"', { type: 'test/type', characterSet: 'utf-8' } ],
-        [ 'Test/Type;Charset="UTF-8"', { type: 'test/type', characterSet: 'utf-8' } ],
-        [ ' test/type ; charset = "utf-8" ', { type: 'test/type', characterSet: 'utf-8' } ],
-    ])('returns parsed content-type header', (header, contentType) => {
-        const result = parseMessageContentType({
-            headers: { 'content-type': header }
-        })
-        expect(result?.type).toBe(contentType.type)
-        expect(result?.characterSet).toBe(contentType.characterSet)
-    })
-})
-
-
 describe('parseContentLengthHeader', () => {
     test.each([ '', ' ', 'test', '1.1' ])('returns undefined when header not an integer', header => {
         const result = parseContentLengthHeader(header)
@@ -525,28 +408,6 @@ describe('parseContentLengthHeader', () => {
     test.each([ '1', ' 2 ' ])('returns parsed integer', header => {
         const result = parseContentLengthHeader(header)
         expect(result).toBe(Number(header))
-    })
-})
-
-
-describe('parseMessageContentLength', () => {
-    test('returns missing when header missing', () => {
-        const result = parseMessageContentLength({ headers: {} })
-        expect(result).toEqual(error('Missing'))
-    })
-
-    test.each([ '', ' ', 'test', '1.1' ])('returns invalid when header not an integer', header => {
-        const result = parseMessageContentLength({
-            headers: { 'content-length': header }
-        })
-        expect(result).toEqual(error('Invalid'))
-    })
-
-    test.each([ '1', ' 2 ' ])('returns parsed integer', header => {
-        const result = parseMessageContentLength({
-            headers: { 'content-length': header }
-        })
-        expect(result).toEqual(ok(Number(header)))
     })
 })
 
@@ -583,56 +444,22 @@ describe('parseAuthorizationHeaderBearer', () => {
 })
 
 
-describe('parseMessageAuthorizationHeaderBearer', () => {
-    test('returns missing when header missing', () => {
-        const result = parseMessageAuthorizationHeaderBearer({ headers: {} })
-        expect(result).toEqual(error('Missing'))
-    })
+describe('messageIsLikelyWebSocketRequest', () => {
+    const headers: IncomingHttpHeaders = {
+        connection: 'upgrade',
+        upgrade: 'websocket',
+        'sec-websocket-key': 'test',
+        'sec-websocket-version': 'test'
+    }
 
-    test.each([
-        '',
-        ' ',
-        'test',
-        'Bearer',
-        'Bearer ',
-        'Bearer  ',
-        '  Bearer',
-        '  Bearer ',
-        '  Bearer  ',
-        'bearer',
-        'bearer ',
-        'bearer  ',
-        '  bearer',
-        '  bearer ',
-        '  bearer  ',
-        'bearer test',
-        'Bearer 🤔',
-        'Bearer  test'
-    ])('returns invalid when header invalid', header => {
-        const result = parseMessageAuthorizationHeaderBearer({
-            headers: { authorization: header }
-        })
-        expect(result).toEqual(error('Invalid'))
-    })
-
-    test('returns parsed value', () => {
-        const result = parseMessageAuthorizationHeaderBearer({
-            headers: { authorization: 'Bearer Test1-._~+/' }
-        })
-        expect(result).toEqual(ok('Test1-._~+/'))
-    })
-})
-
-
-describe('messageIsWebSocketRequest', () => {
     test.each([
         'upgrade',
         'Upgrade'
-    ])('returns true when connection header is upgrade and upgrade header is websocket', header => {
-        const result = messageIsWebSocketRequest({
+    ])('returns true when connection header is upgrade, upgrade header is websocket, and security headers are present', header => {
+        const result = messageIsLikelyWebSocketRequest({
             headers: {
-                connection: header,
-                upgrade: 'websocket'
+                ...headers,
+                connection: header
             }
         })
         expect(result).toBe(true)
@@ -642,10 +469,10 @@ describe('messageIsWebSocketRequest', () => {
         undefined,
         'test'
     ])('returns false when connection header missing or not upgrade', header => {
-        const result = messageIsWebSocketRequest({
+        const result = messageIsLikelyWebSocketRequest({
             headers: {
-                connection: header,
-                upgrade: 'websocket'
+                ...headers,
+                connection: header
             }
         })
         expect(result).toBe(false)
@@ -655,15 +482,36 @@ describe('messageIsWebSocketRequest', () => {
         'test',
         undefined
     ])('returns false when upgrade header missing or non-websocket', header => {
-        const result = messageIsWebSocketRequest({
+        const result = messageIsLikelyWebSocketRequest({
             headers: {
-                connection: 'upgrade',
+                ...headers,
                 upgrade: header
             }
         })
         expect(result).toBe(false)
     })
+
+    test('returns false when security key header missing', () => {
+        const result = messageIsLikelyWebSocketRequest({
+            headers: {
+                ...headers,
+                'sec-websocket-key': undefined
+            }
+        })
+        expect(result).toBe(false)
+    })
+
+    test('returns false when security version header missing', () => {
+        const result = messageIsLikelyWebSocketRequest({
+            headers: {
+                ...headers,
+                'sec-websocket-version': undefined
+            }
+        })
+        expect(result).toBe(false)
+    })
 })
+
 
 
 describe('response', () => {

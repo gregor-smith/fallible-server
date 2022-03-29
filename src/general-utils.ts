@@ -13,7 +13,6 @@ import type {
     Cookie,
     Formattable,
     MessageHandlerResult,
-    Method,
     WebsocketBody,
     WebsocketResponse
 } from './types.js'
@@ -52,17 +51,6 @@ export function parseCookieHeader(header: string, name: string): string | undefi
 }
 
 
-export function parseMessageCookie(
-    message: Pick<IncomingMessage, 'headers'>,
-    name: string
-): string | undefined {
-    if (message.headers.cookie === undefined) {
-        return
-    }
-    return parseCookieHeader(message.headers.cookie, name)
-}
-
-
 function cookieKeyValuePair<A extends Formattable, B extends Formattable>(
     name: A,
     value: B
@@ -84,15 +72,15 @@ export type ParseSignedMessageCookieError =
 export type Keys = Pick<Keygrip, 'verify'>
 
 export function parseSignedMessageCookie(
-    message: Pick<IncomingMessage, 'headers'>,
+    header: string,
     name: string,
     keys: Keys
 ): Result<string, ParseSignedMessageCookieError> {
-    const value = parseMessageCookie(message, name)
+    const value = parseCookieHeader(header, name)
     if (value === undefined) {
         return error('ValueCookieMissing' as const)
     }
-    const signature = parseMessageCookie(message, signatureCookieName(name))
+    const signature = parseCookieHeader(header, signatureCookieName(name))
     if (signature === undefined) {
         return error('SignatureCookieMissing' as const)
     }
@@ -164,9 +152,7 @@ export function getMessageIP(
     if (Array.isArray(header)) {
         header = header[0]
     }
-    return header?.match(/^\s*([^\s]+)\s*(?:,|$)/)
-        ?.[1]
-        ?? message.socket.remoteAddress
+    return header?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1] ?? message.socket.remoteAddress
 }
 
 
@@ -280,15 +266,6 @@ export function parseContentTypeHeader(header: string): ParsedContentType | unde
 }
 
 
-export function parseMessageContentType(message: Pick<IncomingMessage, 'headers'>): ParsedContentType | undefined {
-    let contentType = message.headers['content-type']
-    if (contentType === undefined) {
-        return
-    }
-    return parseContentTypeHeader(contentType)
-}
-
-
 export function parseContentLengthHeader(header: string): number | undefined {
     // today i learnt passing an all whitespace string to Number gives you 0
     // to what end?
@@ -303,47 +280,17 @@ export function parseContentLengthHeader(header: string): number | undefined {
 }
 
 
-export type ParseMessageContentLengthError =
-    | 'Missing'
-    | 'Invalid'
-
-export function parseMessageContentLength(message: Pick<IncomingMessage, 'headers'>): Result<number, ParseMessageContentLengthError> {
-    if (message.headers['content-length'] === undefined) {
-        return error('Missing' as const)
-    }
-    const length = parseContentLengthHeader(message.headers['content-length'])
-    return length === undefined
-        ? error('Invalid' as const)
-        : ok(length)
-}
-
-
 export function parseAuthorizationHeaderBearer(header: string): string | undefined {
     // See: https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
     return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1]
 }
 
 
-export type ParseMessageAuthorisationBearerError =
-    | 'Missing'
-    | 'Invalid'
-
-export function parseMessageAuthorizationHeaderBearer(
-    message: Pick<IncomingMessage, 'headers'>
-): Result<string, ParseMessageAuthorisationBearerError> {
-    if (message.headers.authorization === undefined) {
-        return error('Missing' as const)
-    }
-    const token = parseAuthorizationHeaderBearer(message.headers.authorization)
-    return token === undefined
-        ? error('Invalid' as const)
-        : ok(token)
-}
-
-
-export function messageIsWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
+export function messageIsLikelyWebSocketRequest(message: Pick<IncomingMessage, 'headers'>): boolean {
     return message.headers.connection?.toLowerCase() === 'upgrade'
         && message.headers.upgrade === 'websocket'
+        && message.headers['sec-websocket-key'] !== undefined
+        && message.headers['sec-websocket-version'] !== undefined
 }
 
 
