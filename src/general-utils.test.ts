@@ -1,36 +1,17 @@
 import type { IncomingHttpHeaders } from 'http'
 
-import { ok, error, Error, Ok } from 'fallible'
-import Keygrip from 'keygrip'
-
-import type {
-    Cleanup,
-    Cookie,
-    WebsocketBody
-} from './types.js'
+import type { Cleanup, WebsocketBody } from './types.js'
 import {
-    cookieHeader,
-    cookieSignatureHeader,
     getMessageIP,
-    parseURLHash,
-    parseURLQueryString,
-    parseSignedMessageCookie,
-    parseURLPath,
-    parseCookieHeader,
-    parseContentTypeHeader,
+    parseCharSetContentTypeHeader,
     parseContentLengthHeader,
     parseAuthorizationHeaderBearer,
-    messageIsLikelyWebSocketRequest,
+    headersIndicateWebSocketRequest,
     parseJSONString,
-    ParseSignedMessageCookieError,
-    joinURLQueryString,
-    parseURLPathSegments,
     response,
     websocketResponse,
     iterateAsResolved,
-    ParsedContentType,
-    contentDispositionHeader,
-    URLParser
+    ParsedContentType
 } from './general-utils.js'
 
 
@@ -46,159 +27,6 @@ describe('parseJSONString', () => {
     test('parses json string', () => {
         const result = parseJSONString('{"test":true}')
         expect(result).toEqual({ test: true })
-    })
-})
-
-
-describe('contentDispositionHeader', () => {
-    test('inline', () => {
-        const result = contentDispositionHeader('inline')
-        expect(result).toBe<typeof result>('inline')
-    })
-
-    test('attachment without filename', () => {
-        const result = contentDispositionHeader('attachment')
-        expect(result).toBe<typeof result>('attachment')
-    })
-
-    test('attachment with filename', () => {
-        const result = contentDispositionHeader('attachment', 'test 🤔')
-        expect(result).toBe<typeof result>(`attachment; filename="test%20%F0%9F%A4%94"`)
-    })
-})
-
-
-describe('parseCookieHeader', () => {
-    test.each([
-        'test',
-        'test=value',
-        'test=value; test2=value2; test3=value3'
-    ])('returns undefined when name missing from header', header => {
-        const result = parseCookieHeader(header, 'test4')
-        expect(result).toBeUndefined()
-    })
-
-    test.each([
-        [ 'test=value; test2=value2; test3=value3', 'value2' ],
-        [ 'test2=value', 'value' ]
-    ])('returns cookie value', (header, value) => {
-        const result = parseCookieHeader(header, 'test2')
-        expect(result).toBe(value)
-    })
-})
-
-
-describe('parseSignedMessageCookie', () => {
-    test.each([
-        '',
-        'test',
-        'test=value',
-        'test=value; test2=value2; test3=value3'
-    ])('returns ValueCookieMissing when name missing from cookie header', header => {
-        const result = parseSignedMessageCookie(
-            header,
-            'test4',
-            new Keygrip([ 'test key' ])
-        )
-        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
-            error('ValueCookieMissing')
-        )
-    })
-
-    test.each([
-        'test=value',
-        'test=value; test2=value2; test3=value3'
-    ])('returns SignatureCookieMissing when signature name missing from cookie header', header => {
-        const result = parseSignedMessageCookie(
-            header,
-            'test',
-            new Keygrip([ 'test key' ])
-        )
-        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
-            error('SignatureCookieMissing')
-        )
-    })
-
-    test.each([
-        [ 'test=value; test.sig=ItukCx0lb6-dY71Zps-69Gkz5XE', 'test' ],
-        [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2' ]
-    ])('returns SignatureInvalid when signature does not match', (header, name) => {
-        const result = parseSignedMessageCookie(
-            header,
-            name,
-            new Keygrip([ 'invalid key' ])
-        )
-        expect(result).toEqual<Error<ParseSignedMessageCookieError>>(
-            error('SignatureInvalid')
-        )
-    })
-
-    test.each([
-        [ 'test=value; test.sig=ItukCx0lb6-dY71Zps-69Gkz5XE', 'test', 'value', 'test key' ],
-        [ 'test2=value2; test2.sig=JLS-pHsjhoJAExITxBFTj8jko5o', 'test2', 'value2', 'test key 2' ]
-    ])('returns cookie value', (header, name, value, key) => {
-        const result = parseSignedMessageCookie(
-            header,
-            name,
-            new Keygrip([ key ])
-        )
-        expect(result).toEqual<Ok<string>>(ok(value))
-    })
-})
-
-
-describe('cookieHeader', () => {
-    test.each<[ string, Cookie, string ]>([
-        [
-            'test-cookie',
-            { value: 'test value' },
-            'test-cookie=test value'
-        ],
-        [
-            'test-cookie-2',
-            {
-                value: 'test value 2',
-                path: '/test/path',
-                maxAge: 1337,
-                domain: 'test.domain',
-                httpOnly: true,
-                sameSite: 'lax',
-                secure: true
-            },
-            'test-cookie-2=test value 2; Path=/test/path; Max-Age=1337; Domain=test.domain; SameSite=lax; Secure; HttpOnly'
-        ]
-    ])('returns formatted cookie', (name, cookie, header) => {
-        const result = cookieHeader(name, cookie)
-        expect(result).toBe(header)
-    })
-})
-
-
-describe('cookieSignatureHeader', () => {
-    test.each<[ string, Cookie, string, string ]>([
-        [
-            'test-cookie',
-            { value: 'test value' },
-            'test key',
-            'test-cookie.sig=7LcOkGwGNIdyT4SLKCdgLl0ayb0'
-        ],
-        [
-            'test-cookie-2',
-            {
-                value: 'test value 2',
-                path: '/test/path',
-                maxAge: 1337,
-                domain: 'test.domain',
-                httpOnly: true,
-                sameSite: 'lax',
-                secure: true
-            },
-            'test key 2',
-            'test-cookie-2.sig=47eK_2MpYl2oFIWr2WmPDwXWZmg; Path=/test/path; Max-Age=1337; Domain=test.domain; SameSite=lax; Secure; HttpOnly'
-        ]
-    ])('returns signature header signed with key', (name, cookie, key, header) => {
-        const result = cookieSignatureHeader(name, cookie, new Keygrip([ key ]))
-        expect(result).toBe(header)
     })
 })
 
@@ -247,137 +75,12 @@ describe('getMessageIP', () => {
 })
 
 
-describe('joinURLQueryString', () => {
-    test.each<[ Record<string, string | number | bigint | boolean | null | undefined>, string ]>([
-        [ {}, '' ],
-        [ { aaa: undefined }, '' ],
-        [ { aaa: '111', bbb: 222, ccc: null, ddd: true }, '?aaa=111&bbb=222&ccc=null&ddd=true' ],
-        [ { aaa: false, bbb: undefined, ccc: 333n }, '?aaa=false&ccc=333' ],
-    ])('joins url params', (params, joined) => {
-        const result = joinURLQueryString(params)
-        expect(result).toBe(joined)
-    })
-})
-
-
-describe('parseURLQueryString', () => {
-    test.each([
-        [ '/', {} ],
-        [ '/aaa/bbb/ccc', {} ],
-        [ '/aaa/bbb/ccc/', {} ],
-        [ '/#', {} ],
-        [ '/aaa/bbb/ccc#', {} ],
-        [ '/aaa/bbb/ccc/#', {} ],
-        [ '/?', {} ],
-        [ '/aaa/bbb/ccc?', {} ],
-        [ '/aaa/bbb/ccc/?', {} ],
-        [ '/?#', {} ],
-        [ '/aaa/bbb/ccc?#', {} ],
-        [ '/aaa/bbb/ccc/?#', {} ],
-        [ '/?aaa=bbb', { aaa: 'bbb' } ],
-        [ '/?aaa=bbb#', { aaa: 'bbb' } ],
-        [ '/?aaa=bbb&ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ],
-        [ '/?aaa=bbb&ccc=ddd#', { aaa: 'bbb', ccc: 'ddd' } ],
-        [ '/?%20aaa%20=%20bbb%20', { ' aaa ': ' bbb ' } ],
-        // no arrays, last value should take precedence
-        [ '/?aaa=bbb&aaa=ccc', { aaa: 'ccc' } ],
-        // again no arrays so no special php-style syntax
-        [ '/?aaa[]=bbb&aaa[]=ccc', { 'aaa[]': 'ccc' } ],
-        // ? and & should interchangeable even though it's technically
-        // incorrect, just to keep shit from exploding
-        [ '/?aaa=bbb?ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ],
-        [ '/&aaa=bbb&ccc=ddd', { aaa: 'bbb', ccc: 'ddd' } ],
-        [ '/?aaa&bbb=ccc&ddd', { bbb: 'ccc' } ],
-        [ '/?aaa=&bbb=ccc&ddd=', { bbb: 'ccc' } ],
-        [ '/?aaa&bbb=ccc&ddd#', { bbb: 'ccc' } ],
-        [ '/?aaa=&bbb=ccc&ddd=#', { bbb: 'ccc' } ]
-    ])('returns record with empty and missing values skipped and rest decoded', (url, query) => {
-        let result = parseURLQueryString(url)
-        expect(result).toEqual(query)
-        result = new URLParser(url).query()
-        expect(result).toEqual(query)
-    })
-})
-
-
-describe('parseURLHash', () => {
-    test.each([
-        [ '/', '' ],
-        [ '/?', '' ],
-        [ '/#', '' ],
-        [ '/?#', ''  ],
-        [ '/?aaa=bbb#', '' ],
-        [ '/#test', 'test' ],
-        [ '/?#test', 'test'  ],
-        [ '/?aaa=bbb#test', 'test' ],
-        [ '/#%20test%20', ' test ' ]
-    ])('returns decoded hash', (url, hash) => {
-        let result = parseURLHash(url)
-        expect(result).toBe(hash)
-        result = new URLParser(url).hash()
-        expect(result).toBe(hash)
-    })
-})
-
-
-describe('parseURLPath', () => {
-    const base: [ string, string ][] = [
-        [ '', '/' ],
-        [ '/', '/' ],
-        [ '//', '/' ],
-        [ '/aaa/bbb/ccc', '/aaa/bbb/ccc' ],
-        [ '/aaa/bbb/ccc/', '/aaa/bbb/ccc' ],
-        [ '//aaa/bbb///ccc', '/aaa/bbb/ccc' ],
-        [ '//aaa/bbb///ccc////', '/aaa/bbb/ccc' ],
-        [ '/%20aaa%20/%20bbb%20', '/ aaa / bbb ' ],
-    ]
-
-    test.each([
-        ...base,
-        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '?aaa=bbb', path ]),
-        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '#aaa', path ]),
-        ...base.map<[ string, string ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
-    ])('returns decoded path and ignores query and hash', (url, path) => {
-        let result = parseURLPath(url)
-        expect(result).toBe(path)
-        result = new URLParser(url).path()
-        expect(result).toBe(path)
-    })
-})
-
-
-describe('parseURLPathSegments', () => {
-    const base: [ string, string[] ][] = [
-        [ '', [] ],
-        [ '/', [] ],
-        [ '//', [] ],
-        [ '/aaa/bbb/ccc', [ 'aaa', 'bbb', 'ccc' ] ],
-        [ '/aaa/bbb/ccc/', [ 'aaa', 'bbb', 'ccc' ] ],
-        [ '//aaa/bbb///ccc', [ 'aaa', 'bbb', 'ccc' ] ],
-        [ '//aaa/bbb///ccc////', [ 'aaa', 'bbb', 'ccc' ] ],
-        [ '/%20aaa%20/%20bbb%20', [ ' aaa ', ' bbb ' ] ],
-    ]
-
-    test.each([
-        ...base,
-        ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb', path ]),
-        ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '#aaa', path ]),
-        ...base.map<[ string, string[] ]>(([ url, path ]) => [ url + '?aaa=bbb#aaa', path ])
-    ])('returns decoded path segments and ignores query and hash', (url, path) => {
-        let result: ReadonlyArray<string> = [ ...parseURLPathSegments(url) ]
-        expect(result).toEqual(path)
-        result = new URLParser(url).segments()
-        expect(result).toEqual(path)
-    })
-})
-
-
-describe('parseContentTypeHeader', () => {
+describe('parseCharSetContentTypeHeader', () => {
     test.each([
         '',
         ' '
     ])('returns undefined when header empty', header => {
-        const result = parseContentTypeHeader(header)
+        const result = parseCharSetContentTypeHeader(header)
         expect(result).toBeUndefined()
     })
 
@@ -391,8 +94,9 @@ describe('parseContentTypeHeader', () => {
         [ 'test/type;charset="utf-8"', { type: 'test/type', characterSet: 'utf-8' } ],
         [ 'Test/Type;Charset="UTF-8"', { type: 'test/type', characterSet: 'utf-8' } ],
         [ ' test/type ; charset = "utf-8" ', { type: 'test/type', characterSet: 'utf-8' } ],
-    ])('returns parsed mheader', (header, contentType) => {
-        const result = parseContentTypeHeader(header)
+        [ 'test/type; other-directive=true', { type: 'test/type; other-directive=true' } ],
+    ])('returns parsed header', (header, contentType) => {
+        const result = parseCharSetContentTypeHeader(header)
         expect(result?.type).toBe(contentType.type)
         expect(result?.characterSet).toBe(contentType.characterSet)
     })
@@ -444,7 +148,7 @@ describe('parseAuthorizationHeaderBearer', () => {
 })
 
 
-describe('messageIsLikelyWebSocketRequest', () => {
+describe('headersIndicateWebSocketRequest', () => {
     const headers: IncomingHttpHeaders = {
         connection: 'upgrade',
         upgrade: 'websocket',
@@ -456,11 +160,9 @@ describe('messageIsLikelyWebSocketRequest', () => {
         'upgrade',
         'Upgrade'
     ])('returns true when connection header is upgrade, upgrade header is websocket, and security headers are present', header => {
-        const result = messageIsLikelyWebSocketRequest({
-            headers: {
-                ...headers,
-                connection: header
-            }
+        const result = headersIndicateWebSocketRequest({
+            ...headers,
+            connection: header
         })
         expect(result).toBe(true)
     })
@@ -469,11 +171,9 @@ describe('messageIsLikelyWebSocketRequest', () => {
         undefined,
         'test'
     ])('returns false when connection header missing or not upgrade', header => {
-        const result = messageIsLikelyWebSocketRequest({
-            headers: {
-                ...headers,
-                connection: header
-            }
+        const result = headersIndicateWebSocketRequest({
+            ...headers,
+            connection: header
         })
         expect(result).toBe(false)
     })
@@ -482,31 +182,25 @@ describe('messageIsLikelyWebSocketRequest', () => {
         'test',
         undefined
     ])('returns false when upgrade header missing or non-websocket', header => {
-        const result = messageIsLikelyWebSocketRequest({
-            headers: {
-                ...headers,
-                upgrade: header
-            }
+        const result = headersIndicateWebSocketRequest({
+            ...headers,
+            upgrade: header
         })
         expect(result).toBe(false)
     })
 
     test('returns false when security key header missing', () => {
-        const result = messageIsLikelyWebSocketRequest({
-            headers: {
-                ...headers,
-                'sec-websocket-key': undefined
-            }
+        const result = headersIndicateWebSocketRequest({
+            ...headers,
+            'sec-websocket-key': undefined
         })
         expect(result).toBe(false)
     })
 
     test('returns false when security version header missing', () => {
-        const result = messageIsLikelyWebSocketRequest({
-            headers: {
-                ...headers,
-                'sec-websocket-version': undefined
-            }
+        const result = headersIndicateWebSocketRequest({
+            ...headers,
+            'sec-websocket-version': undefined
         })
         expect(result).toBe(false)
     })

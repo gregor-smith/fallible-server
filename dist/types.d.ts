@@ -1,24 +1,29 @@
 /// <reference types="node" />
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type http from 'node:http';
 import type WebSocket from 'ws';
 import type { Awaitable } from 'fallible';
 import type { WebsocketReadyState } from './general-utils.js';
-export declare type Message = Omit<IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
+/**
+ * A Node {@link http.IncomingMessage IncomingMessage} that is correctly typed
+ * to yield {@link Buffer Buffers} on iteration
+ */
+export declare type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
+/** Data that can be sent in a WebSocket message */
 export declare type WebsocketData = WebSocket.Data;
-export declare type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'TRACE' | 'OPTIONS' | 'CONNECT';
+/** Value that can be formatted into a string as-is */
 export declare type Formattable = string | number | boolean | bigint | null;
-export declare type Cookie = {
-    value: Formattable;
-    maxAge?: number;
-    path?: string;
-    domain?: string;
-    secure?: boolean;
-    httpOnly?: boolean;
-    sameSite?: 'strict' | 'lax' | 'none';
-};
-export declare type AwaitableRequestListener = (message: IncomingMessage, response: ServerResponse) => Awaitable<void>;
+/**
+ * A {@link http.RequestListener RequestListener} that can optionally return a
+ * {@link PromiseLike}
+ */
+export declare type AwaitableRequestListener = (message: http.IncomingMessage, response: http.ServerResponse) => Awaitable<void>;
+/** Iterable using `for await`  */
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
 export declare type AwaitableIterator<Yield, Return = void, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
+/**
+ * @param code
+ * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
+ */
 export declare type WebsocketCloseInfo = {
     code: number;
     reason?: string;
@@ -26,6 +31,12 @@ export declare type WebsocketCloseInfo = {
 export declare type WebsocketIterator = AwaitableIterator<WebsocketData, WebsocketCloseInfo | void>;
 export declare type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator;
 export declare type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterator;
+/**
+ * @param code
+ * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
+ * @param reason
+ * Will be an empty string if no close code was provided
+ */
 export declare type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>;
 export declare type WebsocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>;
 export declare type WebsocketBody = {
@@ -35,6 +46,12 @@ export declare type WebsocketBody = {
     onSendError?: WebsocketSendErrorCallback;
 };
 export declare type Header = Formattable | ReadonlyArray<Formattable>;
+/**
+ * Any iterable—sync or async—yielding {@link Uint8Array Uint8Arrays}, or
+ * a function returning such an iterable. Note that {@link Buffer Buffers} are
+ * instances of {@link Uint8Array}, and Node streams implement
+ * {@link AsyncIterable}
+ */
 export declare type StreamBody = AwaitableIterable<Uint8Array> | (() => AwaitableIterable<Uint8Array>);
 export declare type RegularResponse = {
     headers?: Readonly<Record<string, Header>>;

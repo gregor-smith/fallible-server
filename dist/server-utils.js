@@ -1,4 +1,3 @@
-import { TextDecoder } from 'node:util';
 import { parse as secureJSONParse } from 'secure-json-parse';
 import { error, ok } from 'fallible';
 import { Formidable, errors as formidableErrors } from 'formidable';
@@ -30,7 +29,7 @@ export async function parseJSONStream(stream, { maximumSize = Infinity, encoding
     return ok(value);
 }
 // TODO: replace with async generator
-export function parseMultipartRequest(request, { encoding, saveDirectory, keepFileExtensions, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
+export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirectory, keepFileExtensions = false, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
     return new Promise(resolve => {
         new Formidable({
             enabledPlugins: ['multipart'],

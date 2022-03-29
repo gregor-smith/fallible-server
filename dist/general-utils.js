@@ -1,165 +1,29 @@
 // This file should have no runtime dependencies on Node modules as some utils
 // within are useful on both server and client. Exclusively server-only utils
 // should go in ./server-utils.ts
-import { error, ok } from 'fallible';
 export { parse as parseJSONString } from 'secure-json-parse';
-export function contentDispositionHeader(type, filename) {
-    if (type === 'inline') {
-        return type;
-    }
-    if (filename !== undefined) {
-        type = `${type}; filename="${encodeURIComponent(filename)}"`;
-    }
-    return type;
-}
-export function parseCookieHeader(header, name) {
-    // TODO: allow double quoted values (see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1)
-    // TODO: disallow ascii control codes (see https://jkorpela.fi/chars/c0.html)
-    // TODO: check name is valid cookie (see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#attributes)
-    return header.match(`(?:^|; )${name}=([^;]*)`)?.[1];
-}
-export function parseMessageCookie(message, name) {
-    if (message.headers.cookie === undefined) {
-        return;
-    }
-    return parseCookieHeader(message.headers.cookie, name);
-}
-function cookieKeyValuePair(name, value) {
-    return `${name}=${value}`;
-}
-export function signatureCookieName(name) {
-    return `${name}.sig`;
-}
-export function parseSignedMessageCookie(message, name, keys) {
-    const value = parseMessageCookie(message, name);
-    if (value === undefined) {
-        return error('ValueCookieMissing');
-    }
-    const signature = parseMessageCookie(message, signatureCookieName(name));
-    if (signature === undefined) {
-        return error('SignatureCookieMissing');
-    }
-    if (!keys.verify(cookieKeyValuePair(name, value), signature)) {
-        return error('SignatureInvalid');
-    }
-    return ok(value);
-}
-export function cookieHeader(name, { value, path, maxAge, domain, sameSite, secure = false, httpOnly = false }) {
-    const segments = [cookieKeyValuePair(name, value)];
-    if (path !== undefined) {
-        segments.push(`Path=${path}`);
-    }
-    if (maxAge !== undefined) {
-        segments.push(`Max-Age=${maxAge}`);
-    }
-    if (domain !== undefined) {
-        segments.push(`Domain=${domain}`);
-    }
-    if (sameSite !== undefined) {
-        segments.push(`SameSite=${sameSite}`);
-    }
-    if (secure) {
-        segments.push('Secure');
-    }
-    if (httpOnly) {
-        segments.push('HttpOnly');
-    }
-    return segments.join('; ');
-}
-export function cookieSignatureHeader(name, cookie, keys) {
-    return cookieHeader(signatureCookieName(name), {
-        ...cookie,
-        value: keys.sign(cookieKeyValuePair(name, cookie.value))
-    });
-}
-export function getMessageHeader(message, name) {
-    const header = message.headers[name];
-    return Array.isArray(header)
-        ? header[0]
-        : header;
-}
+/**
+ * Attempts to return the IP of the client the message represents.
+ *
+ * @param useXForwardedFor
+ * If `true`, the `'X-Forwarded-For'` header is respected. Defaults to `false`.
+ */
 export function getMessageIP(message, useXForwardedFor = false) {
     if (!useXForwardedFor) {
         return message.socket.remoteAddress;
     }
-    return getMessageHeader(message, 'x-forwarded-for')
-        ?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1]
-        ?? message.socket.remoteAddress;
-}
-export function getMessageMethod(message) {
-    return message.method?.toUpperCase() ?? 'GET';
-}
-export function getMessageURL(message) {
-    return message.url ?? '/';
-}
-export function joinURLQueryString(query) {
-    const pairs = [];
-    for (let [key, value] of Object.entries(query)) {
-        if (value === undefined) {
-            continue;
-        }
-        key = encodeURIComponent(key);
-        value = encodeURIComponent(String(value));
-        pairs.push(`${key}=${value}`);
+    let header = message.headers['x-forwarded-for'];
+    if (Array.isArray(header)) {
+        header = header[0];
     }
-    return pairs.length === 0
-        ? ''
-        : ('?' + pairs.join('&'));
+    return header?.match(/^\s*([^\s]+)\s*(?:,|$)/)?.[1] ?? message.socket.remoteAddress;
 }
-export function parseURLQueryString(url) {
-    const query = {};
-    const matches = url.matchAll(/[\?&]([^\?&#=]+)=([^\?&#]+)(?=$|[\?&#])/g);
-    for (let [, key, value] of matches) {
-        if (value === undefined || value.length === 0) {
-            continue;
-        }
-        key = decodeURIComponent(key);
-        value = decodeURIComponent(value);
-        query[key] = value;
-    }
-    return query;
-}
-export function parseURLHash(url) {
-    const match = url.match(/#(.+)/)?.[1];
-    return match === undefined
-        ? ''
-        : decodeURIComponent(match);
-}
-function joinURLPathSegments(segments) {
-    return '/' + segments.join('/');
-}
-export function parseURLPath(url) {
-    const segments = [...parseURLPathSegments(url)];
-    return joinURLPathSegments(segments);
-}
-export function* parseURLPathSegments(url) {
-    for (const [segment] of url.matchAll(/(?<=\/)[^\/\?#]+/g)) {
-        yield decodeURIComponent(segment);
-    }
-}
-export class URLParser {
-    full;
-    #hash;
-    #path;
-    #segments;
-    #query;
-    constructor(full) {
-        this.full = full;
-    }
-    hash() {
-        return this.#hash ??= parseURLHash(this.full);
-    }
-    path() {
-        return this.#path ??= joinURLPathSegments(this.segments());
-    }
-    segments() {
-        return this.#segments ??= [...parseURLPathSegments(this.full)];
-    }
-    query() {
-        return this.#query ??= parseURLQueryString(this.full);
-    }
-}
-export function parseContentTypeHeader(header) {
+/**
+ * Parses the type and character set from a Content-Type header.
+ * If the header has no `charset` directive, the entire header is returned.
+ * Both type and characterSet are always returned lower case.
+ */
+export function parseCharSetContentTypeHeader(header) {
     const match = header.match(/^\s*(.+?)\s*;\s*charset\s*=\s*(")?(.+?)\2\s*$/i);
     if (match === null) {
         header = header.trim();
@@ -176,16 +40,9 @@ export function parseContentTypeHeader(header) {
         characterSet: characterSet.toLowerCase()
     };
 }
-export function parseMessageContentType(message) {
-    let contentType = message.headers['content-type'];
-    if (contentType === undefined) {
-        return;
-    }
-    return parseContentTypeHeader(contentType);
-}
+/** Parses the integer value of a Content-Length header */
 export function parseContentLengthHeader(header) {
-    // today i learnt passing an all whitespace string to Number gives you 0
-    // to what end?
+    // Passing an all whitespace string to Number gives you 0
     if (!header.match(/[0-9]/)) {
         return;
     }
@@ -195,31 +52,21 @@ export function parseContentLengthHeader(header) {
     }
     return length;
 }
-export function parseMessageContentLength(message) {
-    if (message.headers['content-length'] === undefined) {
-        return error('Missing');
-    }
-    const length = parseContentLengthHeader(message.headers['content-length']);
-    return length === undefined
-        ? error('Invalid')
-        : ok(length);
-}
+/** Parses the token from a Authorization header with the Bearer scheme */
 export function parseAuthorizationHeaderBearer(header) {
     // See: https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
     return header.match(/^Bearer ([a-zA-Z0-9\-\._\~\+\/]+)/)?.[1];
 }
-export function parseMessageAuthorizationHeaderBearer(message) {
-    if (message.headers.authorization === undefined) {
-        return error('Missing');
-    }
-    const token = parseAuthorizationHeaderBearer(message.headers.authorization);
-    return token === undefined
-        ? error('Invalid')
-        : ok(token);
-}
-export function messageIsWebSocketRequest(message) {
-    return message.headers.connection?.toLowerCase() === 'upgrade'
-        && message.headers.upgrade === 'websocket';
+/**
+ * Returns whether all the headers required for a WebSocket upgrade are present.
+ * Does not guarantee that those headers are fully valid - currently this can
+ * only be confirmed by returning a {@link websocketResponse} from a handler.
+ */
+export function headersIndicateWebSocketRequest(headers) {
+    return headers.connection?.toLowerCase() === 'upgrade'
+        && headers.upgrade === 'websocket'
+        && headers['sec-websocket-key'] !== undefined
+        && headers['sec-websocket-version'] !== undefined;
 }
 export function response(state, cleanup) {
     return { state, cleanup };
@@ -227,6 +74,7 @@ export function response(state, cleanup) {
 export function websocketResponse(body, cleanup) {
     return response({ body }, cleanup);
 }
+/** Yields values from an iterable of promises as they resolve */
 export async function* iterateAsResolved(promises) {
     const map = new Map();
     let counter = 0;

@@ -16,19 +16,8 @@ export type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & 
 /** Data that can be sent in a WebSocket message */
 export type WebsocketData = WebSocket.Data
 
-/** Value that can be substituted as-is in a format string */
+/** Value that can be formatted into a string as-is */
 export type Formattable = string | number | boolean | bigint | null
-
-
-export type Cookie = {
-    value: Formattable
-    maxAge?: number
-    path?: string
-    domain?: string
-    secure?: boolean
-    httpOnly?: boolean
-    sameSite?: 'strict' | 'lax' | 'none'
-}
 
 
 /**
@@ -75,6 +64,7 @@ export type WebsocketBody = {
     onMessage?: WebsocketMessageCallback
     onClose?: WebsocketCloseCallback
     onSendError?: WebsocketSendErrorCallback
+    // TODO: onUpgradeError returning a different Response
 }
 
 

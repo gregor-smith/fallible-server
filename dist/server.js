@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import stream from 'node:stream';
 import WebSocket from 'ws';
 import { response } from './general-utils.js';
 function warn(message) {
@@ -67,13 +67,23 @@ class Socket {
 }
 /**
  * Creates a callback intended to be added as a listener to the `request` event
- * of a Node `http` `Server`.
+ * of an {@link http.Server}.
  * @param messageHandler
- * A function which takes a Node `http` `IncomingMessage` and returns a `Response`
+ * A function that takes an {@link http.IncomingMessage IncomingMessage} and
+ * returns a {@link types.MessageHandlerResult MessageHandlerResult}. The
+ * result may include a {@link types.Cleanup cleanup} function, which is always
+ * called after the request has ended, regardless of whether any exceptions
+ * occurred. The `Content-Type` header is set by default depending on type of
+ * the {@link types.Response response} body: `string` bodies default to
+ * `text/html; charset=utf8` while {@link Uint8Array} and
+ * {@link types.StreamBody stream} bodies default to `application/octet-stream`.
+ * The 'Content-Length' header is also set for all except stream and WebSocket
+ * bodies.
+ *
  * @param exceptionListener
- * A function called if the message handler throws or if the `ServerResponse`
- * fires an `error` event when writing.
- * If not given, prints a warning and `console.error` is used.
+ * A function called when the message handler throws or the
+ * {@link http.ServerResponse ServerResponse} fires an `error` event. If not
+ * given, a warning is printed and {@link console.error} is used.
  * @returns
  * The callback, and a map of all active WebSockets identified by UUIDs.
  */
@@ -138,6 +148,8 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // websocket
         else if ('onOpen' in state.body) {
+            // TODO: subclass WebSocket.Server and override the handleUpgrade
+            // implementation with one that throws rather than ending the socket
             const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
             const { onOpen, onMessage, onSendError, onClose } = state.body;
             const socket = new Socket(websocket, onSendError ?? defaultOnWebsocketSendError);
@@ -168,22 +180,22 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             const iterable = typeof state.body === 'function'
                 ? state.body()
                 : state.body;
-            const stream = iterable instanceof Readable
+            const readable = iterable instanceof stream.Readable
                 ? iterable
-                : Readable.from(iterable, { objectMode: false });
+                : stream.Readable.from(iterable, { objectMode: false });
             try {
                 await new Promise((resolve, reject) => {
                     const errorHandler = (error) => {
                         res.off('error', errorHandler);
-                        stream.off('error', errorHandler);
-                        stream.unpipe(res);
+                        readable.off('error', errorHandler);
+                        readable.unpipe(res);
                         res.end();
                         reject(error);
                     };
                     res.on('close', resolve);
                     res.once('error', errorHandler);
-                    stream.once('error', errorHandler);
-                    stream.pipe(res);
+                    readable.once('error', errorHandler);
+                    readable.pipe(res);
                 });
             }
             catch (exception) {
@@ -242,14 +254,12 @@ export function composeMessageHandlers(firstHandler, secondHandler) {
     };
 }
 /**
- * Chains together two message handlers that return `Result` states. If the
- * first handler returns a state of `Error`, it is immediately returned. If it
- * returns `Ok`, its value is passed as the state the second handler. Any
- * cleanup functions returned are combined so that the second handler's cleanup
- * is called before the first's.
- * @param firstHandler
- * @param secondHandler
- * @returns
+ * Chains together two message handlers that return
+ * {@link fallible.Result Result} states. If the first handler returns a state
+ * of {@link fallible.Error Error}, it is immediately returned. If it returns
+ * {@link fallible.Ok Ok}, its value is passed as the state the second handler.
+ * Any cleanup functions returned are combined so that the second handler's
+ * cleanup is called before the first's.
  */
 export function composeResultMessageHandlers(firstHandler, secondHandler) {
     return async (message, state, sockets) => {
@@ -273,11 +283,11 @@ function composeCleanupResponse(state, cleanups) {
     });
 }
 /**
- * An alternative to `composeMessageHandlers`. Much more elegant when chaining
- * many handlers together. Immutable.
+ * An alternative to {@link composeMessageHandlers}. Much more elegant when
+ * chaining many handlers together. Immutable.
  *
  * The following are equivalent:
- * ```
+ * ```typescript
  * new MessageHandlerComposer(a)
  *      .intoHandler(b)
  *      .intoHandler(c)
@@ -300,11 +310,11 @@ export class MessageHandlerComposer {
     }
 }
 /**
- * An alternative to `composeResultMessageHandlers`. Much more elegant when
- * chaining many handlers together. Immutable.
+ * An alternative to {@link composeResultMessageHandlers}. Much more elegant
+ * when chaining many handlers together. Immutable.
  *
  * The following are equivalent:
- * ```
+ * ```typescript
  * new ResultMessageHandlerComposer(a)
  *      .intoResultHandler(b)
  *      .intoHandler(c)
