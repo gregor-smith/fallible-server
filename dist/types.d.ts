@@ -2,14 +2,14 @@
 import type http from 'node:http';
 import type WebSocket from 'ws';
 import type { Awaitable } from 'fallible';
-import type { WebSocketReadyState } from './general-utils.js';
+import type { WebSocketReadyState } from './utils.js';
 /**
  * A Node {@link http.IncomingMessage IncomingMessage} that is correctly typed
  * to yield {@link Buffer Buffers} on iteration
  */
 export declare type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
 /** Data that can be sent in a WebSocket message */
-export declare type WebsocketData = WebSocket.Data;
+export declare type WebSocketData = WebSocket.Data;
 /** Value that can be formatted into a string as-is */
 export declare type Formattable = string | number | boolean | bigint | null;
 /**
@@ -28,9 +28,9 @@ export declare type WebSocketCloseInfo = {
     code: number;
     reason?: string;
 };
-export declare type WebSocketIterator = AwaitableIterator<WebsocketData, WebSocketCloseInfo | void>;
+export declare type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>;
 export declare type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator;
-export declare type WebSocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebSocketIterator;
+export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator;
 /**
  * @param code
  * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
@@ -38,7 +38,7 @@ export declare type WebSocketMessageCallback = (data: WebsocketData, socketUUID:
  * Will be an empty string if no close code was provided
  */
 export declare type WebSocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>;
-export declare type WebSocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>;
+export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketBody = {
     onOpen: WebSocketOpenCallback;
     onMessage?: WebSocketMessageCallback;
@@ -58,12 +58,12 @@ export declare type RegularResponse = {
     status?: number;
     body?: string | Uint8Array | StreamBody;
 };
-export declare type WebsocketResponse = {
+export declare type WebSocketResponse = {
     headers?: undefined;
     status?: 101;
     body: Readonly<WebSocketBody>;
 };
-export declare type Response = RegularResponse | WebsocketResponse;
+export declare type Response = RegularResponse | WebSocketResponse;
 export declare type Cleanup = (state: Readonly<Response>) => Awaitable<void>;
 export declare type MessageHandlerResult<State = Response> = {
     state: State;
@@ -74,7 +74,7 @@ export declare type ExceptionListener = (exception: unknown, message: Message, s
 export interface IdentifiedWebSocket {
     readonly uuid: string;
     readonly readyState: WebSocketReadyState;
-    send(data: WebsocketData): Promise<void>;
+    send(data: WebSocketData): Promise<void>;
     close(code: number, reason?: string): Promise<void>;
 }
 export declare type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>;

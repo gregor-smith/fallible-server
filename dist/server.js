@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import stream from 'node:stream';
 import WebSocket from 'ws';
-import { response } from './general-utils.js';
+import * as fallible from 'fallible';
+import { Formidable, errors as FormidableErrors } from 'formidable';
+import { response, parseJSONString } from './utils.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -167,7 +169,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 // is already opened
                 sendWebSocketMessages(socket, onOpen(socket.uuid))
             ]);
-            // TODO: keep track of sendWebsocketMessages promises and await here
+            // TODO: keep track of sendWebSocketMessages promises and await here
             sockets.delete(socket.uuid);
             if (onClose !== undefined) {
                 await onClose(...closeReason, socket.uuid);
@@ -327,6 +329,93 @@ export class ResultMessageHandlerComposer extends MessageHandlerComposer {
     intoResultHandler(other) {
         const handler = composeResultMessageHandlers(this.build(), other);
         return new ResultMessageHandlerComposer(handler);
+    }
+}
+export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
+    let size = 0;
+    const chunks = [];
+    for await (const chunk of stream) {
+        size += chunk.byteLength;
+        if (size > maximumSize) {
+            return fallible.error({ tag: 'MaximumSizeExceeded' });
+        }
+        chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    let text;
+    try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(buffer);
+    }
+    catch (exception) {
+        return fallible.error({ tag: 'DecodeError', error: exception });
+    }
+    let value;
+    try {
+        value = parseJSONString(text);
+    }
+    catch {
+        return fallible.error({ tag: 'InvalidSyntax' });
+    }
+    return fallible.ok(value);
+}
+// TODO: replace with async generator
+export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirectory, keepFileExtensions = false, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
+    return new Promise(resolve => {
+        new Formidable({
+            enabledPlugins: ['multipart'],
+            encoding,
+            keepExtensions: keepFileExtensions,
+            uploadDir: saveDirectory,
+            allowEmptyFiles: true,
+            minFileSize: minimumFileSize,
+            maxFiles: maximumFileCount,
+            maxFileSize: maximumFileSize,
+            maxTotalFileSize: maximumFileCount * maximumFileSize,
+            maxFields: maximumFieldsCount,
+            maxFieldsSize: maximumFieldsSize
+        }).parse(request, (exception, fields, files) => {
+            if (exception !== null && exception !== undefined) {
+                return resolve(fallible.error(getMultipartError(exception)));
+            }
+            const newFiles = {};
+            for (const [name, file] of Object.entries(files)) {
+                newFiles[name] = {
+                    size: file.size,
+                    path: file.filepath,
+                    mimetype: file.mimetype,
+                    dateModified: file.lastModifiedDate
+                };
+            }
+            resolve(fallible.ok({
+                fields,
+                files: newFiles
+            }));
+        });
+    });
+}
+function getMultipartError(error) {
+    if (!(error instanceof FormidableErrors.default)) {
+        return { tag: 'UnknownError', error };
+    }
+    switch (error.code) {
+        case FormidableErrors.malformedMultipart:
+            return { tag: 'InvalidMultipartContentTypeHeader' };
+        case FormidableErrors.aborted:
+            return { tag: 'RequestAborted' };
+        case FormidableErrors.maxFilesExceeded:
+            return { tag: 'MaximumFileCountExceeded' };
+        case FormidableErrors.biggerThanMaxFileSize:
+            return { tag: 'MaximumFileSizeExceeded' };
+        case FormidableErrors.biggerThanTotalMaxFileSize:
+            return { tag: 'MaximumTotalFileSizeExceeded' };
+        case FormidableErrors.maxFieldsExceeded:
+            return { tag: 'MaximumFieldsCountExceeded' };
+        case FormidableErrors.maxFieldsSizeExceeded:
+            return { tag: 'MaximumFieldsSizeExceeded' };
+        case FormidableErrors.smallerThanMinFileSize:
+            return { tag: 'BelowMinimumFileSize' };
+        default:
+            return { tag: 'UnknownError', error };
     }
 }
 //# sourceMappingURL=server.js.map

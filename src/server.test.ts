@@ -1,12 +1,14 @@
 import { TextEncoder } from 'node:util'
 import { setTimeout } from 'node:timers/promises'
+import { Readable } from 'node:stream'
+import { createServer } from 'node:http'
 
 import 'jest-extended'
 import { error, ok, Ok, Result } from 'fallible'
 import { Response as MockResponse } from 'mock-http'
 import WebSocket from 'ws'
 
-import { response, websocketResponse } from './general-utils.js'
+import { response, webSocketResponse } from './utils.js'
 import {
     composeMessageHandlers,
     composeResultMessageHandlers,
@@ -19,13 +21,11 @@ import type {
     Message,
     MessageHandler,
     Response,
-    WebsocketCloseInfo,
-    WebsocketData,
-    WebsocketIterator,
-    WebsocketResponse
+    WebSocketCloseInfo,
+    WebSocketData,
+    WebSocketIterator,
+    WebSocketResponse
 } from './types.js'
-import { Readable } from 'node:stream'
-import { createServer } from 'node:http'
 
 
 const testEncoder = new TextEncoder()
@@ -444,20 +444,20 @@ describe('createRequestListener', () => {
         test('onOpen called, onClose called, messages sent and received', async () => {
             expect.assertions(8)
 
-            const messages: WebsocketData[] = []
+            const messages: WebSocketData[] = []
             let uuid: string | undefined
 
-            const onOpen = jest.fn<WebsocketIterator, [ string ]>(function * (u) {
+            const onOpen = jest.fn<WebSocketIterator, [ string ]>(function * (u) {
                 uuid = u
                 yield 'server open'
                 yield 'server open 2'
             })
             const onClose = jest.fn<void, [ number, string, string ]>()
-            const onMessage = jest.fn<WebsocketIterator, [ WebsocketData, string ]>(function * (message) {
+            const onMessage = jest.fn<WebSocketIterator, [ WebSocketData, string ]>(function * (message) {
                 yield 'server message'
                 yield `server echo: ${message}`
             })
-            const state: WebsocketResponse = { body: { onOpen, onMessage, onClose } }
+            const state: WebSocketResponse = { body: { onOpen, onMessage, onClose } }
 
             const cleanup = jest.fn()
 
@@ -511,7 +511,7 @@ describe('createRequestListener', () => {
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test.each<WebsocketCloseInfo>([
+        test.each<WebSocketCloseInfo>([
             { code: 4321 },
             { code: 4321, reason: 'server close' }
         ])('returning close info from onOpen closes socket', async closeInfo => {
@@ -522,7 +522,7 @@ describe('createRequestListener', () => {
                 let clientCloseArgs: [ number, string ] | undefined
 
                 const [ listener ] = createRequestListener(() =>
-                    websocketResponse(
+                    webSocketResponse(
                         {
                             onOpen: function * () {
                                 return closeInfo
@@ -554,20 +554,20 @@ describe('createRequestListener', () => {
             expect(closeArgs).toEqual([ closeInfo.code, closeInfo.reason ?? '' ])
         })
 
-        test.each<WebsocketCloseInfo>([
+        test.each<WebSocketCloseInfo>([
             { code: 4321 },
             { code: 4321, reason: 'server close' }
         ])('returning close info from onMessage closes socket', async closeInfo => {
             expect.assertions(2)
 
-            const messages: WebsocketData[] = []
+            const messages: WebSocketData[] = []
 
             const closeArgs = await new Promise<[ number, string ]>(resolve => {
                 let serverDone = false
                 let clientCloseArgs: [ number, string ] | undefined
 
                 const [ listener ] = createRequestListener(() =>
-                    websocketResponse(
+                    webSocketResponse(
                         {
                             onOpen: function * () {},
                             onMessage: function * (message) {
@@ -606,7 +606,7 @@ describe('createRequestListener', () => {
         test('stops sending messages if socket closes during generator', async () => {
             expect.assertions(2)
 
-            const messages: WebsocketData[] = []
+            const messages: WebSocketData[] = []
             const onClose = jest.fn<void, [ number, string, string ]>()
 
             await new Promise<void>(resolve => {
@@ -622,7 +622,7 @@ describe('createRequestListener', () => {
                 }
 
                 const [ listener ] = createRequestListener(() =>
-                    websocketResponse(
+                    webSocketResponse(
                         {
                             onOpen: async function * () {
                                 yield 'server open'
@@ -653,7 +653,7 @@ describe('createRequestListener', () => {
         test('onSendError called on unknown send error', async () => {
             expect.assertions(4)
 
-            const onSendError = jest.fn<void, [ WebsocketData, Error, string ]>(() => {})
+            const onSendError = jest.fn<void, [ WebSocketData, Error, string ]>(() => {})
             const onMessage = jest.fn<void, [ string ]>()
             const exception = new Error('test')
             const sendSpy = jest.spyOn(WebSocket.prototype, 'send')
@@ -676,7 +676,7 @@ describe('createRequestListener', () => {
                 }
 
                 const [ listener ] = createRequestListener(() =>
-                    websocketResponse(
+                    webSocketResponse(
                         {
                             onOpen: async function * (u) {
                                 uuid = u
@@ -1099,4 +1099,42 @@ describe('ResultMessageHandlerComposer', () => {
         expect(aCleanup.mock.calls).toEqual([ [ state ] ])
         expect(bCleanup).not.toHaveBeenCalled()
     })
+})
+
+
+describe('parseJSONStream', () => {
+    test.todo('returns MaximumSizeExceeded when stream larger than maximumSize param')
+
+    test.todo('returns DecodeError when stream buffer cannot be decoded')
+
+    test.todo('returns InvalidSyntax when JSON cannot be parsed')
+
+    test.todo('returns JSON decoded with given charset')
+})
+
+
+describe('parseMultipartRequest', () => {
+    test.todo('returns InvalidMultipartContentTypeHeader when content type header invalid')
+
+    test.todo('returns RequestAborted when request aborted during parsing')
+
+    test.todo('returns BelowMinimumFileSize when individual file size lower than minimumFileSize param')
+
+    test.todo('returns MaximumFileCountExceeded when more files than maximumFileCount param')
+
+    test.todo('returns MaximumFileSizeExceeded when individual file size larger than maximumFileSize param')
+
+    test.todo('returns MaximumTotalFileSizeExceeded when combined file size larger than maximumFileSize param * maximumFileCount param')
+
+    test.todo('returns MaximumFieldsCountExceeded when more fields than maximumFieldsCount param')
+
+    test.todo('returns MaximumFieldsSizeExceeded when combined fields larger than maximumFieldsSize param')
+
+    test.todo('returns UnknownError when parsing raises unknown exception')
+
+    test.todo('returns files and fields decoded with given charset')
+
+    test.todo('keepFileExtensions param adds file extensions to returned paths')
+
+    test.todo('saveDirectory param changes returned file paths')
 })

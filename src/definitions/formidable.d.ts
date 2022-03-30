@@ -33,7 +33,7 @@ declare module 'formidable' {
     // which is the only entry point to the library, then exports the entire
     // FormidableError.js module as 'errors'. Ideally a namespace declaration
     // should be used to type this, but namespaces do not support default
-    // exports, so a type definition is used instead even though it's
+    // exports, so a type declaration is used instead even though it's
     // technically incorrect.
     // See: https://stackoverflow.com/questions/61781645
     type Errors = {

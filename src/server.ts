@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto'
 import stream from 'node:stream'
 
 import WebSocket from 'ws'
-import type * as fallible from 'fallible'
+import * as fallible from 'fallible'
+import { Formidable, errors as FormidableErrors } from 'formidable'
 
 import type * as types from './types.js'
-import { WebSocketReadyState, response } from './general-utils.js'
+import { WebSocketReadyState, response, parseJSONString } from './utils.js'
 
 
 function warn(message: string): void {
@@ -15,7 +16,7 @@ function warn(message: string): void {
 
 
 function defaultOnWebsocketSendError(
-    _data: types.WebsocketData,
+    _data: types.WebSocketData,
     { name, message }: Error
 ): void {
     warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response")
@@ -89,7 +90,7 @@ class Socket implements types.IdentifiedWebSocket {
         return this.#underlying.readyState as WebSocketReadyState
     }
 
-    async send(data: types.WebsocketData): Promise<void> {
+    async send(data: types.WebSocketData): Promise<void> {
         const error = await new Promise<Error | undefined>(resolve =>
             this.#underlying.send(data, resolve)
         )
@@ -241,7 +242,7 @@ export function createRequestListener(
                 )
             ])
 
-            // TODO: keep track of sendWebsocketMessages promises and await here
+            // TODO: keep track of sendWebSocketMessages promises and await here
 
             sockets.delete(socket.uuid)
 
@@ -444,5 +445,205 @@ export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
     ): ResultMessageHandlerComposer<ExistingState, State, Error | ErrorB> {
         const handler = composeResultMessageHandlers(this.build(), other)
         return new ResultMessageHandlerComposer(handler)
+    }
+}
+
+
+export type ParseJSONStreamError =
+    | { tag: 'MaximumSizeExceeded' }
+    | { tag: 'DecodeError', error: unknown }
+    | { tag: 'InvalidSyntax' }
+
+export type ParseJSONStreamOptions = {
+    /**
+     * Limits the maximum size of the stream; if this limit is exceeded,
+     * an {@link ParseJSONStreamError error} is returned. By default unlimited.
+     */
+    maximumSize?: number
+    /**
+     * Defaults to `utf-8`. If decoding fails, an
+     * {@link ParseJSONStreamError error} is returned
+     */
+    encoding?: BufferEncoding
+}
+
+
+export async function parseJSONStream(
+    stream: types.AwaitableIterable<Uint8Array>,
+    {
+        maximumSize = Infinity,
+        encoding = 'utf-8'
+    }: ParseJSONStreamOptions = {}
+): Promise<fallible.Result<unknown, ParseJSONStreamError>> {
+    let size = 0
+    const chunks: Uint8Array[] = []
+    for await (const chunk of stream) {
+        size += chunk.byteLength
+        if (size > maximumSize) {
+            return fallible.error({ tag: 'MaximumSizeExceeded' } as const)
+        }
+        chunks.push(chunk)
+    }
+
+    const buffer = Buffer.concat(chunks)
+    let text: string
+    try {
+        text = new TextDecoder(encoding, { fatal: true }).decode(buffer)
+    }
+    catch (exception) {
+        return fallible.error({ tag: 'DecodeError', error: exception } as const)
+    }
+
+    let value: unknown
+    try {
+        value = parseJSONString(text)
+    }
+    catch {
+        return fallible.error({ tag: 'InvalidSyntax' } as const)
+    }
+
+    return fallible.ok(value)
+}
+
+
+export type ParseMultipartRequestError =
+    | { tag: 'InvalidMultipartContentTypeHeader' }
+    | { tag: 'RequestAborted' }
+    | { tag: 'BelowMinimumFileSize' }
+    | { tag: 'MaximumFileCountExceeded' }
+    | { tag: 'MaximumFileSizeExceeded' }
+    | { tag: 'MaximumTotalFileSizeExceeded' }
+    | { tag: 'MaximumFieldsCountExceeded' }
+    | { tag: 'MaximumFieldsSizeExceeded' }
+    | { tag: 'UnknownError', error: unknown }
+
+export type MultipartFile = {
+    size: number
+    path: string
+    mimetype: string
+    dateModified: Date
+}
+
+export type ParsedMultipart = {
+    fields: Record<string, string>
+    files: Record<string, MultipartFile>
+}
+
+export type ParseMultipartRequestArguments = {
+    /** Encoding of fields; defaults to `utf-8` */
+    encoding?: BufferEncoding
+    /** Defaults to the OS temp dir */
+    saveDirectory?: string
+    /** Defaults to false */
+    keepFileExtensions?: boolean
+    /**
+     * The minimum size of each individual file in the body; if any file is
+     * smaller in size, an {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
+    minimumFileSize?: number
+    /**
+     * The maximum number of files in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
+    maximumFileCount?: number
+    /**
+     * The maximum size of each individual file in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
+    maximumFileSize?: number
+    /**
+     * The maximum number of fields in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
+    maximumFieldsCount?: number
+    /**
+     * The maximum total size of fields in the body; if exceeded, an
+     * {@link ParseMultipartRequestError error} is returned.
+     * By default unlimited.
+     */
+    maximumFieldsSize?: number
+}
+
+// TODO: replace with async generator
+export function parseMultipartRequest(
+    request: http.IncomingMessage,
+    {
+        encoding = 'utf-8',
+        saveDirectory,
+        keepFileExtensions = false,
+        minimumFileSize = 0,
+        maximumFileCount = Infinity,
+        maximumFileSize = Infinity,
+        maximumFieldsCount = Infinity,
+        maximumFieldsSize = Infinity
+    }: ParseMultipartRequestArguments = {}
+): Promise<fallible.Result<ParsedMultipart, ParseMultipartRequestError>> {
+    return new Promise(resolve => {
+        new Formidable({
+            enabledPlugins: [ 'multipart' ],
+            encoding,
+            keepExtensions: keepFileExtensions,
+            uploadDir: saveDirectory,
+            allowEmptyFiles: true,
+            minFileSize: minimumFileSize,
+            maxFiles: maximumFileCount,
+            maxFileSize: maximumFileSize,
+            maxTotalFileSize: maximumFileCount * maximumFileSize,
+            maxFields: maximumFieldsCount,
+            maxFieldsSize: maximumFieldsSize
+        }).parse(request, (exception, fields, files) => {
+            if (exception !== null && exception !== undefined) {
+                return resolve(
+                    fallible.error(
+                        getMultipartError(exception)
+                    )
+                )
+            }
+            const newFiles: Record<string, MultipartFile> = {}
+            for (const [ name, file ] of Object.entries(files)) {
+                newFiles[name] = {
+                    size: file.size,
+                    path: file.filepath,
+                    mimetype: file.mimetype,
+                    dateModified: file.lastModifiedDate
+                }
+            }
+            resolve(
+                fallible.ok({
+                    fields,
+                    files: newFiles
+                })
+            )
+        })
+    })
+}
+
+function getMultipartError(error: unknown): ParseMultipartRequestError {
+    if (!(error instanceof FormidableErrors.default)) {
+        return { tag: 'UnknownError', error }
+    }
+    switch (error.code) {
+        case FormidableErrors.malformedMultipart:
+            return { tag: 'InvalidMultipartContentTypeHeader' }
+        case FormidableErrors.aborted:
+            return { tag: 'RequestAborted' }
+        case FormidableErrors.maxFilesExceeded:
+            return { tag: 'MaximumFileCountExceeded' }
+        case FormidableErrors.biggerThanMaxFileSize:
+            return { tag: 'MaximumFileSizeExceeded' }
+        case FormidableErrors.biggerThanTotalMaxFileSize:
+            return { tag: 'MaximumTotalFileSizeExceeded' }
+        case FormidableErrors.maxFieldsExceeded:
+            return { tag: 'MaximumFieldsCountExceeded' }
+        case FormidableErrors.maxFieldsSizeExceeded:
+            return { tag: 'MaximumFieldsSizeExceeded' }
+        case FormidableErrors.smallerThanMinFileSize:
+            return { tag: 'BelowMinimumFileSize' }
+        default:
+            return { tag: 'UnknownError', error }
     }
 }

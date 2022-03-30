@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import type { Cleanup, MessageHandlerResult, WebSocketBody, WebsocketResponse } from './types.js';
+import type { Cleanup, MessageHandlerResult, WebSocketBody, WebSocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
 export declare const enum WebSocketReadyState {
     Connecting = 0,
@@ -37,11 +37,11 @@ declare type WebSocketHeaders = Pick<IncomingHttpHeaders, 'connection' | 'upgrad
 /**
  * Returns whether all the headers required for a WebSocket upgrade are present.
  * Does not guarantee that those headers are fully valid - currently this can
- * only be confirmed by returning a {@link websocketResponse} from a handler.
+ * only be confirmed by returning a {@link webSocketResponse} from a handler.
  */
 export declare function headersIndicateWebSocketRequest(headers: WebSocketHeaders): boolean;
 export declare function response<T extends void>(state?: T): MessageHandlerResult<T>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
-export declare function websocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse>;
+export declare function webSocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebSocketResponse>;
 /** Yields values from an iterable of promises as they resolve */
 export declare function iterateAsResolved<T>(promises: Iterable<PromiseLike<T>>): AsyncGenerator<T, void, unknown>;

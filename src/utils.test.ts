@@ -9,10 +9,10 @@ import {
     headersIndicateWebSocketRequest,
     parseJSONString,
     response,
-    websocketResponse,
+    webSocketResponse,
     iterateAsResolved,
     ParsedContentType
-} from './general-utils.js'
+} from './utils.js'
 
 
 describe('parseJSONString', () => {
@@ -229,7 +229,7 @@ describe('response', () => {
 })
 
 
-describe('websocketResponse', () => {
+describe('webSocketResponse', () => {
     const body: WebSocketBody = {
         onMessage: function * () {},
         onClose: () => {},
@@ -238,7 +238,7 @@ describe('websocketResponse', () => {
     }
 
     test('body argument', () => {
-        const result = websocketResponse(body)
+        const result = webSocketResponse(body)
         expect(result).toEqual<typeof result>({
             state: { body }
         })
@@ -246,7 +246,7 @@ describe('websocketResponse', () => {
 
     test('cleanup argument', () => {
         const cleanup: Cleanup = () => {}
-        const result = websocketResponse(body, cleanup)
+        const result = webSocketResponse(body, cleanup)
         expect(result).toEqual<typeof result>({
             state: { body },
             cleanup

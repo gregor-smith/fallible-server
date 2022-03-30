@@ -1,6 +1,5 @@
-// This file should have no runtime dependencies on Node modules as some utils
-// within are useful on both server and client. Exclusively server-only utils
-// should go in ./server-utils.ts
+// This file should have no runtime dependencies on Node modules. Exclusively
+// Node-only utils should go in ./server.ts
 
 
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
@@ -9,7 +8,7 @@ import type {
     Cleanup,
     MessageHandlerResult,
     WebSocketBody,
-    WebsocketResponse
+    WebSocketResponse
 } from './types.js'
 
 
@@ -107,7 +106,7 @@ type WebSocketHeaders = Pick<IncomingHttpHeaders, 'connection' | 'upgrade' | 'se
 /**
  * Returns whether all the headers required for a WebSocket upgrade are present.
  * Does not guarantee that those headers are fully valid - currently this can
- * only be confirmed by returning a {@link websocketResponse} from a handler.
+ * only be confirmed by returning a {@link webSocketResponse} from a handler.
  */
 export function headersIndicateWebSocketRequest(headers: WebSocketHeaders): boolean {
     return headers.connection?.toLowerCase() === 'upgrade'
@@ -124,7 +123,7 @@ export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T
 }
 
 
-export function websocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse> {
+export function webSocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebSocketResponse> {
     return response({ body }, cleanup)
 }
 

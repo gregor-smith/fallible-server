@@ -1,6 +1,5 @@
-// This file should have no runtime dependencies on Node modules as some utils
-// within are useful on both server and client. Exclusively server-only utils
-// should go in ./server-utils.ts
+// This file should have no runtime dependencies on Node modules. Exclusively
+// Node-only utils should go in ./server.ts
 export { parse as parseJSONString } from 'secure-json-parse';
 /**
  * Attempts to return the IP of the client the message represents.
@@ -60,7 +59,7 @@ export function parseAuthorizationHeaderBearer(header) {
 /**
  * Returns whether all the headers required for a WebSocket upgrade are present.
  * Does not guarantee that those headers are fully valid - currently this can
- * only be confirmed by returning a {@link websocketResponse} from a handler.
+ * only be confirmed by returning a {@link webSocketResponse} from a handler.
  */
 export function headersIndicateWebSocketRequest(headers) {
     return headers.connection?.toLowerCase() === 'upgrade'
@@ -71,7 +70,7 @@ export function headersIndicateWebSocketRequest(headers) {
 export function response(state, cleanup) {
     return { state, cleanup };
 }
-export function websocketResponse(body, cleanup) {
+export function webSocketResponse(body, cleanup) {
     return response({ body }, cleanup);
 }
 /** Yields values from an iterable of promises as they resolve */
@@ -88,4 +87,4 @@ export async function* iterateAsResolved(promises) {
         map.delete(current);
     }
 }
-//# sourceMappingURL=general-utils.js.map
+//# sourceMappingURL=utils.js.map
