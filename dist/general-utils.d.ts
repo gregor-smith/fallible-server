@@ -1,8 +1,8 @@
 /// <reference types="node" />
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import type { Cleanup, MessageHandlerResult, WebsocketBody, WebsocketResponse } from './types.js';
+import type { Cleanup, MessageHandlerResult, WebSocketBody, WebsocketResponse } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
-export declare const enum WebsocketReadyState {
+export declare const enum WebSocketReadyState {
     Connecting = 0,
     Open = 1,
     Closing = 2,
@@ -42,6 +42,6 @@ declare type WebSocketHeaders = Pick<IncomingHttpHeaders, 'connection' | 'upgrad
 export declare function headersIndicateWebSocketRequest(headers: WebSocketHeaders): boolean;
 export declare function response<T extends void>(state?: T): MessageHandlerResult<T>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
-export declare function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse>;
+export declare function websocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse>;
 /** Yields values from an iterable of promises as they resolve */
 export declare function iterateAsResolved<T>(promises: Iterable<PromiseLike<T>>): AsyncGenerator<T, void, unknown>;

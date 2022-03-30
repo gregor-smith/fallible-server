@@ -3,7 +3,7 @@ import type http from 'node:http'
 import type WebSocket from 'ws'
 import type { Awaitable } from 'fallible'
 
-import type { WebsocketReadyState } from './general-utils.js'
+import type { WebSocketReadyState } from './general-utils.js'
 
 
 /**
@@ -44,26 +44,26 @@ export type AwaitableIterator<Yield, Return = void, Next = unknown> =
  * @param code
  * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
  */
-export type WebsocketCloseInfo = {
+export type WebSocketCloseInfo = {
     code: number
     reason?: string
 }
-export type WebsocketIterator = AwaitableIterator<WebsocketData, WebsocketCloseInfo | void>
-export type WebsocketOpenCallback = (socketUUID: string) => WebsocketIterator
-export type WebsocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebsocketIterator
+export type WebSocketIterator = AwaitableIterator<WebsocketData, WebSocketCloseInfo | void>
+export type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator
+export type WebSocketMessageCallback = (data: WebsocketData, socketUUID: string) => WebSocketIterator
 /**
  * @param code
  * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
  * @param reason
  * Will be an empty string if no close code was provided
  */
-export type WebsocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
-export type WebsocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>
-export type WebsocketBody = {
-    onOpen: WebsocketOpenCallback
-    onMessage?: WebsocketMessageCallback
-    onClose?: WebsocketCloseCallback
-    onSendError?: WebsocketSendErrorCallback
+export type WebSocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
+export type WebSocketSendErrorCallback = (data: WebsocketData, error: Error, socketUUID: string) => Awaitable<void>
+export type WebSocketBody = {
+    onOpen: WebSocketOpenCallback
+    onMessage?: WebSocketMessageCallback
+    onClose?: WebSocketCloseCallback
+    onSendError?: WebSocketSendErrorCallback
     // TODO: onUpgradeError returning a different Response
 }
 
@@ -91,7 +91,7 @@ export type RegularResponse = {
 export type WebsocketResponse = {
     headers?: undefined
     status?: 101
-    body: Readonly<WebsocketBody>
+    body: Readonly<WebSocketBody>
 }
 
 export type Response = RegularResponse | WebsocketResponse
@@ -120,12 +120,12 @@ export type ExceptionListener = (
 ) => void
 
 
-export interface IdentifiedWebsocket {
+export interface IdentifiedWebSocket {
     readonly uuid: string
-    readonly readyState: WebsocketReadyState
+    readonly readyState: WebSocketReadyState
 
     send(data: WebsocketData): Promise<void>
     close(code: number, reason?: string): Promise<void>
 }
 
-export type SocketMap = ReadonlyMap<string, IdentifiedWebsocket>
+export type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>

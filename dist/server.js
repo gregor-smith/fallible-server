@@ -18,7 +18,7 @@ function setResponseHeaders(res, headers) {
         }
     }
 }
-async function sendWebsocketMessages(socket, messages) {
+async function sendWebSocketMessages(socket, messages) {
     const promises = [];
     while (true) {
         const result = await messages.next();
@@ -155,7 +155,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             const socket = new Socket(websocket, onSendError ?? defaultOnWebsocketSendError);
             sockets.set(socket.uuid, socket);
             if (onMessage !== undefined) {
-                websocket.on('message', data => sendWebsocketMessages(socket, onMessage(data, socket.uuid)));
+                websocket.on('message', data => sendWebSocketMessages(socket, onMessage(data, socket.uuid)));
             }
             // no need to listen for the socket error event as close event is
             // always called on errors anyway. see:
@@ -165,7 +165,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 // the 'open' even is never fired when running in noServer
                 // mode, so just call onOpen straight away as the request
                 // is already opened
-                sendWebsocketMessages(socket, onOpen(socket.uuid))
+                sendWebSocketMessages(socket, onOpen(socket.uuid))
             ]);
             // TODO: keep track of sendWebsocketMessages promises and await here
             sockets.delete(socket.uuid);

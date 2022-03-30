@@ -8,7 +8,7 @@ import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import type {
     Cleanup,
     MessageHandlerResult,
-    WebsocketBody,
+    WebSocketBody,
     WebsocketResponse
 } from './types.js'
 
@@ -16,7 +16,7 @@ import type {
 export { parse as parseJSONString } from 'secure-json-parse'
 
 
-export const enum WebsocketReadyState {
+export const enum WebSocketReadyState {
     Connecting,
     Open,
     Closing,
@@ -124,7 +124,7 @@ export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T
 }
 
 
-export function websocketResponse(body: WebsocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse> {
+export function websocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebsocketResponse> {
     return response({ body }, cleanup)
 }
 

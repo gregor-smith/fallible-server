@@ -6,7 +6,7 @@ import WebSocket from 'ws'
 import type * as fallible from 'fallible'
 
 import type * as types from './types.js'
-import { WebsocketReadyState, response } from './general-utils.js'
+import { WebSocketReadyState, response } from './general-utils.js'
 
 
 function warn(message: string): void {
@@ -37,16 +37,16 @@ function setResponseHeaders(
 }
 
 
-async function sendWebsocketMessages(
+async function sendWebSocketMessages(
     socket: Socket,
-    messages: types.WebsocketIterator
+    messages: types.WebSocketIterator
 ): Promise<void> {
     const promises: Promise<void>[] = []
 
     while (true) {
         const result = await messages.next()
 
-        if (socket.readyState !== WebsocketReadyState.Open) {
+        if (socket.readyState !== WebSocketReadyState.Open) {
             await Promise.all(promises)
             return
         }
@@ -71,22 +71,22 @@ function getDefaultExceptionListener(): types.ExceptionListener {
 }
 
 
-class Socket implements types.IdentifiedWebsocket {
+class Socket implements types.IdentifiedWebSocket {
     #underlying: WebSocket
-    #onSendError: types.WebsocketSendErrorCallback
+    #onSendError: types.WebSocketSendErrorCallback
 
     readonly uuid = randomUUID()
 
     constructor(
         underlying: WebSocket,
-        onSendError: types.WebsocketSendErrorCallback
+        onSendError: types.WebSocketSendErrorCallback
     ) {
         this.#underlying = underlying
         this.#onSendError = onSendError
     }
 
-    get readyState(): WebsocketReadyState {
-        return this.#underlying.readyState as WebsocketReadyState
+    get readyState(): WebSocketReadyState {
+        return this.#underlying.readyState as WebSocketReadyState
     }
 
     async send(data: types.WebsocketData): Promise<void> {
@@ -217,7 +217,7 @@ export function createRequestListener(
 
             if (onMessage !== undefined) {
                 websocket.on('message', data =>
-                    sendWebsocketMessages(
+                    sendWebSocketMessages(
                         socket,
                         onMessage(data, socket.uuid)
                     )
@@ -235,7 +235,7 @@ export function createRequestListener(
                 // the 'open' even is never fired when running in noServer
                 // mode, so just call onOpen straight away as the request
                 // is already opened
-                sendWebsocketMessages(
+                sendWebSocketMessages(
                     socket,
                     onOpen(socket.uuid)
                 )

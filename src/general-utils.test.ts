@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders } from 'http'
 
-import type { Cleanup, WebsocketBody } from './types.js'
+import type { Cleanup, WebSocketBody } from './types.js'
 import {
     getMessageIP,
     parseCharSetContentTypeHeader,
@@ -230,7 +230,7 @@ describe('response', () => {
 
 
 describe('websocketResponse', () => {
-    const body: WebsocketBody = {
+    const body: WebSocketBody = {
         onMessage: function * () {},
         onClose: () => {},
         onOpen: function * () {},
