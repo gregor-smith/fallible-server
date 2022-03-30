@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto'
 import stream from 'node:stream'
 
 import WebSocket from 'ws'
-import * as fallible from 'fallible'
+import { Result, ok, error } from 'fallible'
 import { Formidable, errors as FormidableErrors } from 'formidable'
 
 import type * as types from './types.js'
-import { WebSocketReadyState, response, parseJSONString } from './utils.js'
+import { WebSocketReadyState } from './utils.js'
 
 
 function warn(message: string): void {
@@ -289,223 +289,6 @@ export function createRequestListener(
 }
 
 
-/**
- * Composes an array of message handlers into one. This new handler calls each
- * of the given handlers in the array until one of them returns a state of
- * type `NewState`, which is returned. If all of them return a state of type
- * `Next`, the state from the given fallback handler is returned instead. Any
- * cleanup functions returned by handlers are combined so that invocation
- * executes them in reverse order. Useful for implementing routing.
- * @param handlers
- * Array of handlers that can return responses of either NewState or Next
- * @param fallback
- * A handler that can only return NewState, used if all of the previous
- * handlers return `NewState`
- * @param isNext
- * A type guard used to identify whether the state returned from a handler is
- * of type `Next`
- */
-export function fallthroughMessageHandler<ExistingState, NewState, Next>(
-    handlers: ReadonlyArray<types.MessageHandler<ExistingState, NewState | Next>>,
-    fallback: types.MessageHandler<ExistingState, NewState>,
-    isNext: (state: Readonly<NewState | Next>) => state is Next
-): types.MessageHandler<ExistingState, NewState> {
-    return async (message, state, sockets) => {
-        const cleanups: (types.Cleanup | undefined)[] = []
-        for (const handler of handlers) {
-            const result = await handler(message, state, sockets)
-            cleanups.push(result.cleanup)
-            if (isNext(result.state)) {
-                continue
-            }
-            return composeCleanupResponse(result.state, cleanups)
-        }
-        const result = await fallback(message, state, sockets)
-        cleanups.push(result.cleanup)
-        return composeCleanupResponse(result.state, cleanups)
-    }
-}
-
-
-/**
- * Chains together two message handlers into one. The state returned from the
- * first handler is passed to the second handler. Any cleanup functions
- * returned are combined so that the second handler's cleanup is called before
- * the first's.
- */
-export function composeMessageHandlers<StateA, StateB, StateC>(
-    firstHandler: types.MessageHandler<StateA, StateB>,
-    secondHandler: types.MessageHandler<StateB, StateC>
-): types.MessageHandler<StateA, StateC> {
-    return async (message, state, sockets) => {
-        const firstResult = await firstHandler(message, state, sockets)
-        const secondResult = await secondHandler(message, firstResult.state, sockets)
-        return composeCleanupResponse(
-            secondResult.state,
-            [ firstResult.cleanup, secondResult.cleanup ]
-        )
-    }
-}
-
-
-/**
- * Chains together two message handlers that return
- * {@link fallible.Result Result} states. If the first handler returns a state
- * of {@link fallible.Error Error}, it is immediately returned. If it returns
- * {@link fallible.Ok Ok}, its value is passed as the state the second handler.
- * Any cleanup functions returned are combined so that the second handler's
- * cleanup is called before the first's.
- */
-export function composeResultMessageHandlers<StateA, StateB, StateC, ErrorA, ErrorB>(
-    firstHandler: types.MessageHandler<StateA, fallible.Result<StateB, ErrorA>>,
-    secondHandler: types.MessageHandler<StateB, fallible.Result<StateC, ErrorA | ErrorB>>
-): types.MessageHandler<StateA, fallible.Result<StateC, ErrorA | ErrorB>> {
-    return async (message, state, sockets) => {
-        const firstResult = await firstHandler(message, state, sockets)
-        if (!firstResult.state.ok) {
-            return firstResult as types.MessageHandlerResult<fallible.Error<ErrorA>>
-        }
-        const secondResult = await secondHandler(message, firstResult.state.value, sockets)
-        return composeCleanupResponse(
-            secondResult.state,
-            [ firstResult.cleanup, secondResult.cleanup ]
-        )
-    }
-}
-
-
-function composeCleanupResponse<T>(
-    state: T,
-    cleanups: ReadonlyArray<types.Cleanup | undefined>
-): types.MessageHandlerResult<T> {
-    return response(state, async state => {
-        for (let index = cleanups.length - 1; index >= 0; index--) {
-            const cleanup = cleanups[index]
-            if (cleanup === undefined) {
-                continue
-            }
-            await cleanup(state)
-        }
-    })
-}
-
-
-/**
- * An alternative to {@link composeMessageHandlers}. Much more elegant when
- * chaining many handlers together. Immutable.
- *
- * The following are equivalent:
- * ```typescript
- * new MessageHandlerComposer(a)
- *      .intoHandler(b)
- *      .intoHandler(c)
- *      .build()
- *
- * composeMessageHandlers(composeMessageHandlers(a, b), c)
- * ```
- */
-export class MessageHandlerComposer<ExistingState, NewState> {
-    readonly #handler: types.MessageHandler<ExistingState, NewState>
-
-    constructor(handler: types.MessageHandler<ExistingState, NewState>) {
-        this.#handler = handler
-    }
-
-    intoHandler<State>(
-        other: types.MessageHandler<NewState, State>
-    ): MessageHandlerComposer<ExistingState, State> {
-        const handler = composeMessageHandlers(this.#handler, other)
-        return new MessageHandlerComposer(handler)
-    }
-
-    build(): types.MessageHandler<ExistingState, NewState> {
-        return this.#handler
-    }
-}
-
-
-/**
- * An alternative to {@link composeResultMessageHandlers}. Much more elegant
- * when chaining many handlers together. Immutable.
- *
- * The following are equivalent:
- * ```typescript
- * new ResultMessageHandlerComposer(a)
- *      .intoResultHandler(b)
- *      .intoHandler(c)
- *      .build()
- *
- * composeMessageHandlers(composeResultMessageHandlers(a, b), c)
- * ```
- */
-export class ResultMessageHandlerComposer<ExistingState, NewState, Error>
-        extends MessageHandlerComposer<ExistingState, fallible.Result<NewState, Error>> {
-    intoResultHandler<State, ErrorB>(
-        other: types.MessageHandler<NewState, fallible.Result<State, Error | ErrorB>>
-    ): ResultMessageHandlerComposer<ExistingState, State, Error | ErrorB> {
-        const handler = composeResultMessageHandlers(this.build(), other)
-        return new ResultMessageHandlerComposer(handler)
-    }
-}
-
-
-export type ParseJSONStreamError =
-    | { tag: 'MaximumSizeExceeded' }
-    | { tag: 'DecodeError', error: unknown }
-    | { tag: 'InvalidSyntax' }
-
-export type ParseJSONStreamOptions = {
-    /**
-     * Limits the maximum size of the stream; if this limit is exceeded,
-     * an {@link ParseJSONStreamError error} is returned. By default unlimited.
-     */
-    maximumSize?: number
-    /**
-     * Defaults to `utf-8`. If decoding fails, an
-     * {@link ParseJSONStreamError error} is returned
-     */
-    encoding?: BufferEncoding
-}
-
-
-export async function parseJSONStream(
-    stream: types.AwaitableIterable<Uint8Array>,
-    {
-        maximumSize = Infinity,
-        encoding = 'utf-8'
-    }: ParseJSONStreamOptions = {}
-): Promise<fallible.Result<unknown, ParseJSONStreamError>> {
-    let size = 0
-    const chunks: Uint8Array[] = []
-    for await (const chunk of stream) {
-        size += chunk.byteLength
-        if (size > maximumSize) {
-            return fallible.error({ tag: 'MaximumSizeExceeded' } as const)
-        }
-        chunks.push(chunk)
-    }
-
-    const buffer = Buffer.concat(chunks)
-    let text: string
-    try {
-        text = new TextDecoder(encoding, { fatal: true }).decode(buffer)
-    }
-    catch (exception) {
-        return fallible.error({ tag: 'DecodeError', error: exception } as const)
-    }
-
-    let value: unknown
-    try {
-        value = parseJSONString(text)
-    }
-    catch {
-        return fallible.error({ tag: 'InvalidSyntax' } as const)
-    }
-
-    return fallible.ok(value)
-}
-
-
 export type ParseMultipartRequestError =
     | { tag: 'InvalidMultipartContentTypeHeader' }
     | { tag: 'RequestAborted' }
@@ -581,7 +364,7 @@ export function parseMultipartRequest(
         maximumFieldsCount = Infinity,
         maximumFieldsSize = Infinity
     }: ParseMultipartRequestArguments = {}
-): Promise<fallible.Result<ParsedMultipart, ParseMultipartRequestError>> {
+): Promise<Result<ParsedMultipart, ParseMultipartRequestError>> {
     return new Promise(resolve => {
         new Formidable({
             enabledPlugins: [ 'multipart' ],
@@ -598,7 +381,7 @@ export function parseMultipartRequest(
         }).parse(request, (exception, fields, files) => {
             if (exception !== null && exception !== undefined) {
                 return resolve(
-                    fallible.error(
+                    error(
                         getMultipartError(exception)
                     )
                 )
@@ -613,7 +396,7 @@ export function parseMultipartRequest(
                 }
             }
             resolve(
-                fallible.ok({
+                ok({
                     fields,
                     files: newFiles
                 })

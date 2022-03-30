@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import stream from 'node:stream';
 import WebSocket from 'ws';
-import * as fallible from 'fallible';
+import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
-import { response, parseJSONString } from './utils.js';
+import './utils.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -210,154 +210,6 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
     };
     return [listener, sockets];
 }
-/**
- * Composes an array of message handlers into one. This new handler calls each
- * of the given handlers in the array until one of them returns a state of
- * type `NewState`, which is returned. If all of them return a state of type
- * `Next`, the state from the given fallback handler is returned instead. Any
- * cleanup functions returned by handlers are combined so that invocation
- * executes them in reverse order. Useful for implementing routing.
- * @param handlers
- * Array of handlers that can return responses of either NewState or Next
- * @param fallback
- * A handler that can only return NewState, used if all of the previous
- * handlers return `NewState`
- * @param isNext
- * A type guard used to identify whether the state returned from a handler is
- * of type `Next`
- */
-export function fallthroughMessageHandler(handlers, fallback, isNext) {
-    return async (message, state, sockets) => {
-        const cleanups = [];
-        for (const handler of handlers) {
-            const result = await handler(message, state, sockets);
-            cleanups.push(result.cleanup);
-            if (isNext(result.state)) {
-                continue;
-            }
-            return composeCleanupResponse(result.state, cleanups);
-        }
-        const result = await fallback(message, state, sockets);
-        cleanups.push(result.cleanup);
-        return composeCleanupResponse(result.state, cleanups);
-    };
-}
-/**
- * Chains together two message handlers into one. The state returned from the
- * first handler is passed to the second handler. Any cleanup functions
- * returned are combined so that the second handler's cleanup is called before
- * the first's.
- */
-export function composeMessageHandlers(firstHandler, secondHandler) {
-    return async (message, state, sockets) => {
-        const firstResult = await firstHandler(message, state, sockets);
-        const secondResult = await secondHandler(message, firstResult.state, sockets);
-        return composeCleanupResponse(secondResult.state, [firstResult.cleanup, secondResult.cleanup]);
-    };
-}
-/**
- * Chains together two message handlers that return
- * {@link fallible.Result Result} states. If the first handler returns a state
- * of {@link fallible.Error Error}, it is immediately returned. If it returns
- * {@link fallible.Ok Ok}, its value is passed as the state the second handler.
- * Any cleanup functions returned are combined so that the second handler's
- * cleanup is called before the first's.
- */
-export function composeResultMessageHandlers(firstHandler, secondHandler) {
-    return async (message, state, sockets) => {
-        const firstResult = await firstHandler(message, state, sockets);
-        if (!firstResult.state.ok) {
-            return firstResult;
-        }
-        const secondResult = await secondHandler(message, firstResult.state.value, sockets);
-        return composeCleanupResponse(secondResult.state, [firstResult.cleanup, secondResult.cleanup]);
-    };
-}
-function composeCleanupResponse(state, cleanups) {
-    return response(state, async (state) => {
-        for (let index = cleanups.length - 1; index >= 0; index--) {
-            const cleanup = cleanups[index];
-            if (cleanup === undefined) {
-                continue;
-            }
-            await cleanup(state);
-        }
-    });
-}
-/**
- * An alternative to {@link composeMessageHandlers}. Much more elegant when
- * chaining many handlers together. Immutable.
- *
- * The following are equivalent:
- * ```typescript
- * new MessageHandlerComposer(a)
- *      .intoHandler(b)
- *      .intoHandler(c)
- *      .build()
- *
- * composeMessageHandlers(composeMessageHandlers(a, b), c)
- * ```
- */
-export class MessageHandlerComposer {
-    #handler;
-    constructor(handler) {
-        this.#handler = handler;
-    }
-    intoHandler(other) {
-        const handler = composeMessageHandlers(this.#handler, other);
-        return new MessageHandlerComposer(handler);
-    }
-    build() {
-        return this.#handler;
-    }
-}
-/**
- * An alternative to {@link composeResultMessageHandlers}. Much more elegant
- * when chaining many handlers together. Immutable.
- *
- * The following are equivalent:
- * ```typescript
- * new ResultMessageHandlerComposer(a)
- *      .intoResultHandler(b)
- *      .intoHandler(c)
- *      .build()
- *
- * composeMessageHandlers(composeResultMessageHandlers(a, b), c)
- * ```
- */
-export class ResultMessageHandlerComposer extends MessageHandlerComposer {
-    intoResultHandler(other) {
-        const handler = composeResultMessageHandlers(this.build(), other);
-        return new ResultMessageHandlerComposer(handler);
-    }
-}
-export async function parseJSONStream(stream, { maximumSize = Infinity, encoding = 'utf-8' } = {}) {
-    let size = 0;
-    const chunks = [];
-    for await (const chunk of stream) {
-        size += chunk.byteLength;
-        if (size > maximumSize) {
-            return fallible.error({ tag: 'MaximumSizeExceeded' });
-        }
-        chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
-    let text;
-    try {
-        text = new TextDecoder(encoding, { fatal: true }).decode(buffer);
-    }
-    catch (exception) {
-        return fallible.error({ tag: 'DecodeError', error: exception });
-    }
-    let value;
-    try {
-        value = parseJSONString(text);
-    }
-    catch {
-        return fallible.error({ tag: 'InvalidSyntax' });
-    }
-    return fallible.ok(value);
-}
 // TODO: replace with async generator
 export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirectory, keepFileExtensions = false, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
     return new Promise(resolve => {
@@ -375,7 +227,7 @@ export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirecto
             maxFieldsSize: maximumFieldsSize
         }).parse(request, (exception, fields, files) => {
             if (exception !== null && exception !== undefined) {
-                return resolve(fallible.error(getMultipartError(exception)));
+                return resolve(error(getMultipartError(exception)));
             }
             const newFiles = {};
             for (const [name, file] of Object.entries(files)) {
@@ -386,7 +238,7 @@ export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirecto
                     dateModified: file.lastModifiedDate
                 };
             }
-            resolve(fallible.ok({
+            resolve(ok({
                 fields,
                 files: newFiles
             }));
