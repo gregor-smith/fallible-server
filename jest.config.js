@@ -4,5 +4,5 @@ export default {
         '^(.*)\\.js$': '$1'
     },
     setupFilesAfterEnv: [ 'jest-extended/all' ],
-    transformIgnorePatterns: [ '/node_modules/(?!(formidable)/)' ]
+    transformIgnorePatterns: [ '/node_modules/(?!(formidable|fallible)/)' ]
 }
