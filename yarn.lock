@@ -2082,9 +2082,9 @@ expect@^28.0.0-alpha.1:
     jest-matcher-utils "^28.0.0-alpha.1"
     jest-message-util "^28.0.0-alpha.1"
 
-"fallible@link:./../fallible":
-  version "0.0.0"
-  uid ""
+"fallible@https://github.com/gregor-smith/fallible.git":
+  version "0.1.0"
+  resolved "https://github.com/gregor-smith/fallible.git#4fe10a151291b7bf80306ac53d665af4dfd5fd82"
 
 fast-json-stable-stringify@^2.0.0:
   version "2.1.0"
