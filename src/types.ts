@@ -24,6 +24,8 @@ export type Formattable = string | number | boolean | bigint | null
  * A {@link http.RequestListener RequestListener} that can optionally return a
  * {@link PromiseLike}
  */
+// TODO: message/response types compatible with both ploin http module and
+//       http2 module in compat mode
 export type AwaitableRequestListener = (
     message: http.IncomingMessage,
     response: http.ServerResponse
@@ -40,13 +42,10 @@ export type AwaitableIterator<Yield, Return = void, Next = unknown> =
     | AsyncIterator<Yield, Return, Next>
 
 
-/**
- * @param code
- * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
- */
 export type WebSocketCloseInfo = {
+    /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
     code: number
-    reason?: string
+    reason?: string | Buffer
 }
 export type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>
 export type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator
@@ -57,7 +56,7 @@ export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string)
  * @param reason
  * Will be an empty string if no close code was provided
  */
-export type WebSocketCloseCallback = (code: number, reason: string, socketUUID: string) => Awaitable<void>
+export type WebSocketCloseCallback = (code: number, reason: string | Buffer, socketUUID: string) => Awaitable<void>
 export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
 export type WebSocketBody = {
     onOpen: WebSocketOpenCallback
@@ -83,8 +82,28 @@ export type StreamBody =
 
 
 export type RegularResponse = {
+    /**
+     * `Content-Length` and `Content-Type` headers may be set by default
+     * depending on the type of `body`; see that field for details. Manually
+     * specifying these headers will always override any defaults.
+     */
     headers?: Readonly<Record<string, Header>>
+    /** Defaults to `200` */
     status?: number
+    /**
+     * The `Content-Type` and `Content-Length` headers may be set by default
+     * depending on the type of this body:
+     *
+     * | Body type    | `Content-Type`             | `Content-Length`        |
+     * |--------------|----------------------------|-------------------------|
+     * | `string`     | `text/html; charset=utf-8` | Value's length in bytes |
+     * | `Uint8Array` | `application/octet-stream` | Value's length in bytes |
+     * | `StreamBody` | `application/octet-stream` | Not set                 |
+     * | `undefined`  | Not set                    | `0`                     |
+     *
+     * Setting these headers through the `headers` field will always override
+     * any defaults.
+     */
     body?: string | Uint8Array | StreamBody
 }
 
@@ -124,8 +143,13 @@ export interface IdentifiedWebSocket {
     readonly uuid: string
     readonly readyState: WebSocketReadyState
 
+    /**
+     * Sends `data` and handles any errors that may occur using the
+     * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
+     * the socket was created.
+     */
     send(data: WebSocketData): Promise<void>
-    close(code: number, reason?: string): Promise<void>
+    close(code: number, reason?: string | Buffer): Promise<void>
 }
 
 export type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>

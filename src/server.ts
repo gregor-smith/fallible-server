@@ -99,7 +99,7 @@ class Socket implements types.IdentifiedWebSocket {
         }
     }
 
-    close(code?: number, reason?: string): Promise<void> {
+    close(code?: number, reason?: string | Buffer): Promise<void> {
         return new Promise(resolve => {
             this.#underlying.on('close', resolve)
             this.#underlying.close(code, reason)
@@ -230,7 +230,7 @@ export function createRequestListener(
             // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
 
             const [ closeReason, ] = await Promise.all([
-                new Promise<[ number, string ]>(resolve =>
+                new Promise<[ number, string | Buffer ]>(resolve =>
                     websocket.on('close', (...args) => resolve(args))
                 ),
                 // the 'open' even is never fired when running in noServer

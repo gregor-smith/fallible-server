@@ -30,7 +30,7 @@ import {
 describe('parseJSONString', () => {
     test.each([
         '{',
-        '{"constructor": {}}',
+        '{"constructor": { "prototype": {} }}',
         '{"__proto__": {}}',
     ])('throws on invalid or malicious json string', json => {
         expect(() => parseJSONString(json)).toThrowError(SyntaxError)

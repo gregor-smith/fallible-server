@@ -443,7 +443,7 @@ describe('createRequestListener', () => {
                 yield 'server open'
                 yield 'server open 2'
             })
-            const onClose = jest.fn<void, [ number, string, string ]>()
+            const onClose = jest.fn<void, [ number, string | Buffer, string ]>()
             const onMessage = jest.fn<WebSocketIterator, [ WebSocketData, string ]>(function * (message) {
                 yield 'server message'
                 yield `server echo: ${message}`
@@ -508,9 +508,9 @@ describe('createRequestListener', () => {
         ])('returning close info from onOpen closes socket', async closeInfo => {
             expect.assertions(1)
 
-            const closeArgs = await new Promise<[ number, string ]>(resolve => {
+            const closeArgs = await new Promise<[ number, string | Buffer ]>(resolve => {
                 let serverDone = false
-                let clientCloseArgs: [ number, string ] | undefined
+                let clientCloseArgs: [ number, string | Buffer ] | undefined
 
                 const [ listener ] = createRequestListener(() =>
                     webSocketResponse(
@@ -553,9 +553,9 @@ describe('createRequestListener', () => {
 
             const messages: WebSocketData[] = []
 
-            const closeArgs = await new Promise<[ number, string ]>(resolve => {
+            const closeArgs = await new Promise<[ number, string | Buffer ]>(resolve => {
                 let serverDone = false
-                let clientCloseArgs: [ number, string ] | undefined
+                let clientCloseArgs: [ number, string | Buffer ] | undefined
 
                 const [ listener ] = createRequestListener(() =>
                     webSocketResponse(
@@ -598,7 +598,7 @@ describe('createRequestListener', () => {
             expect.assertions(2)
 
             const messages: WebSocketData[] = []
-            const onClose = jest.fn<void, [ number, string, string ]>()
+            const onClose = jest.fn<void, [ number, string | Buffer, string ]>()
 
             await new Promise<void>(resolve => {
                 let done = false
