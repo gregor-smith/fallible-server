@@ -1,5 +1,7 @@
 # `fallible-server`
-A Node Web framework with a focus on type safety and cleaner error handling. **Currently a work in progress and subject to change**.
+A Node Web framework with a focus on type safety and cleaner error handling. 
+
+**Currently a work in progress and subject to change**.
 
 ## Features
 * Type-safe middleware-like composition
@@ -192,7 +194,7 @@ If the `MessageHandler` passed to `createRequestListener` throws, an empty respo
 ## Routing
 Currently no dedicated router is included with this package, but there are tools with which you can easily make your own, notably `fallthroughMessageHandler`.
 
-This function takes an array of `MessageHandlers` which may return either some arbitrary state or a specific state indicating that execution should fall through to the next handler in the array. In case every handler falls through, a given fallback handler is used. A given type guard is used to identify the state returned by each handler. An example of this can be seen below; note that neither return state is required to take any specific shape.
+This function takes an array of `MessageHandlers` which may return either some arbitrary response state or a specific state indicating that execution should fall through to the next handler in the array. In case every handler falls through, a given fallback handler is used. A given type guard is used to identify the state returned by each handler. An example of this can be seen below; note that neither return state is required to take any specific shape.
 
 ```typescript
 const routeHandlers: MessageHandler<void, Response | 'no-match'>[] = [
