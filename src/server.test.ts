@@ -1,7 +1,7 @@
 import { TextEncoder } from 'node:util'
 import { Readable } from 'node:stream'
 import { createServer } from 'node:http'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
@@ -590,6 +590,57 @@ describe('WebSocketResponder', () => {
     })
 
     describe('response', () => {
-        test.todo('returns response with given options, base headers and protocol')
+        test('returns response with given options, base headers and protocol', () => {
+            const key = 'a'.repeat(22) + '=='
+            const protocol = 'test protocol'
+            const result = WebSocketResponder.fromHeaders('GET', {
+                upgrade: 'websocket',
+                'sec-websocket-key': key,
+                'sec-websocket-protocol': protocol,
+                'sec-websocket-version': '13'
+            })
+            const responder = result.value as WebSocketResponder
+
+            const onOpen = jest.fn()
+            const onMessage = jest.fn()
+            const onClose = jest.fn()
+            const onSendError = jest.fn()
+            const maximumMessageSize = 1234
+            const uuid = randomUUID()
+            const headers = { 'X-Test-Header': 'test' }
+            const cleanup = jest.fn()
+            const response = responder.response(
+                {
+                    onOpen,
+                    onMessage,
+                    onClose,
+                    onSendError,
+                    maximumMessageSize,
+                    uuid,
+                    headers
+                },
+                cleanup
+            )
+
+            expect(response).toEqual<typeof response>({
+                state: {
+                    onOpen,
+                    onMessage,
+                    onClose,
+                    onSendError,
+                    maximumMessageSize,
+                    uuid,
+                    headers: {
+                        ...headers,
+                        'Sec-WebSocket-Accept': createHash('sha1')
+                            .update(key + WEBSOCKET_GUID)
+                            .digest('base64'),
+                        'Sec-WebSocket-Protocol': protocol
+                    },
+                    protocol
+                },
+                cleanup
+            })
+        })
     })
 })
