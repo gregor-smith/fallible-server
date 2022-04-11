@@ -111,7 +111,6 @@ export declare type WebSocketResponderError = {
     tag: 'MissingVersionHeader';
 } | {
     tag: 'InvalidOrUnsupportedVersionHeader';
-    version: number;
     header: string;
 };
 export declare type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'headers'> & {

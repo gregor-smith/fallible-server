@@ -337,7 +337,7 @@ export class WebSocketResponder {
         if (key === undefined) {
             return error({ tag: 'MissingKeyHeader' });
         }
-        if (!/^[+/0-9A-Za-z]{22}==$/.test(key)) {
+        if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
             return error({
                 tag: 'InvalidKeyHeader',
                 header: key
@@ -346,11 +346,10 @@ export class WebSocketResponder {
         if (headers['sec-websocket-version'] === undefined) {
             return error({ tag: 'MissingVersionHeader' });
         }
-        const version = Number(headers['sec-websocket-version']);
-        if (version !== 8 && version !== 13) {
+        // ws only supports 8 and 13
+        if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
             return error({
                 tag: 'InvalidOrUnsupportedVersionHeader',
-                version,
                 header: headers['sec-websocket-version']
             });
         }

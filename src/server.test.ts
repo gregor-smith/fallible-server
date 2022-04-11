@@ -1,16 +1,23 @@
 import { TextEncoder } from 'node:util'
 import { Readable } from 'node:stream'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 
 import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
+import { error } from 'fallible'
 
 import { response } from './utils.js'
-import { createRequestListener } from './server.js'
+import {
+    createRequestListener,
+    WebSocketResponder,
+    WebSocketResponderError
+} from './server.js'
 import type {
     Message,
     Response
 } from './types.js'
+import { WEBSOCKET_GUID } from './constants.js'
 
 
 const testEncoder = new TextEncoder()
@@ -469,15 +476,117 @@ describe('parseMultipartRequest', () => {
 
 describe('WebSocketResponder', () => {
     describe('fromHeaders', () => {
-        test.todo('returns NonGETMethod when method parameter not GET')
+        test.each([
+            undefined,
+            'get',
+            'test',
+            'POST',
+            'PUT',
+            'DELETE',
+            'PATCH',
+        ])('returns NonGETMethod when method parameter not GET', method => {
+            const result = WebSocketResponder.fromHeaders(method, {})
+            expect(result).toEqual(
+                error<WebSocketResponderError>({ tag: 'NonGETMethod', method })
+            )
+        })
 
-        test.todo('returns InvalidUpgradeHeader when upgrade header not websocket')
+        test('returns MissingUpgradeHeader when upgrade header missing', () => {
+            const result = WebSocketResponder.fromHeaders('GET', {})
+            expect(result).toEqual(
+                error<WebSocketResponderError>({ tag: 'MissingUpgradeHeader' })
+            )
+        })
 
-        test.todo('returns InvalidKeyHeader when sec-websocket-key header invalid')
+        test.each([
+            ' websocket',
+            'websocket ',
+            'test'
+        ])('returns InvalidUpgradeHeader when upgrade header not websocket', header => {
+            const result = WebSocketResponder.fromHeaders('GET', { upgrade: header })
+            expect(result).toEqual(
+                error<WebSocketResponderError>({
+                    tag: 'InvalidUpgradeHeader',
+                    header
+                })
+            )
+        })
 
-        test.todo('returns InvalidOrUnsupportedVersionHeader when sec-websocket-version header not 8 or 13')
+        test('returns MissingKeyHeader when sec-websocket-key header missing', () => {
+            const result = WebSocketResponder.fromHeaders('GET', { upgrade: 'websocket' })
+            expect(result).toEqual(
+                error<WebSocketResponderError>({ tag: 'MissingKeyHeader' })
+            )
+        })
 
-        test.todo('returns responder with correct accept and protocol')
+        test.each([
+            'a'.repeat(21) + '==',
+            'a'.repeat(23) + '==',
+            'a'.repeat(24),
+            '-'.repeat(22) + '==',
+            '='.repeat(24),
+            ' '.repeat(22) + '==',
+        ])('returns InvalidKeyHeader when sec-websocket-key header invalid', header => {
+            const result = WebSocketResponder.fromHeaders('GET', {
+                upgrade: 'websocket',
+                'sec-websocket-key': header
+            })
+            expect(result).toEqual(
+                error<WebSocketResponderError>({
+                    tag: 'InvalidKeyHeader',
+                    header
+                })
+            )
+        })
+
+        test('returns MissingVersionHeader when sec-websocket-version header missing', () => {
+            const result = WebSocketResponder.fromHeaders('GET', {
+                upgrade: 'websocket',
+                'sec-websocket-key': 'a'.repeat(22) + '=='
+            })
+            expect(result).toEqual(
+                error<WebSocketResponderError>({ tag: 'MissingVersionHeader' })
+            )
+        })
+
+        test.each([
+            '7',
+            '9',
+            '12',
+            '14',
+            'test'
+        ])('returns InvalidOrUnsupportedVersionHeader when sec-websocket-version header not 8 or 13', header => {
+            const result = WebSocketResponder.fromHeaders('GET', {
+                upgrade: 'websocket',
+                'sec-websocket-key': 'a'.repeat(22) + '==',
+                'sec-websocket-version': header
+            })
+            expect(result).toEqual(
+                error<WebSocketResponderError>({
+                    tag: 'InvalidOrUnsupportedVersionHeader',
+                    header
+                })
+            )
+        })
+
+        test('returns responder with correct accept and protocol', () => {
+            const key = 'a'.repeat(22) + '=='
+            const protocol = 'test protocol'
+            const result = WebSocketResponder.fromHeaders('GET', {
+                upgrade: 'websocket',
+                'sec-websocket-key': key,
+                'sec-websocket-protocol': protocol,
+                'sec-websocket-version': '13'
+            })
+
+            expect(result.ok).toBeTrue()
+            expect((result.value as WebSocketResponder).accept).toBe(
+                createHash('sha1')
+                    .update(key + WEBSOCKET_GUID)
+                    .digest('base64')
+            )
+            expect((result.value as WebSocketResponder).protocol).toBe(protocol)
+        })
     })
 
     describe('response', () => {

@@ -478,7 +478,7 @@ export type WebSocketResponderError =
     | { tag: 'MissingKeyHeader' }
     | { tag: 'InvalidKeyHeader', header: string }
     | { tag: 'MissingVersionHeader' }
-    | { tag: 'InvalidOrUnsupportedVersionHeader', version: number, header: string }
+    | { tag: 'InvalidOrUnsupportedVersionHeader', header: string }
 
 export type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'headers'> & {
     headers?: types.Headers
@@ -513,7 +513,7 @@ export class WebSocketResponder {
         if (key === undefined) {
             return error<WebSocketResponderError>({ tag: 'MissingKeyHeader' })
         }
-        if (!/^[+/0-9A-Za-z]{22}==$/.test(key)) {
+        if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
             return error<WebSocketResponderError>({
                 tag: 'InvalidKeyHeader',
                 header: key
@@ -523,11 +523,10 @@ export class WebSocketResponder {
         if (headers['sec-websocket-version'] === undefined) {
             return error<WebSocketResponderError>({ tag: 'MissingVersionHeader' })
         }
-        const version = Number(headers['sec-websocket-version'])
-        if (version !== 8 && version !== 13) {
+        // ws only supports 8 and 13
+        if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
             return error<WebSocketResponderError>({
                 tag: 'InvalidOrUnsupportedVersionHeader',
-                version,
                 header: headers['sec-websocket-version']
             })
         }
