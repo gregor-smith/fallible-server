@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import stream from 'node:stream';
 import WebSocket from 'ws';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
-import './utils.js';
+import { response } from './utils.js';
+import { WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -43,11 +44,12 @@ function getDefaultExceptionListener() {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option");
     return console.error;
 }
-class Socket {
+class WebSocketWrapper {
+    uuid;
     #underlying;
     #onSendError;
-    uuid = randomUUID();
-    constructor(underlying, onSendError) {
+    constructor(underlying, onSendError, uuid) {
+        this.uuid = uuid;
         this.#underlying = underlying;
         this.#onSendError = onSendError;
     }
@@ -55,7 +57,16 @@ class Socket {
         return this.#underlying.readyState;
     }
     async send(data) {
-        const error = await new Promise(resolve => this.#underlying.send(data, resolve));
+        let error;
+        try {
+            error = await new Promise(resolve => this.#underlying.send(data, resolve));
+        }
+        catch (e) {
+            if (!(e instanceof Error)) {
+                throw e;
+            }
+            error = e;
+        }
         if (error !== undefined) {
             await this.#onSendError(data, error, this.uuid);
         }
@@ -90,7 +101,6 @@ class Socket {
  * The callback, and a map of all active WebSockets identified by UUIDs.
  */
 export function createRequestListener(messageHandler, exceptionListener = getDefaultExceptionListener()) {
-    const server = new WebSocket.Server({ noServer: true });
     const sockets = new Map();
     const listener = async (req, res) => {
         let state;
@@ -102,106 +112,136 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             exceptionListener(exception, req);
             state = { status: 500 };
         }
-        res.statusCode = state.status ?? 200;
-        if (typeof state.body === 'string') {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.setHeader('Content-Length', Buffer.byteLength(state.body, 'utf-8'));
-            setResponseHeaders(res, state.headers);
-            try {
-                await new Promise((resolve, reject) => {
-                    res.on('close', resolve);
-                    res.on('error', reject);
-                    res.end(state.body, 'utf-8');
-                });
-            }
-            catch (exception) {
-                exceptionListener(exception, req, state);
-            }
-        }
-        else if (state.body instanceof Uint8Array) {
-            res.setHeader('Content-Type', 'application/octet-stream');
-            res.setHeader('Content-Length', state.body.byteLength);
-            setResponseHeaders(res, state.headers);
-            try {
-                await new Promise((resolve, reject) => {
-                    res.on('close', resolve);
-                    res.on('error', reject);
-                    res.end(state.body);
-                });
-            }
-            catch (exception) {
-                exceptionListener(exception, req, state);
-            }
-        }
-        // no body
-        else if (state.body === undefined) {
-            res.setHeader('Content-Length', 0);
-            setResponseHeaders(res, state.headers);
-            try {
-                await new Promise((resolve, reject) => {
-                    res.on('close', resolve);
-                    res.on('error', reject);
-                    res.end();
-                });
-            }
-            catch (exception) {
-                exceptionListener(exception, req, state);
-            }
-        }
         // websocket
-        else if ('onOpen' in state.body) {
-            // TODO: subclass WebSocket.Server and override the handleUpgrade
-            // implementation with one that throws rather than ending the socket
-            const websocket = await new Promise(resolve => server.handleUpgrade(req, req.socket, Buffer.alloc(0), resolve));
-            const { onOpen, onMessage, onSendError, onClose } = state.body;
-            const socket = new Socket(websocket, onSendError ?? defaultOnWebsocketSendError);
-            sockets.set(socket.uuid, socket);
-            if (onMessage !== undefined) {
-                websocket.on('message', data => sendWebSocketMessages(socket, onMessage(data, socket.uuid)));
+        if ('onOpen' in state) {
+            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, headers, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            const lines = [
+                'HTTP/1.1 101 Switching Protocols',
+                'Upgrade: websocket',
+                'Connection: Upgrade',
+            ];
+            for (let [header, value] of Object.entries(headers)) {
+                if (Array.isArray(value)) {
+                    value = value.join(', ');
+                }
+                // TODO: sanitise headers, forbid upgrade/connection
+                lines.push(`${header}: ${value}`);
             }
-            // no need to listen for the socket error event as close event is
-            // always called on errors anyway. see:
-            // https://github.com/websockets/ws/issues/1823#issuecomment-740056036
-            const [closeReason,] = await Promise.all([
-                new Promise(resolve => websocket.on('close', (...args) => resolve(args))),
-                // the 'open' even is never fired when running in noServer
-                // mode, so just call onOpen straight away as the request
-                // is already opened
-                sendWebSocketMessages(socket, onOpen(socket.uuid))
-            ]);
-            // TODO: keep track of sendWebSocketMessages promises and await here
-            sockets.delete(socket.uuid);
-            if (onClose !== undefined) {
-                await onClose(...closeReason, socket.uuid);
+            lines.push('\r\n');
+            const httpResponse = lines.join('\r\n');
+            const ws = new WebSocket(null);
+            if (protocol !== undefined) {
+                ws._protocol = protocol;
             }
-        }
-        // iterable
-        else {
-            res.setHeader('Content-Type', 'application/octet-stream');
-            setResponseHeaders(res, state.headers);
-            const iterable = typeof state.body === 'function'
-                ? state.body()
-                : state.body;
-            const readable = iterable instanceof stream.Readable
-                ? iterable
-                : stream.Readable.from(iterable, { objectMode: false });
-            try {
-                await new Promise((resolve, reject) => {
-                    const errorHandler = (error) => {
-                        res.off('error', errorHandler);
-                        readable.off('error', errorHandler);
-                        readable.unpipe(res);
-                        res.end();
-                        reject(error);
-                    };
-                    res.on('close', resolve);
-                    res.once('error', errorHandler);
-                    readable.once('error', errorHandler);
-                    readable.pipe(res);
+            const wrapper = new WebSocketWrapper(ws, onSendError, uuid);
+            await new Promise(resolve => {
+                const closeListener = (code, reason) => {
+                    sockets.delete(uuid);
+                    ws.off('error', errorListener);
+                    const result = ok({ code, reason });
+                    const promise = onClose?.(result, uuid);
+                    resolve(promise);
+                };
+                const errorListener = (exception) => {
+                    sockets.delete(uuid);
+                    ws.off('close', closeListener);
+                    if (ws.readyState < 2 /* Closing */) {
+                        ws.close();
+                    }
+                    exceptionListener(exception, req, state);
+                    // TODO: type possible error codes
+                    const result = error(exception);
+                    const promise = onClose?.(result, uuid);
+                    resolve(promise);
+                };
+                ws.on('open', () => {
+                    sockets.set(uuid, wrapper);
+                    sendWebSocketMessages(wrapper, onOpen(uuid));
                 });
+                ws.once('error', errorListener);
+                ws.on('close', closeListener);
+                if (onMessage !== undefined) {
+                    ws.on('message', data => {
+                        sendWebSocketMessages(wrapper, onMessage(data, uuid));
+                    });
+                }
+                ws.setSocket(req.socket, Buffer.alloc(0), maximumMessageSize);
+                req.socket.write(httpResponse);
+            });
+        }
+        else {
+            res.statusCode = state.status ?? 200;
+            const body = state.body;
+            if (typeof body === 'string') {
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.setHeader('Content-Length', Buffer.byteLength(body, 'utf-8'));
+                setResponseHeaders(res, state.headers);
+                try {
+                    await new Promise((resolve, reject) => {
+                        res.on('close', resolve);
+                        res.on('error', reject);
+                        res.end(body, 'utf-8');
+                    });
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                }
             }
-            catch (exception) {
-                exceptionListener(exception, req, state);
+            else if (body instanceof Uint8Array) {
+                res.setHeader('Content-Type', 'application/octet-stream');
+                res.setHeader('Content-Length', body.byteLength);
+                setResponseHeaders(res, state.headers);
+                try {
+                    await new Promise((resolve, reject) => {
+                        res.on('close', resolve);
+                        res.on('error', reject);
+                        res.end(body);
+                    });
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                }
+            }
+            else if (body === undefined) {
+                res.setHeader('Content-Length', 0);
+                setResponseHeaders(res, state.headers);
+                try {
+                    await new Promise((resolve, reject) => {
+                        res.on('close', resolve);
+                        res.on('error', reject);
+                        res.end();
+                    });
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                }
+            }
+            // stream
+            else {
+                res.setHeader('Content-Type', 'application/octet-stream');
+                setResponseHeaders(res, state.headers);
+                const iterable = typeof body === 'function' ? body() : body;
+                const readable = iterable instanceof stream.Readable
+                    ? iterable
+                    : stream.Readable.from(iterable, { objectMode: false });
+                try {
+                    await new Promise((resolve, reject) => {
+                        const errorHandler = (error) => {
+                            res.off('error', errorHandler);
+                            readable.off('error', errorHandler);
+                            readable.unpipe(res);
+                            res.end();
+                            reject(error);
+                        };
+                        res.on('close', resolve);
+                        res.once('error', errorHandler);
+                        readable.once('error', errorHandler);
+                        readable.pipe(res);
+                    });
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                }
             }
         }
         if (cleanup !== undefined) {
@@ -268,6 +308,72 @@ function getMultipartError(error) {
             return { tag: 'BelowMinimumFileSize' };
         default:
             return { tag: 'UnknownError', error };
+    }
+}
+export class WebSocketResponder {
+    accept;
+    protocol;
+    constructor(accept, protocol) {
+        this.accept = accept;
+        this.protocol = protocol;
+    }
+    static fromHeaders(method, headers) {
+        if (method !== 'GET') {
+            return error({
+                tag: 'NonGETMethod',
+                method
+            });
+        }
+        if (headers.upgrade === undefined) {
+            return error({ tag: 'MissingUpgradeHeader' });
+        }
+        if (headers.upgrade.toLowerCase() !== 'websocket') {
+            return error({
+                tag: 'InvalidUpgradeHeader',
+                header: headers.upgrade
+            });
+        }
+        const key = headers['sec-websocket-key'];
+        if (key === undefined) {
+            return error({ tag: 'MissingKeyHeader' });
+        }
+        if (!/^[+/0-9A-Za-z]{22}==$/.test(key)) {
+            return error({
+                tag: 'InvalidKeyHeader',
+                header: key
+            });
+        }
+        if (headers['sec-websocket-version'] === undefined) {
+            return error({ tag: 'MissingVersionHeader' });
+        }
+        const version = Number(headers['sec-websocket-version']);
+        if (version !== 8 && version !== 13) {
+            return error({
+                tag: 'InvalidOrUnsupportedVersionHeader',
+                version,
+                header: headers['sec-websocket-version']
+            });
+        }
+        const accept = createHash('sha1')
+            .update(key + WEBSOCKET_GUID)
+            .digest('base64');
+        const protocol = headers['sec-websocket-protocol']
+            ?.match(/^(.+?)(?:,|$)/)?.[1];
+        const responder = new WebSocketResponder(accept, protocol);
+        return ok(responder);
+    }
+    response(options, cleanup) {
+        const headers = {
+            'Sec-WebSocket-Accept': this.accept
+        };
+        if (this.protocol !== undefined) {
+            headers['Sec-WebSocket-Protocol'] = this.protocol;
+        }
+        return response({
+            ...options,
+            headers: { ...headers, ...options.headers },
+            protocol: this.protocol
+        }, cleanup);
     }
 }
 //# sourceMappingURL=server.js.map

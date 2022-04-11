@@ -94,3 +94,33 @@ export declare type ParseMultipartRequestArguments = {
     maximumFieldsSize?: number;
 };
 export declare function parseMultipartRequest(request: http.IncomingMessage, { encoding, saveDirectory, keepFileExtensions, minimumFileSize, maximumFileCount, maximumFileSize, maximumFieldsCount, maximumFieldsSize }?: ParseMultipartRequestArguments): Promise<Result<ParsedMultipart, ParseMultipartRequestError>>;
+export declare type WebSocketResponderError = {
+    tag: 'NonGETMethod';
+    method: string | undefined;
+} | {
+    tag: 'MissingUpgradeHeader';
+} | {
+    tag: 'InvalidUpgradeHeader';
+    header: string;
+} | {
+    tag: 'MissingKeyHeader';
+} | {
+    tag: 'InvalidKeyHeader';
+    header: string;
+} | {
+    tag: 'MissingVersionHeader';
+} | {
+    tag: 'InvalidOrUnsupportedVersionHeader';
+    version: number;
+    header: string;
+};
+export declare type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'headers'> & {
+    headers?: types.Headers;
+};
+export declare class WebSocketResponder {
+    readonly accept: string;
+    readonly protocol: string | undefined;
+    private constructor();
+    static fromHeaders(method: string | undefined, headers: types.WebSocketRequestHeaders): Result<WebSocketResponder, WebSocketResponderError>;
+    response(options: WebSocketResponderOptions, cleanup?: types.Cleanup): types.MessageHandlerResult<types.WebSocketResponse>;
+}

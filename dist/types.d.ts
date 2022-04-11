@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import type http from 'node:http';
 import type WebSocket from 'ws';
-import type { Awaitable } from 'fallible';
+import type { Awaitable, Result } from 'fallible';
 import type { WebSocketReadyState } from './utils.js';
 /**
  * A Node {@link http.IncomingMessage IncomingMessage} that is correctly typed
@@ -34,15 +34,13 @@ export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID:
  * @param reason
  * Will be an empty string if no close code was provided
  */
-export declare type WebSocketCloseCallback = (code: number, reason: string | Buffer, socketUUID: string) => Awaitable<void>;
+export declare type WebSocketCloseCallback = (result: Result<{
+    code: number;
+    reason: Buffer;
+}, Error>, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
-export declare type WebSocketBody = {
-    onOpen: WebSocketOpenCallback;
-    onMessage?: WebSocketMessageCallback;
-    onClose?: WebSocketCloseCallback;
-    onSendError?: WebSocketSendErrorCallback;
-};
 export declare type Header = Formattable | ReadonlyArray<Formattable>;
+export declare type Headers = Record<string, Header>;
 /**
  * Any iterable—sync or async—yielding {@link Uint8Array Uint8Arrays}, or
  * a function returning such an iterable. Note that {@link Buffer Buffers} are
@@ -56,7 +54,7 @@ export declare type RegularResponse = {
      * depending on the type of `body`; see that field for details. Manually
      * specifying these headers will always override any defaults.
      */
-    headers?: Readonly<Record<string, Header>>;
+    headers?: Headers;
     /** Defaults to `200` */
     status?: number;
     /**
@@ -75,10 +73,19 @@ export declare type RegularResponse = {
      */
     body?: string | Uint8Array | StreamBody;
 };
+export declare type WebSocketRequestHeaders = Pick<http.IncomingHttpHeaders, 'upgrade' | 'sec-websocket-key' | 'sec-websocket-version' | 'sec-websocket-protocol'>;
+export declare type WebSocketResponseHeaders = Headers & {
+    'Sec-WebSocket-Accept': string;
+};
 export declare type WebSocketResponse = {
-    headers?: undefined;
-    status?: 101;
-    body: Readonly<WebSocketBody>;
+    onOpen: WebSocketOpenCallback;
+    onMessage?: WebSocketMessageCallback;
+    onClose?: WebSocketCloseCallback;
+    onSendError?: WebSocketSendErrorCallback;
+    maximumMessageSize?: number;
+    protocol?: string;
+    headers: WebSocketResponseHeaders;
+    uuid?: string;
 };
 export declare type Response = RegularResponse | WebSocketResponse;
 export declare type Cleanup = (state: Readonly<Response>) => Awaitable<void>;
@@ -94,7 +101,7 @@ export interface IdentifiedWebSocket {
     /**
      * Sends `data` and handles any errors that may occur using the
      * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
-     * the socket was created.
+     * the response was created.
      */
     send(data: WebSocketData): Promise<void>;
     close(code: number, reason?: string | Buffer): Promise<void>;

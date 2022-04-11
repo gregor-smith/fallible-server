@@ -2,17 +2,15 @@
 // Node-only utils should go in ./server.ts
 
 
-import * as fallible from 'fallible'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 
+import * as fallible from 'fallible'
 import { parse as parseJSONString } from 'secure-json-parse'
 
 import type {
     AwaitableIterable,
     Cleanup,
     MessageHandlerResult,
-    WebSocketBody,
-    WebSocketResponse,
     MessageHandler
 } from './types.js'
 
@@ -125,11 +123,6 @@ export function response<T extends void>(state?: T): MessageHandlerResult<T>
 export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>
 export function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T> {
     return { state, cleanup }
-}
-
-
-export function webSocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebSocketResponse> {
-    return response({ body }, cleanup)
 }
 
 

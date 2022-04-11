@@ -1,21 +1,15 @@
 import { TextEncoder } from 'node:util'
-import { setTimeout } from 'node:timers/promises'
 import { Readable } from 'node:stream'
 import { createServer } from 'node:http'
 
 import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
-import WebSocket from 'ws'
 
-import { response, webSocketResponse } from './utils.js'
+import { response } from './utils.js'
 import { createRequestListener } from './server.js'
 import type {
     Message,
-    Response,
-    WebSocketCloseInfo,
-    WebSocketData,
-    WebSocketIterator,
-    WebSocketResponse
+    Response
 } from './types.js'
 
 
@@ -423,284 +417,25 @@ describe('createRequestListener', () => {
             server.close(done)
         })
 
-        function connectWebsocket(): WebSocket {
-            const addressInfo = server.address()
-            if (addressInfo === null || typeof addressInfo !== 'object') {
-                throw new Error(`Invalid server address: ${addressInfo}`)
-            }
-            const uri = `ws://${addressInfo.address}:${addressInfo.port}`
-            return new WebSocket(uri)
-        }
+        test.todo('onOpen/onMessage/onClose called, messages sent and received')
 
-        test('onOpen called, onClose called, messages sent and received', async () => {
-            expect.assertions(8)
+        test.todo('returning close info from onOpen closes socket')
 
-            const messages: WebSocketData[] = []
-            let uuid: string | undefined
+        test.todo('returning close info from onMessage closes socket')
 
-            const onOpen = jest.fn<WebSocketIterator, [ string ]>(function * (u) {
-                uuid = u
-                yield 'server open'
-                yield 'server open 2'
-            })
-            const onClose = jest.fn<void, [ number, string | Buffer, string ]>()
-            const onMessage = jest.fn<WebSocketIterator, [ WebSocketData, string ]>(function * (message) {
-                yield 'server message'
-                yield `server echo: ${message}`
-            })
-            const state: WebSocketResponse = { body: { onOpen, onMessage, onClose } }
+        test.todo('stops sending messages if socket closes during message generator')
 
-            const cleanup = jest.fn()
+        test.todo('onSendError called on unknown send error')
 
-            await new Promise<void>(resolve => {
-                // Simply listening for the client close event is not enough,
-                // as the server request listener has not yet returned at that
-                // point. We get around this by both listening for the client
-                // close event and using the messageHandler's cleanup callback.
-                let done = false
+        test.todo('incoming message larger than maximumMessageSize is rejected')
 
-                function waitForOtherToFinish(): void {
-                    if (done) {
-                        resolve()
-                    }
-                    else {
-                        done = true
-                    }
-                }
+        test.todo('outgoing message larger than maximumMessageSize calls onSendError')
 
-                const [ listener ] = createRequestListener(() =>
-                    response(
-                        state,
-                        cleanup.mockImplementationOnce(waitForOtherToFinish)
-                    )
-                )
-                server.addListener('request', listener)
+        test.todo('subprotocol sets Sec-WebSocket-Protocol header')
 
-                const client = connectWebsocket()
-                client.on('open', () => client.send('client open'))
-                client.on('message', message => {
-                    messages.push(message)
-                    if (messages.length >= 4) {
-                        client.close(4321, 'client close')
-                    }
-                })
-                client.on('close', waitForOtherToFinish)
-            })
+        test.todo('writes custom headers')
 
-            expect(uuid).not.toBeUndefined()
-            expect(onOpen).toHaveBeenCalledOnce()
-            expect(onOpen).toHaveBeenCalledBefore(onMessage)
-            expect(onMessage.mock.calls).toEqual([ [ 'client open', uuid ] ])
-            expect(messages).toEqual([
-                'server open',
-                'server open 2',
-                'server message',
-                'server echo: client open'
-            ])
-            expect(onClose).toHaveBeenCalledAfter(onMessage)
-            expect(onClose.mock.calls).toEqual([ [ 4321, 'client close', uuid ] ])
-            expect(cleanup.mock.calls).toEqual([ [ state ] ])
-        })
-
-        test.each<WebSocketCloseInfo>([
-            { code: 4321 },
-            { code: 4321, reason: 'server close' }
-        ])('returning close info from onOpen closes socket', async closeInfo => {
-            expect.assertions(1)
-
-            const closeArgs = await new Promise<[ number, string | Buffer ]>(resolve => {
-                let serverDone = false
-                let clientCloseArgs: [ number, string | Buffer ] | undefined
-
-                const [ listener ] = createRequestListener(() =>
-                    webSocketResponse(
-                        {
-                            onOpen: function * () {
-                                return closeInfo
-                            }
-                        },
-                        () => {
-                            if (clientCloseArgs === undefined) {
-                                serverDone = true
-                            }
-                            else {
-                                resolve(clientCloseArgs)
-                            }
-                        }
-                    )
-                )
-                server.addListener('request', listener)
-
-                const client = connectWebsocket()
-                client.on('close', (...args) => {
-                    if (serverDone) {
-                        resolve(args)
-                    }
-                    else {
-                        clientCloseArgs = args
-                    }
-                })
-            })
-
-            expect(closeArgs).toEqual([ closeInfo.code, closeInfo.reason ?? '' ])
-        })
-
-        test.each<WebSocketCloseInfo>([
-            { code: 4321 },
-            { code: 4321, reason: 'server close' }
-        ])('returning close info from onMessage closes socket', async closeInfo => {
-            expect.assertions(2)
-
-            const messages: WebSocketData[] = []
-
-            const closeArgs = await new Promise<[ number, string | Buffer ]>(resolve => {
-                let serverDone = false
-                let clientCloseArgs: [ number, string | Buffer ] | undefined
-
-                const [ listener ] = createRequestListener(() =>
-                    webSocketResponse(
-                        {
-                            onOpen: function * () {},
-                            onMessage: function * (message) {
-                                messages.push(message)
-                                return closeInfo
-                            }
-                        },
-                        () => {
-                            if (clientCloseArgs === undefined) {
-                                serverDone = true
-                            }
-                            else {
-                                resolve(clientCloseArgs)
-                            }
-                        }
-                    )
-                )
-                server.addListener('request', listener)
-
-                const client = connectWebsocket()
-                client.on('open', () => client.send('client open'))
-                client.on('close', (...args) => {
-                    if (serverDone) {
-                        resolve(args)
-                    }
-                    else {
-                        clientCloseArgs = args
-                    }
-                })
-            })
-
-            expect(messages).toEqual([ 'client open' ])
-            expect(closeArgs).toEqual([ closeInfo.code, closeInfo.reason ?? '' ])
-        })
-
-        test('stops sending messages if socket closes during generator', async () => {
-            expect.assertions(2)
-
-            const messages: WebSocketData[] = []
-            const onClose = jest.fn<void, [ number, string | Buffer, string ]>()
-
-            await new Promise<void>(resolve => {
-                let done = false
-
-                function waitForOtherToFinish() {
-                    if (done) {
-                        resolve()
-                    }
-                    else {
-                        done = true
-                    }
-                }
-
-                const [ listener ] = createRequestListener(() =>
-                    webSocketResponse(
-                        {
-                            onOpen: async function * () {
-                                yield 'server open'
-                                await setTimeout(5)
-                                yield 'should be unreachable'
-                            },
-                            onClose
-                        },
-                        waitForOtherToFinish
-                    )
-                )
-                server.addListener('request', listener)
-
-                const client = connectWebsocket()
-                client.on('message', message => {
-                    messages.push(message)
-                    client.close(4321, 'client close')
-                })
-                client.on('close', waitForOtherToFinish)
-            })
-
-            expect(messages).toEqual([ 'server open' ])
-            expect(onClose.mock.calls).toEqual([
-                [ 4321, 'client close', expect.any(String) ]
-            ])
-        })
-
-        test('onSendError called on unknown send error', async () => {
-            expect.assertions(4)
-
-            const onSendError = jest.fn<void, [ WebSocketData, Error, string ]>(() => {})
-            const onMessage = jest.fn<void, [ string ]>()
-            const exception = new Error('test')
-            const sendSpy = jest.spyOn(WebSocket.prototype, 'send')
-                // The wrong overload is inferred so the second
-                // parameter must be typed as any
-                .mockImplementation((_, callback: any) => callback(exception))
-
-            let uuid: string | undefined
-
-            await new Promise<void>(resolve => {
-                let done = false
-
-                function waitForOtherToFinish() {
-                    if (done) {
-                        resolve()
-                    }
-                    else {
-                        done = true
-                    }
-                }
-
-                const [ listener ] = createRequestListener(() =>
-                    webSocketResponse(
-                        {
-                            onOpen: async function * (u) {
-                                uuid = u
-                                yield 'a'
-                                yield 'b'
-                                yield 'c'
-                                return { code: 1000 }
-                            },
-                            onSendError
-                        },
-                        waitForOtherToFinish
-                    )
-                )
-                server.addListener('request', listener)
-
-                const client = connectWebsocket()
-                client.on('message', onMessage)
-                client.on('close', waitForOtherToFinish)
-            })
-
-            expect(uuid).not.toBeUndefined()
-            expect(onMessage).not.toHaveBeenCalled()
-            expect(sendSpy.mock.calls).toEqual([
-                [ 'a', expect.any(Function) ],
-                [ 'b', expect.any(Function) ],
-                [ 'c', expect.any(Function) ],
-            ])
-            expect(onSendError.mock.calls).toEqual([
-                [ 'a', exception, uuid ],
-                [ 'b', exception, uuid ],
-                [ 'c', exception, uuid ]
-            ])
-        })
+        test.todo('custom uuid is passed to callbacks')
     })
 })
 
@@ -729,4 +464,23 @@ describe('parseMultipartRequest', () => {
     test.todo('keepFileExtensions param adds file extensions to returned paths')
 
     test.todo('saveDirectory param changes returned file paths')
+})
+
+
+describe('WebSocketResponder', () => {
+    describe('fromHeaders', () => {
+        test.todo('returns NonGETMethod when method parameter not GET')
+
+        test.todo('returns InvalidUpgradeHeader when upgrade header not websocket')
+
+        test.todo('returns InvalidKeyHeader when sec-websocket-key header invalid')
+
+        test.todo('returns InvalidOrUnsupportedVersionHeader when sec-websocket-version header not 8 or 13')
+
+        test.todo('returns responder with correct accept and protocol')
+    })
+
+    describe('response', () => {
+        test.todo('returns response with given options, base headers and protocol')
+    })
 })

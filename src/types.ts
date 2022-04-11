@@ -1,7 +1,7 @@
 import type http from 'node:http'
 
 import type WebSocket from 'ws'
-import type { Awaitable } from 'fallible'
+import type { Awaitable, Result } from 'fallible'
 
 import type { WebSocketReadyState } from './utils.js'
 
@@ -56,18 +56,14 @@ export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string)
  * @param reason
  * Will be an empty string if no close code was provided
  */
-export type WebSocketCloseCallback = (code: number, reason: string | Buffer, socketUUID: string) => Awaitable<void>
+export type WebSocketCloseCallback = (
+    result: Result<{ code: number, reason: Buffer }, Error>,
+    socketUUID: string
+) => Awaitable<void>
 export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
-export type WebSocketBody = {
-    onOpen: WebSocketOpenCallback
-    onMessage?: WebSocketMessageCallback
-    onClose?: WebSocketCloseCallback
-    onSendError?: WebSocketSendErrorCallback
-    // TODO: onUpgradeError returning a different Response
-}
-
 
 export type Header = Formattable | ReadonlyArray<Formattable>
+export type Headers = Record<string, Header>
 
 
 /**
@@ -87,7 +83,7 @@ export type RegularResponse = {
      * depending on the type of `body`; see that field for details. Manually
      * specifying these headers will always override any defaults.
      */
-    headers?: Readonly<Record<string, Header>>
+    headers?: Headers
     /** Defaults to `200` */
     status?: number
     /**
@@ -107,10 +103,27 @@ export type RegularResponse = {
     body?: string | Uint8Array | StreamBody
 }
 
+export type WebSocketRequestHeaders = Pick<
+    http.IncomingHttpHeaders,
+    | 'upgrade'
+    | 'sec-websocket-key'
+    | 'sec-websocket-version'
+    | 'sec-websocket-protocol'
+>
+
+export type WebSocketResponseHeaders = Headers & {
+    'Sec-WebSocket-Accept': string
+}
+
 export type WebSocketResponse = {
-    headers?: undefined
-    status?: 101
-    body: Readonly<WebSocketBody>
+    onOpen: WebSocketOpenCallback
+    onMessage?: WebSocketMessageCallback
+    onClose?: WebSocketCloseCallback
+    onSendError?: WebSocketSendErrorCallback
+    maximumMessageSize?: number
+    protocol?: string
+    headers: WebSocketResponseHeaders
+    uuid?: string
 }
 
 export type Response = RegularResponse | WebSocketResponse
@@ -146,7 +159,7 @@ export interface IdentifiedWebSocket {
     /**
      * Sends `data` and handles any errors that may occur using the
      * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
-     * the socket was created.
+     * the response was created.
      */
     send(data: WebSocketData): Promise<void>
     close(code: number, reason?: string | Buffer): Promise<void>

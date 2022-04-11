@@ -72,9 +72,6 @@ export function headersIndicateWebSocketRequest(headers) {
 export function response(state, cleanup) {
     return { state, cleanup };
 }
-export function webSocketResponse(body, cleanup) {
-    return response({ body }, cleanup);
-}
 /** Yields values from an iterable of promises as they resolve */
 export async function* iterateAsResolved(promises) {
     const map = new Map();

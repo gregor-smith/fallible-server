@@ -1,7 +1,7 @@
 /// <reference types="node" />
-import * as fallible from 'fallible';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import type { AwaitableIterable, Cleanup, MessageHandlerResult, WebSocketBody, WebSocketResponse, MessageHandler } from './types.js';
+import * as fallible from 'fallible';
+import type { AwaitableIterable, Cleanup, MessageHandlerResult, MessageHandler } from './types.js';
 export { parse as parseJSONString } from 'secure-json-parse';
 export declare const enum WebSocketReadyState {
     Connecting = 0,
@@ -43,7 +43,6 @@ declare type WebSocketHeaders = Pick<IncomingHttpHeaders, 'connection' | 'upgrad
 export declare function headersIndicateWebSocketRequest(headers: WebSocketHeaders): boolean;
 export declare function response<T extends void>(state?: T): MessageHandlerResult<T>;
 export declare function response<T>(state: T, cleanup?: Cleanup): MessageHandlerResult<T>;
-export declare function webSocketResponse(body: WebSocketBody, cleanup?: Cleanup): MessageHandlerResult<WebSocketResponse>;
 /** Yields values from an iterable of promises as they resolve */
 export declare function iterateAsResolved<T>(promises: Iterable<PromiseLike<T>>): AsyncGenerator<T, void, unknown>;
 export declare type ParseJSONStreamError = {

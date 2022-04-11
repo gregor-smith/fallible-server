@@ -6,7 +6,6 @@ import type {
     Cleanup,
     MessageHandler,
     Response,
-    WebSocketBody
 } from './types.js'
 import {
     getMessageIP,
@@ -16,7 +15,6 @@ import {
     headersIndicateWebSocketRequest,
     parseJSONString,
     response,
-    webSocketResponse,
     iterateAsResolved,
     ParsedContentType,
     fallthroughMessageHandler,
@@ -237,32 +235,6 @@ describe('response', () => {
         const cleanup: Cleanup = () => {}
         const result = response(state, cleanup)
         expect(result).toEqual<typeof result>({ state, cleanup })
-    })
-})
-
-
-describe('webSocketResponse', () => {
-    const body: WebSocketBody = {
-        onMessage: function * () {},
-        onClose: () => {},
-        onOpen: function * () {},
-        onSendError: () => {}
-    }
-
-    test('body argument', () => {
-        const result = webSocketResponse(body)
-        expect(result).toEqual<typeof result>({
-            state: { body }
-        })
-    })
-
-    test('cleanup argument', () => {
-        const cleanup: Cleanup = () => {}
-        const result = webSocketResponse(body, cleanup)
-        expect(result).toEqual<typeof result>({
-            state: { body },
-            cleanup
-        })
     })
 })
 
