@@ -135,15 +135,13 @@ interface InternalWebSocket extends WebSocket {
  * of an {@link http.Server}.
  * @param messageHandler
  * A function that takes an {@link http.IncomingMessage IncomingMessage} and
- * returns a {@link types.MessageHandlerResult MessageHandlerResult}. The
- * result may include a {@link types.Cleanup cleanup} function, which is always
- * called after the request has ended, regardless of whether any exceptions
- * occurred. The `Content-Type` header is set by default depending on type of
- * the {@link types.Response response} body: `string` bodies default to
- * `text/html; charset=utf8` while {@link Uint8Array} and
- * {@link types.StreamBody stream} bodies default to `application/octet-stream`.
- * The 'Content-Length' header is also set for all except stream and WebSocket
- * bodies.
+ * returns a {@link types.MessageHandlerResult MessageHandlerResult<Response>}.
+ * The result may include a {@link types.Cleanup cleanup} function, which is
+ * always called after the request has ended, regardless of whether any
+ * exceptions occurred.
+ * See {@link types.RegularResponse RegularResponse} and
+ * {@link types.WebSocketResponse WebSocketResponse} for details about
+ * responses that can be returned.
  *
  * @param exceptionListener
  * A function called when the message handler throws or the

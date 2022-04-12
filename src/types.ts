@@ -24,7 +24,7 @@ export type Formattable = string | number | boolean | bigint | null
  * A {@link http.RequestListener RequestListener} that can optionally return a
  * {@link PromiseLike}
  */
-// TODO: message/response types compatible with both ploin http module and
+// TODO: message/response types compatible with both plain http module and
 //       http2 module in compat mode
 export type AwaitableRequestListener = (
     message: http.IncomingMessage,
@@ -32,7 +32,7 @@ export type AwaitableRequestListener = (
 ) => Awaitable<void>
 
 
-/** Iterable using `for await`  */
+/** Any value iterable using `for await`  */
 export type AwaitableIterable<T> =
     | Iterable<T>
     | AsyncIterable<T>
@@ -103,6 +103,8 @@ export type RegularResponse = {
     body?: string | Uint8Array | StreamBody
 }
 
+
+/** The HTTP headers used when upgrading a WebSocket request */
 export type WebSocketRequestHeaders = Pick<
     http.IncomingHttpHeaders,
     | 'upgrade'
@@ -113,14 +115,46 @@ export type WebSocketRequestHeaders = Pick<
 
 
 export type WebSocketResponse = {
+    /**
+     * Used as the Sec-WebSocket-Accept header's value. Is typically the base64
+     * representation of the SHA-1 hash of the incoming Sec-WebSocket-Key
+     * header concatenated with a magic string. See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
+     */
     accept: string
+    /**
+     * Used as the Sec-WebSocket-Protocol header's value. If the client
+     * WebSocket gave a subprotocol during connection, it should be echoed as
+     * this header. See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
+     */
     protocol?: string
+    /**
+     * Incoming messages larger than this size will cause the socket to be
+     * closed with a 1009 close code, and an error passed to `onClose`.
+     *
+     * Outgoing messages larger than this size will be skipped and `onSendError`
+     * called.
+     *
+     * Defaults to `WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE`; see `./constants.ts`
+     */
     maximumMessageSize?: number
+    /**
+     * The UUID used to identify the socket in the {@link SocketMap} and passed
+     * to the various callbacks. If not given, `crypto.randomUUID` is used.
+     */
     uuid?: string
     onOpen?: WebSocketOpenCallback
     onMessage?: WebSocketMessageCallback
     onClose?: WebSocketCloseCallback
     onSendError?: WebSocketSendErrorCallback
+    /**
+     * Additional headers. Note that currently neither header nor its value is
+     * sanitised; this will change in the future. Also take care not to specify
+     * `Upgrade`, `Connection`, `Sec-WebSocket-Accept` or
+     * `Sec-WebSocket-Protocol` headers; in the future, doing so will likely
+     * result in a runtime error.
+     */
     headers?: Headers
 }
 
