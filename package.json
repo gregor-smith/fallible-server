@@ -29,7 +29,7 @@
   "dependencies": {
     "@types/node": "^17.0.23",
     "@types/ws": "^8.5.3",
-    "fallible": "https://github.com/gregor-smith/fallible.git",
+    "fallible": "https://github.com/gregor-smith/fallible.git#v1.0.0",
     "formidable": "v3",
     "secure-json-parse": "^2.4.0",
     "ws": "^7.4.6"
