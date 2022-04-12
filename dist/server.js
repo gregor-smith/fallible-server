@@ -84,15 +84,13 @@ class WebSocketWrapper {
  * of an {@link http.Server}.
  * @param messageHandler
  * A function that takes an {@link http.IncomingMessage IncomingMessage} and
- * returns a {@link types.MessageHandlerResult MessageHandlerResult}. The
- * result may include a {@link types.Cleanup cleanup} function, which is always
- * called after the request has ended, regardless of whether any exceptions
- * occurred. The `Content-Type` header is set by default depending on type of
- * the {@link types.Response response} body: `string` bodies default to
- * `text/html; charset=utf8` while {@link Uint8Array} and
- * {@link types.StreamBody stream} bodies default to `application/octet-stream`.
- * The 'Content-Length' header is also set for all except stream and WebSocket
- * bodies.
+ * returns a {@link types.MessageHandlerResult MessageHandlerResult<Response>}.
+ * The result may include a {@link types.Cleanup cleanup} function, which is
+ * always called after the request has ended, regardless of whether any
+ * exceptions occurred.
+ * See {@link types.RegularResponse RegularResponse} and
+ * {@link types.WebSocketResponse WebSocketResponse} for details about
+ * responses that can be returned.
  *
  * @param exceptionListener
  * A function called when the message handler throws or the
@@ -260,6 +258,38 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
     return [listener, sockets];
 }
 // TODO: replace with async generator
+/**
+ * Parses a request's `multipart/form-data` body and returns a record of files
+ * and fields. Files are saved to the disk. Various limits on file and field
+ * sizes and counts can be configured; see
+ * {@link ParseMultipartRequestArguments}.
+ *
+ * Returns {@link InvalidMultipartContentTypeHeaderError} if the `Content-Type`
+ * header of the request is not a valid `multipart/form-data` content type with
+ * boundary.
+ * Returns {@link RequestAbortedError} if the request is aborted during parsing.
+ * Returns {@link BelowMinimumFileSizeError} when any file is below the
+ * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize}
+ * parameter in size.
+ * Returns {@link MaximumFileCountExceededError} when the number of files
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
+ * parameter.
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the
+ * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
+ * parameter in size.
+ * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined
+ * exceed the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} and
+ * {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
+ * parameters in size.
+ * Returns {@link MaximumFieldsCountExceededError} when the number of fields
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFieldsCount maximumFieldsCount}
+ * parameter.
+ * Returns {@link MaximumFieldsSizeExceededError} when all fields combined
+ * exceed the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize}
+ * parameter in size.
+ * Returns {@link UnknownParseError} when an as of yet unknown error
+ * occurs during parsing.
+ */
 export function parseMultipartRequest(request, { encoding = 'utf-8', saveDirectory, keepFileExtensions = false, minimumFileSize = 0, maximumFileCount = Infinity, maximumFileSize = Infinity, maximumFieldsCount = Infinity, maximumFieldsSize = Infinity } = {}) {
     return new Promise(resolve => {
         new Formidable({
@@ -319,13 +349,43 @@ function getMultipartError(error) {
             return { tag: 'UnknownError', error };
     }
 }
+/** A helper class for making WebSocket responses. */
 export class WebSocketResponder {
     accept;
     protocol;
-    constructor(accept, protocol) {
+    constructor(
+    /**
+     * The string to be passed as the value of the response's
+     * `Sec-WebSocket-Accept` header, created from the request's
+     * `Sec-WebSocket-Key` header.
+     */
+    accept, 
+    /**
+     * The value of the request's `Sec-WebSocket-Protocol` header, to be
+     * passed as the value of the response header with the same name.
+     */
+    protocol) {
         this.accept = accept;
         this.protocol = protocol;
     }
+    /**
+     * Creates a new {@link WebSocketResponder} from a request's headers and
+     * method.
+     *
+     * Returns {@link NonGETMethodError} if the method is not `GET`.
+     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
+     * missing.
+     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
+     * `websocket`.
+     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
+     * is missing.
+     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
+     * is invalid.
+     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
+     * header is missing.
+     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
+     * `Sec-WebSocket-Version` header is not `8` or `13`.
+     */
     static fromHeaders(method, headers) {
         if (method !== 'GET') {
             return error({
@@ -370,6 +430,11 @@ export class WebSocketResponder {
         const responder = new WebSocketResponder(accept, protocol);
         return ok(responder);
     }
+    /**
+     * Creates a new
+     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
+     * using this instance's {@link protocol} and {@link accept}.
+     */
     response(options, cleanup) {
         return response({
             ...options,

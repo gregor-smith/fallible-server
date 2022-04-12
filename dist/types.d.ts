@@ -17,23 +17,18 @@ export declare type Formattable = string | number | boolean | bigint | null;
  * {@link PromiseLike}
  */
 export declare type AwaitableRequestListener = (message: http.IncomingMessage, response: http.ServerResponse) => Awaitable<void>;
-/** Iterable using `for await`  */
+/** Any value iterable using `for await`  */
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
 export declare type AwaitableIterator<Yield, Return = void, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
 export declare type WebSocketCloseInfo = {
     /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
     code: number;
+    /** Will be an empty string if no close code was provided */
     reason?: string | Buffer;
 };
 export declare type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>;
 export declare type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator;
 export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator;
-/**
- * @param code
- * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
- * @param reason
- * Will be an empty string if no close code was provided
- */
 export declare type WebSocketCloseCallback = (result: Result<WebSocketCloseInfo, Error>, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
 export declare type Header = Formattable | ReadonlyArray<Formattable>;
@@ -48,8 +43,9 @@ export declare type StreamBody = AwaitableIterable<Uint8Array> | (() => Awaitabl
 export declare type RegularResponse = {
     /**
      * `Content-Length` and `Content-Type` headers may be set by default
-     * depending on the type of `body`; see that field for details. Manually
-     * specifying these headers will always override any defaults.
+     * depending on the type of {@link RegularResponse.body `body`}; see that
+     * field for details. Manually specifying these headers will always
+     * override any defaults.
      */
     headers?: Headers;
     /** Defaults to `200` */
@@ -58,28 +54,63 @@ export declare type RegularResponse = {
      * The `Content-Type` and `Content-Length` headers may be set by default
      * depending on the type of this body:
      *
-     * | Body type    | `Content-Type`             | `Content-Length`        |
-     * |--------------|----------------------------|-------------------------|
-     * | `string`     | `text/html; charset=utf-8` | Value's length in bytes |
-     * | `Uint8Array` | `application/octet-stream` | Value's length in bytes |
-     * | `StreamBody` | `application/octet-stream` | Not set                 |
-     * | `undefined`  | Not set                    | `0`                     |
+     * | Body type                        | `Content-Type`             | `Content-Length`        |
+     * |----------------------------------|----------------------------|-------------------------|
+     * | `string`                         | `text/html; charset=utf-8` | Value's length in bytes |
+     * | `Uint8Array`                     | `application/octet-stream` | Value's length in bytes |
+     * | {@link StreamBody `StreamBody` } | `application/octet-stream` | Not set                 |
+     * | `undefined`                      | Not set                    | `0`                     |
      *
      * Setting these headers through the `headers` field will always override
      * any defaults.
      */
     body?: string | Uint8Array | StreamBody;
 };
+/** The HTTP headers used when upgrading a WebSocket request */
 export declare type WebSocketRequestHeaders = Pick<http.IncomingHttpHeaders, 'upgrade' | 'sec-websocket-key' | 'sec-websocket-version' | 'sec-websocket-protocol'>;
 export declare type WebSocketResponse = {
+    /**
+     * Used as the Sec-WebSocket-Accept header's value. Is typically the base64
+     * representation of the SHA-1 hash of the incoming Sec-WebSocket-Key
+     * header concatenated with a magic string. See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
+     */
     accept: string;
+    /**
+     * Used as the Sec-WebSocket-Protocol header's value. If the client
+     * WebSocket gave a subprotocol during connection, it should be echoed as
+     * this header. See:
+     * https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
+     */
     protocol?: string;
+    /**
+     * Incoming messages larger than this size will cause the socket to be
+     * closed with a 1009 close code, and an error passed to
+     * {@link WebSocketResponse.onClose `onClose`}.
+     *
+     * Outgoing messages larger than this size will be skipped and
+     * {@link WebSocketResponse.onSendError `onSendError`} called.
+     *
+     * Defaults to `WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE`; see `./constants.ts`
+     */
     maximumMessageSize?: number;
+    /**
+     * The UUID used to identify the socket in the {@link SocketMap `SocketMap`}
+     * and passed to the various callbacks. If not given, `crypto.randomUUID`
+     * is used.
+     */
     uuid?: string;
     onOpen?: WebSocketOpenCallback;
     onMessage?: WebSocketMessageCallback;
     onClose?: WebSocketCloseCallback;
     onSendError?: WebSocketSendErrorCallback;
+    /**
+     * Additional headers. Note that currently neither header nor its value is
+     * sanitised; this will change in the future. Also take care not to specify
+     * `Upgrade`, `Connection`, `Sec-WebSocket-Accept` or
+     * `Sec-WebSocket-Protocol` headers; in the future, doing so will likely
+     * result in a runtime error.
+     */
     headers?: Headers;
 };
 export declare type Response = RegularResponse | WebSocketResponse;
