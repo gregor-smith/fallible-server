@@ -1,2 +1,5 @@
-export const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+import WebSocketConstants from 'ws/lib/constants.js'
+
+export const EMPTY_BUFFER = WebSocketConstants.EMPTY_BUFFER
+export const WEBSOCKET_GUID = WebSocketConstants.GUID
 export const WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE = 10 * 1024 * 1024  // 10mb

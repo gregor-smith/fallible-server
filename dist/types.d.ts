@@ -34,10 +34,7 @@ export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID:
  * @param reason
  * Will be an empty string if no close code was provided
  */
-export declare type WebSocketCloseCallback = (result: Result<{
-    code: number;
-    reason: Buffer;
-}, Error>, socketUUID: string) => Awaitable<void>;
+export declare type WebSocketCloseCallback = (result: Result<WebSocketCloseInfo, Error>, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
 export declare type Header = Formattable | ReadonlyArray<Formattable>;
 export declare type Headers = Record<string, Header>;
@@ -74,18 +71,16 @@ export declare type RegularResponse = {
     body?: string | Uint8Array | StreamBody;
 };
 export declare type WebSocketRequestHeaders = Pick<http.IncomingHttpHeaders, 'upgrade' | 'sec-websocket-key' | 'sec-websocket-version' | 'sec-websocket-protocol'>;
-export declare type WebSocketResponseHeaders = Headers & {
-    'Sec-WebSocket-Accept': string;
-};
 export declare type WebSocketResponse = {
-    onOpen: WebSocketOpenCallback;
+    accept: string;
+    protocol?: string;
+    maximumMessageSize?: number;
+    uuid?: string;
+    onOpen?: WebSocketOpenCallback;
     onMessage?: WebSocketMessageCallback;
     onClose?: WebSocketCloseCallback;
     onSendError?: WebSocketSendErrorCallback;
-    maximumMessageSize?: number;
-    protocol?: string;
-    headers: WebSocketResponseHeaders;
-    uuid?: string;
+    headers?: Headers;
 };
 export declare type Response = RegularResponse | WebSocketResponse;
 export declare type Cleanup = (state: Readonly<Response>) => Awaitable<void>;

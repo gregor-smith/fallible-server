@@ -57,7 +57,7 @@ export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string)
  * Will be an empty string if no close code was provided
  */
 export type WebSocketCloseCallback = (
-    result: Result<{ code: number, reason: Buffer }, Error>,
+    result: Result<WebSocketCloseInfo, Error>,
     socketUUID: string
 ) => Awaitable<void>
 export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
@@ -111,19 +111,17 @@ export type WebSocketRequestHeaders = Pick<
     | 'sec-websocket-protocol'
 >
 
-export type WebSocketResponseHeaders = Headers & {
-    'Sec-WebSocket-Accept': string
-}
 
 export type WebSocketResponse = {
-    onOpen: WebSocketOpenCallback
+    accept: string
+    protocol?: string
+    maximumMessageSize?: number
+    uuid?: string
+    onOpen?: WebSocketOpenCallback
     onMessage?: WebSocketMessageCallback
     onClose?: WebSocketCloseCallback
     onSendError?: WebSocketSendErrorCallback
-    maximumMessageSize?: number
-    protocol?: string
-    headers: WebSocketResponseHeaders
-    uuid?: string
+    headers?: Headers
 }
 
 export type Response = RegularResponse | WebSocketResponse

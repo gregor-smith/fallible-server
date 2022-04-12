@@ -113,9 +113,7 @@ export declare type WebSocketResponderError = {
     tag: 'InvalidOrUnsupportedVersionHeader';
     header: string;
 };
-export declare type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'headers'> & {
-    headers?: types.Headers;
-};
+export declare type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'accept'>;
 export declare class WebSocketResponder {
     readonly accept: string;
     readonly protocol: string | undefined;

@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import stream from 'node:stream';
 import WebSocket from 'ws';
+import WebSocketConstants from 'ws/lib/constants.js';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
 import { response } from './utils.js';
-import { WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID } from './constants.js';
+import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -113,26 +114,31 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             state = { status: 500 };
         }
         // websocket
-        if ('onOpen' in state) {
-            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, headers, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+        if ('accept' in state) {
+            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, headers, accept, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            const ws = new WebSocket(null);
             const lines = [
                 'HTTP/1.1 101 Switching Protocols',
                 'Upgrade: websocket',
                 'Connection: Upgrade',
+                `Sec-WebSocket-Accept: ${accept}` // TODO: sanitise
             ];
-            for (let [header, value] of Object.entries(headers)) {
-                if (Array.isArray(value)) {
-                    value = value.join(', ');
+            if (protocol !== undefined) {
+                lines.push(`Sec-WebSocket-Protocol: ${protocol}`); // TODO: sanitise
+                ws._protocol = protocol;
+            }
+            if (headers !== undefined) {
+                for (let [header, value] of Object.entries(headers)) {
+                    if (Array.isArray(value)) {
+                        value = value.join(', ');
+                    }
+                    // TODO: sanitise
+                    // TODO: forbid duplicates
+                    lines.push(`${header}: ${value}`);
                 }
-                // TODO: sanitise headers, forbid upgrade/connection
-                lines.push(`${header}: ${value}`);
             }
             lines.push('\r\n');
             const httpResponse = lines.join('\r\n');
-            const ws = new WebSocket(null);
-            if (protocol !== undefined) {
-                ws._protocol = protocol;
-            }
             const wrapper = new WebSocketWrapper(ws, onSendError, uuid);
             await new Promise(resolve => {
                 const closeListener = (code, reason) => {
@@ -146,7 +152,8 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                     sockets.delete(uuid);
                     ws.off('close', closeListener);
                     if (ws.readyState < 2 /* Closing */) {
-                        ws.close();
+                        const code = exception[WebSocketConstants.kStatusCode];
+                        ws.close(code);
                     }
                     exceptionListener(exception, req, state);
                     // TODO: type possible error codes
@@ -156,7 +163,9 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 };
                 ws.on('open', () => {
                     sockets.set(uuid, wrapper);
-                    sendWebSocketMessages(wrapper, onOpen(uuid));
+                    if (onOpen !== undefined) {
+                        sendWebSocketMessages(wrapper, onOpen(uuid));
+                    }
                 });
                 ws.once('error', errorListener);
                 ws.on('close', closeListener);
@@ -165,7 +174,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                         sendWebSocketMessages(wrapper, onMessage(data, uuid));
                     });
                 }
-                ws.setSocket(req.socket, Buffer.alloc(0), maximumMessageSize);
+                ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize);
                 req.socket.write(httpResponse);
             });
         }
@@ -362,16 +371,10 @@ export class WebSocketResponder {
         return ok(responder);
     }
     response(options, cleanup) {
-        const headers = {
-            'Sec-WebSocket-Accept': this.accept
-        };
-        if (this.protocol !== undefined) {
-            headers['Sec-WebSocket-Protocol'] = this.protocol;
-        }
         return response({
             ...options,
-            headers: { ...headers, ...options.headers },
-            protocol: this.protocol
+            protocol: this.protocol,
+            accept: this.accept
         }, cleanup);
     }
 }

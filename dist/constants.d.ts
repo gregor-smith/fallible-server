@@ -1,2 +1,4 @@
-export declare const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+/// <reference types="node" />
+export declare const EMPTY_BUFFER: Buffer;
+export declare const WEBSOCKET_GUID: string;
 export declare const WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE: number;

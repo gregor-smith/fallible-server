@@ -4,12 +4,17 @@ import stream from 'node:stream'
 import type { Socket } from 'node:net'
 
 import WebSocket from 'ws'
+import WebSocketConstants from 'ws/lib/constants.js'
 import { Result, ok, error } from 'fallible'
 import { Formidable, errors as FormidableErrors } from 'formidable'
 
 import type * as types from './types.js'
 import { response, WebSocketReadyState } from './utils.js'
-import { WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID } from './constants.js'
+import {
+    EMPTY_BUFFER,
+    WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
+    WEBSOCKET_GUID
+} from './constants.js'
 
 
 function warn(message: string): void {
@@ -165,37 +170,44 @@ export function createRequestListener(
         }
 
         // websocket
-        if ('onOpen' in state) {
+        if ('accept' in state) {
             const {
                 onOpen,
                 onMessage,
                 onSendError = defaultOnWebsocketSendError,
                 onClose,
                 headers,
+                accept,
                 protocol,
                 maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
                 uuid = randomUUID()
             } = state
 
+            const ws = new WebSocket(null) as InternalWebSocket
+
             const lines = [
                 'HTTP/1.1 101 Switching Protocols',
                 'Upgrade: websocket',
                 'Connection: Upgrade',
+                `Sec-WebSocket-Accept: ${accept}`  // TODO: sanitise
             ]
-            for (let [ header, value ] of Object.entries(headers)) {
-                if (Array.isArray(value)) {
-                    value = value.join(', ')
+            if (protocol !== undefined) {
+                lines.push(`Sec-WebSocket-Protocol: ${protocol}`)  // TODO: sanitise
+                ws._protocol = protocol
+            }
+            if (headers !== undefined) {
+                for (let [ header, value ] of Object.entries(headers)) {
+                    if (Array.isArray(value)) {
+                        value = value.join(', ')
+                    }
+                    // TODO: sanitise
+                    // TODO: forbid duplicates
+                    lines.push(`${header}: ${value}`)
                 }
-                // TODO: sanitise headers, forbid upgrade/connection
-                lines.push(`${header}: ${value}`)
             }
             lines.push('\r\n')
             const httpResponse = lines.join('\r\n')
 
-            const ws = new WebSocket(null) as InternalWebSocket
-            if (protocol !== undefined) {
-                ws._protocol = protocol
-            }
             const wrapper = new WebSocketWrapper(ws, onSendError, uuid)
 
             await new Promise<void>(resolve => {
@@ -211,7 +223,8 @@ export function createRequestListener(
                     sockets.delete(uuid)
                     ws.off('close', closeListener)
                     if (ws.readyState < WebSocketReadyState.Closing) {
-                        ws.close()
+                        const code: number | undefined = (exception as any)[WebSocketConstants.kStatusCode]
+                        ws.close(code)
                     }
                     exceptionListener(exception, req, state)
                     // TODO: type possible error codes
@@ -222,10 +235,12 @@ export function createRequestListener(
 
                 ws.on('open', () => {
                     sockets.set(uuid, wrapper)
-                    sendWebSocketMessages(
-                        wrapper,
-                        onOpen(uuid)
-                    )
+                    if (onOpen !== undefined) {
+                        sendWebSocketMessages(
+                            wrapper,
+                            onOpen(uuid)
+                        )
+                    }
                 })
                 ws.once('error', errorListener)
                 ws.on('close', closeListener)
@@ -238,7 +253,7 @@ export function createRequestListener(
                     })
                 }
 
-                ws.setSocket(req.socket, Buffer.alloc(0), maximumMessageSize)
+                ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize)
                 req.socket.write(httpResponse)
             })
         }
@@ -480,9 +495,7 @@ export type WebSocketResponderError =
     | { tag: 'MissingVersionHeader' }
     | { tag: 'InvalidOrUnsupportedVersionHeader', header: string }
 
-export type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'headers'> & {
-    headers?: types.Headers
-}
+export type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'accept'>
 
 
 export class WebSocketResponder {
@@ -491,7 +504,10 @@ export class WebSocketResponder {
         readonly protocol: string | undefined
     ) {}
 
-    static fromHeaders(method: string | undefined, headers: types.WebSocketRequestHeaders): Result<WebSocketResponder, WebSocketResponderError> {
+    static fromHeaders(
+        method: string | undefined,
+        headers: types.WebSocketRequestHeaders
+    ): Result<WebSocketResponder, WebSocketResponderError> {
         if (method !== 'GET') {
             return error<WebSocketResponderError>({
                 tag: 'NonGETMethod',
@@ -541,18 +557,15 @@ export class WebSocketResponder {
         return ok(responder)
     }
 
-    response(options: WebSocketResponderOptions, cleanup?: types.Cleanup): types.MessageHandlerResult<types.WebSocketResponse> {
-        const headers: types.WebSocketResponseHeaders = {
-            'Sec-WebSocket-Accept': this.accept
-        }
-        if (this.protocol !== undefined) {
-            headers['Sec-WebSocket-Protocol'] = this.protocol
-        }
+    response(
+        options: WebSocketResponderOptions,
+        cleanup?: types.Cleanup
+    ): types.MessageHandlerResult<types.WebSocketResponse> {
         return response(
             {
                 ...options,
-                headers: { ...headers, ...options.headers },
-                protocol: this.protocol
+                protocol: this.protocol,
+                accept: this.accept
             },
             cleanup
         )
