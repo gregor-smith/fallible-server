@@ -1,11 +1,13 @@
 import { TextEncoder } from 'node:util'
 import { Readable } from 'node:stream'
-import { createServer } from 'node:http'
+import { createServer, IncomingMessage } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
+import { setTimeout } from 'node:timers/promises'
 
 import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
-import { error } from 'fallible'
+import { error, ok, Result } from 'fallible'
+import WebSocket from 'ws'
 
 import { response } from './utils.js'
 import {
@@ -15,7 +17,11 @@ import {
 } from './server.js'
 import type {
     Message,
-    Response
+    Response,
+    WebSocketCloseInfo,
+    WebSocketData,
+    WebSocketIterator,
+    WebSocketResponse
 } from './types.js'
 import { WEBSOCKET_GUID } from './constants.js'
 
@@ -28,6 +34,13 @@ const testResponse = {
         'test-header-2': 'test header value 2'
     }
 } as const
+
+
+function webSocketAccept(key: string): string {
+    return createHash('sha1')
+        .update(key + WEBSOCKET_GUID)
+        .digest('base64')
+}
 
 
 describe('createRequestListener', () => {
@@ -413,36 +426,450 @@ describe('createRequestListener', () => {
 
     describe('websockets', () => {
         const server = createServer()
+        let sendSpy: jest.SpyInstance
 
         beforeAll(done => {
             server.listen(0, '127.0.0.1', done)
         })
+        beforeEach(() => {
+            sendSpy = jest.spyOn(WebSocket.prototype, 'send')
+        })
         afterEach(() => {
             server.removeAllListeners('request')
+            sendSpy.mockRestore()
         })
         afterAll(done => {
             server.close(done)
         })
 
-        test.todo('onOpen/onMessage/onClose called, messages sent and received')
+        function connectWebSocket(
+            protocol?: string,
+            options?: WebSocket.ClientOptions
+        ): WebSocket {
+            const addressInfo = server.address()
+            if (addressInfo === null || typeof addressInfo !== 'object') {
+                throw new Error(`Invalid server address: ${addressInfo}`)
+            }
+            const uri = `ws://${addressInfo.address}:${addressInfo.port}`
+            return new WebSocket(uri, protocol, options)
+        }
 
-        test.todo('returning close info from onOpen closes socket')
+        function webSocketAcceptFromMessage(message: Message): string {
+            return webSocketAccept(message.headers['sec-websocket-key']!)
+        }
 
-        test.todo('returning close info from onMessage closes socket')
+        function createMultiResolver(resolve: () => void, count = 2): () => void {
+            let calls = 0
+            return () => {
+                if (++calls >= count) {
+                    resolve()
+                }
+            }
+        }
 
-        test.todo('stops sending messages if socket closes during message generator')
+        test('onOpen/onMessage/onClose called, messages sent and received', async () => {
+            expect.assertions(9)
 
-        test.todo('onSendError called on unknown send error')
+            const messages: WebSocketData[] = []
+            let uuid: string | undefined
+            let state: WebSocketResponse | undefined
 
-        test.todo('incoming message larger than maximumMessageSize is rejected')
+            const onOpen = jest.fn<WebSocketIterator, [ string ]>(function * (u) {
+                uuid = u
+                yield 'server open'
+                yield 'server open 2'
+            })
+            const onClose = jest.fn<void, [ Result<WebSocketCloseInfo, Error>, string ]>()
+            const onMessage = jest.fn<WebSocketIterator, [ WebSocketData, string ]>(function * (message) {
+                yield 'server message'
+                yield `server echo: ${message}`
+            })
 
-        test.todo('outgoing message larger than maximumMessageSize calls onSendError')
+            const cleanup = jest.fn()
 
-        test.todo('subprotocol sets Sec-WebSocket-Protocol header')
+            await new Promise<void>(resolve => {
+                // Simply listening for the client close event is not enough,
+                // as the server request listener has not yet returned at that
+                // point. We get around this by both listening for the client
+                // close event and using the messageHandler's cleanup callback.
+                const waitForBothServerAndClient = createMultiResolver(resolve)
 
-        test.todo('writes custom headers')
+                const [ listener ] = createRequestListener(message => {
+                    state = {
+                        accept: webSocketAcceptFromMessage(message),
+                        onOpen,
+                        onMessage,
+                        onClose
+                    }
+                    return response(
+                        state,
+                        cleanup.mockImplementationOnce(waitForBothServerAndClient)
+                    )
+                })
+                server.on('request', listener)
 
-        test.todo('custom uuid is passed to callbacks')
+                const client = connectWebSocket()
+                client.on('open', () => client.send('client open'))
+                client.on('message', message => {
+                    messages.push(message)
+                    if (messages.length >= 4) {
+                        client.close(4321, 'client close')
+                    }
+                })
+                client.on('close', waitForBothServerAndClient)
+            })
+
+            expect(uuid).not.toBeUndefined()
+            expect(state).not.toBeUndefined()
+            expect(onOpen).toHaveBeenCalledOnce()
+            expect(onOpen).toHaveBeenCalledBefore(onMessage)
+            expect(onMessage.mock.calls).toEqual([ [ 'client open', uuid ] ])
+            expect(messages).toEqual([
+                'server open',
+                'server open 2',
+                'server message',
+                'server echo: client open'
+            ])
+            expect(onClose).toHaveBeenCalledAfter(onMessage)
+            expect(onClose.mock.calls).toEqual([
+                [ ok({ code: 4321, reason: 'client close' }), uuid ]
+            ])
+            expect(cleanup.mock.calls).toEqual([ [ state ] ])
+        })
+
+        test.each<WebSocketCloseInfo>([
+            { code: 4321 },
+            { code: 4321, reason: 'server close' }
+        ])('returning close info from onOpen closes socket', closeInfo => {
+            expect.assertions(2)
+
+            return new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(message =>
+                    response(
+                        {
+                            accept: webSocketAcceptFromMessage(message),
+                            onOpen: function * () {
+                                return closeInfo
+                            }
+                        },
+                        waitForBothServerAndClient
+                    )
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('close', (code, reason) => {
+                    expect(code).toBe(closeInfo.code)
+                    expect(reason).toBe(closeInfo.reason ?? '')
+                    waitForBothServerAndClient()
+                })
+            })
+        })
+
+        test.each<WebSocketCloseInfo>([
+            { code: 4321 },
+            { code: 4321, reason: 'server close' }
+        ])('returning close info from onMessage closes socket', async closeInfo => {
+            expect.assertions(3)
+
+            const messages: WebSocketData[] = []
+
+            await new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(message =>
+                    response(
+                        {
+                            accept: webSocketAcceptFromMessage(message),
+                            onMessage: function * (message) {
+                                messages.push(message)
+                                return closeInfo
+                            }
+                        },
+                        waitForBothServerAndClient
+                    )
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('open', () => client.send('client open'))
+                client.on('close', (code, reason) => {
+                    expect(code).toBe(closeInfo.code)
+                    expect(reason).toBe(closeInfo.reason ?? '')
+                    waitForBothServerAndClient()
+                })
+            })
+
+            expect(messages).toEqual([ 'client open' ])
+        })
+
+        test('stops sending messages if socket closes during generator', async () => {
+            expect.assertions(2)
+
+            const messages: WebSocketData[] = []
+            const onClose = jest.fn<void, [ Result<WebSocketCloseInfo, Error>, string ]>()
+
+            await new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(message =>
+                    response(
+                        {
+                            accept: webSocketAcceptFromMessage(message),
+                            onOpen: async function * () {
+                                yield 'server open'
+                                await setTimeout(5)
+                                yield 'should be unreachable'
+                            },
+                            onClose
+                        },
+                        waitForBothServerAndClient
+                    )
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('message', message => {
+                    messages.push(message)
+                    client.close(4321, 'client close')
+                })
+                client.on('close', waitForBothServerAndClient)
+            })
+
+            expect(messages).toEqual([ 'server open' ])
+            expect(onClose.mock.calls).toEqual([
+                [ ok({ code: 4321, reason: 'client close' }), expect.any(String) ]
+            ])
+        })
+
+        test('onSendError called on unknown send error', async () => {
+            expect.assertions(4)
+
+            const onSendError = jest.fn<void, [ WebSocketData, Error, string ]>(() => {})
+            const onMessage = jest.fn<void, [ string ]>()
+            const exception = new Error('test')
+            // The wrong overload is inferred so the second
+            // parameter must be typed as any
+            sendSpy.mockImplementation((_, callback: any) => callback(exception))
+
+            let uuid: string | undefined
+
+            await new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(message =>
+                    response(
+                        {
+                            accept: webSocketAcceptFromMessage(message),
+                            onOpen: async function * (u) {
+                                uuid = u
+                                yield 'a'
+                                yield 'b'
+                                yield 'c'
+                                return { code: 1000 }
+                            },
+                            onSendError
+                        },
+                        waitForBothServerAndClient
+                    )
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('message', onMessage)
+                client.on('close', waitForBothServerAndClient)
+            })
+
+            expect(uuid).not.toBeUndefined()
+            expect(onMessage).not.toHaveBeenCalled()
+            expect(sendSpy.mock.calls).toEqual([
+                [ 'a', expect.any(Function) ],
+                [ 'b', expect.any(Function) ],
+                [ 'c', expect.any(Function) ],
+            ])
+            expect(onSendError.mock.calls).toEqual([
+                [ 'a', exception, uuid ],
+                [ 'b', exception, uuid ],
+                [ 'c', exception, uuid ]
+            ])
+        })
+
+        test('incoming message larger than maximumMessageSize calls exception listener and closes socket', async () => {
+            expect.assertions(7)
+
+            const onClose = jest.fn()
+            const onMessage = jest.fn()
+            const exceptionListener = jest.fn()
+
+            const maximumMessageSize = 10
+            let state: WebSocketResponse | undefined
+
+            await new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(
+                    message => {
+                        state = {
+                            accept: webSocketAcceptFromMessage(message),
+                            onClose,
+                            onMessage,
+                            maximumMessageSize
+                        }
+                        return response(
+                            state,
+                            waitForBothServerAndClient
+                        )
+                    },
+                    exceptionListener
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('open', () => {
+                    const largeMessage = 'a'.repeat(maximumMessageSize + 1)
+                    client.send(largeMessage)
+                })
+                client.on('close', (code, reason) => {
+                    expect(code).toBe(1009)
+                    expect(reason).toBe('')
+                    waitForBothServerAndClient()
+                })
+            })
+
+            expect(state).not.toBeUndefined()
+            expect(onMessage).not.toHaveBeenCalled()
+            expect(exceptionListener.mock.calls).toEqual([
+                [ expect.any(RangeError), expect.any(IncomingMessage), state ]
+            ])
+            expect(exceptionListener).toHaveBeenCalledBefore(onClose)
+            expect(onClose.mock.calls).toEqual([
+                [ error(expect.any(RangeError)), expect.any(String) ]
+            ])
+        })
+
+        test('outgoing message larger than maximumMessageSize calls onSendError', async () => {
+            expect.assertions(2)
+
+            const onSendError = jest.fn()
+
+            const maximumMessageSize = 10
+            const largeMessage = 'b'.repeat(maximumMessageSize + 1)
+            const messages: WebSocketData[] = []
+
+            await new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+
+                const [ listener ] = createRequestListener(message =>
+                    response(
+                        {
+                            accept: webSocketAcceptFromMessage(message),
+                            onOpen: function * () {
+                                yield 'a'
+                                yield largeMessage
+                                yield 'c'
+                                return { code: 1000 }
+                            },
+                            onSendError,
+                            maximumMessageSize
+                        },
+                        waitForBothServerAndClient
+                    )
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('message', message => messages.push(message))
+                client.on('close', waitForBothServerAndClient)
+            })
+
+            expect(messages).toEqual([ 'a', 'c' ])
+            expect(onSendError.mock.calls).toEqual([
+                [ largeMessage, expect.any(RangeError), expect.any(String) ]
+            ])
+        })
+
+        test('subprotocol sets Sec-WebSocket-Protocol header', () => {
+            expect.assertions(1)
+
+            const protocol = 'test-protocol'
+
+            return new Promise<void>(resolve => {
+                const [ listener ] = createRequestListener(message =>
+                    response({
+                        accept: webSocketAcceptFromMessage(message),
+                        onOpen: function * () {
+                            return { code: 1000 }
+                        },
+                        protocol
+                    })
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket(protocol)
+                client.on('upgrade', message => {
+                    expect(message.headers).toContainEntry([
+                        'sec-websocket-protocol', protocol
+                    ])
+                })
+                client.on('close', resolve)
+            })
+        })
+
+        test('writes custom headers', () => {
+            expect.assertions(1)
+
+            const testHeaders = {
+                'X-Test-Header': 'test',
+                'X-Test-Header-2': 'test 2'
+            }
+
+            return new Promise<void>(resolve => {
+                const [ listener ] = createRequestListener(message =>
+                    response({
+                        accept: webSocketAcceptFromMessage(message),
+                        onOpen: function * () {
+                            return { code: 1000 }
+                        },
+                        headers: testHeaders
+                    })
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('upgrade', message => {
+                    expect(message.headers).toContainEntries(
+                        Object.entries(testHeaders)
+                            .map(([ key, value ]) => [ key.toLowerCase(), value ])
+                    )
+                })
+                client.on('close', resolve)
+            })
+        })
+
+        test('custom uuid is passed to callbacks', () => {
+            expect.assertions(1)
+
+            const testUUID = 'test uuid'
+
+            return new Promise<void>(resolve => {
+                const [ listener ] = createRequestListener(message =>
+                    response({
+                        accept: webSocketAcceptFromMessage(message),
+                        onOpen: function * (uuid) {
+                            expect(uuid).toBe(testUUID)
+                            return { code: 1000 }
+                        },
+                        uuid: testUUID
+                    })
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('close', resolve)
+            })
+        })
     })
 })
 
@@ -580,11 +1007,7 @@ describe('WebSocketResponder', () => {
             })
 
             expect(result.ok).toBeTrue()
-            expect((result.value as WebSocketResponder).accept).toBe(
-                createHash('sha1')
-                    .update(key + WEBSOCKET_GUID)
-                    .digest('base64')
-            )
+            expect((result.value as WebSocketResponder).accept).toBe(webSocketAccept(key))
             expect((result.value as WebSocketResponder).protocol).toBe(protocol)
         })
     })
@@ -630,13 +1053,8 @@ describe('WebSocketResponder', () => {
                     onSendError,
                     maximumMessageSize,
                     uuid,
-                    headers: {
-                        ...headers,
-                        'Sec-WebSocket-Accept': createHash('sha1')
-                            .update(key + WEBSOCKET_GUID)
-                            .digest('base64'),
-                        'Sec-WebSocket-Protocol': protocol
-                    },
+                    headers,
+                    accept: webSocketAccept(key),
                     protocol
                 },
                 cleanup
