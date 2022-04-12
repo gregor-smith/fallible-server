@@ -126,28 +126,57 @@ The `Content-Type` and `Content-Length` headers may be set by default depending 
 Setting headers through the `headers` field of the response will always override any defaults. Additionally, setting the `status` field will always override the default of `200`.
 
 ### WebSocket responses
-A WebSocket response has a special body object consisting of four callbacks, of which only one is required. These callbacks are:
+A WebSocket response is made up of various callbacks. Although none are technically required, typically you'll use all of them. These are:
 
 #### `onOpen`
-Called when the socket connects. Should return an iterator or async iterator yielding `WebSocketData`—i.e. `string`s or `Buffer`s—to be sent as messages, and optionally returning a `WebSocketCloseInfo` object which is used to close the WebSocket if required.
+Called when the socket connects. Should return an awaitable iterator yielding `string`s or `Buffer`s to be sent as messages, and optionally returning a `WebSocketCloseInfo` object which is used to close the WebSocket if required.
 
-#### `onMessage` (optional)
-Called with the data of each message the socket receives. Should return the same kind of iterator as `onOpen`.
+#### `onMessage`
+Called with the data of each message the socket receives. Returns the same kind of iterator as `onOpen`.
 
-#### `onClose` (optional)
-When the socket closes, this function is called with the code and reason. Can optionally return a `Promise`.
+#### `onClose`
+When the socket closes, this callback is called with the code and reason. Can optionally return a `Promise`.
 
-#### `onSendError` (optional)
-Whenever sending a message fails for any reason, this function is called with the data being sent and the error thrown. Can optionally return a `Promise`.
+#### `onSendError`
+Whenever sending a message fails for any reason, this callback is called with the data being sent and the error thrown. Can optionally return a `Promise`.
 
-All of these callbacks also receive a UUID generated for the socket, which as shown in the next section can be used to manipulate sockets outwith the context of a `MessageHandler`.
+All of these callbacks also receive a UUID generated for the socket, which as shown in the next section can be used to manipulate sockets outwith the context of a `MessageHandler`. If you really need to, you can override this UUID with the `uuid` field of the response.
 
-WebSocket responses currently cannot set any headers. This limitation will hopefully be removed in the future.
+Additional headers can be set through the `headers` field, just like with regular responses. 
 
-Before returning a WebSocket response, first check that the message is most likely a WebSocket upgrade request using the `headersIndicateWebSocketRequest` function. Note that this does not *guarantee* the upgrade will succeed. If the upgrade fails a barebones `400` status response is automatically written. This is due to limitations of the underlying WebSockets library, which will hopefully be removed in the future.
+WebSocket responses require an `accept` field, which is used for the `Sec-WebSocket-Accept` header. An optional `protocol` field is used for the `Sec-WebSocket-Protocol` header. A convenience `WebSocketResponder` class is provided to parse these fields from an `IncomingMessage`, returning a `Result` covering every potential error. Its `response` method can then be used to simplify creating a `WebSocketResponse`:
+
+```typescript
+function exampleWebSocketHandler(message: IncomingMessage): MessageHandlerResult {
+    const result = WebSocketResponder.fromHeaders(message.method, message.headers)
+    if (!result.ok) {
+        const error = result.value
+        switch (error.tag) {
+            /* Obviously in a real application your responses 
+               should ideally be a little more detailed! */
+            case 'NonGETMethod':
+                return response({ status: 405 })
+            case 'MissingUpgradeHeader':
+                return response({ status: 426 })
+            case 'InvalidUpgradeHeader':
+            case 'MissingVersionHeader':
+            case 'InvalidOrUnsupportedVersionHeader':
+            case 'MissingKeyHeader':
+            case 'InvalidKeyHeader':
+                return response({ status: 400 })
+        }
+    }
+    const webSocketResponder = result.value
+    return webSocketResponder.response({ 
+        * onOpen() {
+            yield 'Hello!'
+        }
+    })
+}
+```
 
 ## Managing connected WebSockets
-In addition to their message and state parameters, `MessageHandler` functions receive a third parameter, which is a readonly `Map` of all connected WebSockets identified by their UUIDs. This can be used to close or send messages through a WebSocket from a handler other than the one that created it.
+In addition to their request and state parameters, `MessageHandler` functions receive a third parameter, which is a readonly `Map` of all connected WebSockets identified by their UUIDs. This can be used to close or send messages through a WebSocket from a handler other than the one that created it.
 
 This same map is the second item in the tuple returned by `createRequestListener`, allowing sockets to be manipulated entirely outwith the context of a request.
 
@@ -185,7 +214,7 @@ setInterval(
 In the future the socket map may be extended to emit events when sockets connect and close and such.
 
 ## Exception handling
-My motivation for creating this project was a desire for a Node web server with cleaner, more type-safe error handling, hence the integration with `fallible` and derivative name. As such, `MessageHandler`s should **never** throw, nor their `Cleanup` functions, nor any of the `WebSocketBody` callbacks, nor anything else. Anything that you suspect may throw should be wrapped to return a `Result` instead using the utilities `fallible` provides.
+My motivation behind this project was a desire for a Node web server with cleaner, more type-safe error handling, hence the integration with `fallible` and derivative name. As such, `MessageHandler`s should **never** throw, nor their `Cleanup` functions, nor any of the `WebSocketBody` callbacks, nor anything else. Anything that you suspect may throw should be wrapped to return a `Result` instead using the utilities `fallible` provides.
 
 That said, this is ultimately still Node, and Node is never truly exception-free. For this reason, `createRequestListener` has a second `exceptionListener` parameter which is called if the `messageHandler` parameter throws or if an `error` event is fired while the response is being written. This parameter should always be set; not doing so will print a warning and fall back to `console.error`.
 
