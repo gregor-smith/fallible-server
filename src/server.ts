@@ -341,19 +341,77 @@ export function createRequestListener(
 }
 
 
+/**
+ * Returned from {@link parseMultipartRequest} when the `Content-Type` header
+ * of the request is not a valid `multipart/form-data` content type with
+ * boundary.
+ */
+export type InvalidMultipartContentTypeHeaderError = { tag: 'InvalidMultipartContentTypeHeader' }
+/**
+ * Returned from {@link parseMultipartRequest} if the request is aborted during
+ * parsing.
+ */
+export type RequestAbortedError = { tag: 'RequestAborted' }
+/**
+ * Returned from {@link parseMultipartRequest} when any file is below the
+ * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize} 
+ * parameter in size.
+ */
+export type BelowMinimumFileSizeError = { tag: 'BelowMinimumFileSize' }
+/**
+ * Returned from {@link parseMultipartRequest} when the number of files exceeds
+ * the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * parameter.
+ */
+export type MaximumFileCountExceededError = { tag: 'MaximumFileCountExceeded' }
+/**
+ * Returned from {@link parseMultipartRequest} when any file exceeds the
+ * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
+ * parameter in size.
+ */
+export type MaximumFileSizeExceededError = { tag: 'MaximumFileSizeExceeded' }
+/**
+ * Returned from {@link parseMultipartRequest} when all files' combined exceed
+ * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
+ * and {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * parameters in size.
+ */
+export type MaximumTotalFileSizeExceededError = { tag: 'MaximumTotalFileSizeExceeded' }
+/**
+ * Returned from {@link parseMultipartRequest} when the number of fields
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFieldsCount maximumFieldsCount}
+ * parameter.
+ */
+export type MaximumFieldsCountExceededError = { tag: 'MaximumFieldsCountExceeded' }
+/**
+ * Returned from {@link parseMultipartRequest} when all fields combined exceed
+ * the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize} 
+ * parameter in size.
+ */
+export type MaximumFieldsSizeExceededError = { tag: 'MaximumFieldsSizeExceeded' }
+/**
+ * Returned from {@link parseMultipartRequest} when an as of yet unknown error
+ * occurs during parsing.
+ */
+export type UnknownParseError = { tag: 'UnknownError', error: unknown }
 export type ParseMultipartRequestError =
-    | { tag: 'InvalidMultipartContentTypeHeader' }
-    | { tag: 'RequestAborted' }
-    | { tag: 'BelowMinimumFileSize' }
-    | { tag: 'MaximumFileCountExceeded' }
-    | { tag: 'MaximumFileSizeExceeded' }
-    | { tag: 'MaximumTotalFileSizeExceeded' }
-    | { tag: 'MaximumFieldsCountExceeded' }
-    | { tag: 'MaximumFieldsSizeExceeded' }
-    | { tag: 'UnknownError', error: unknown }
+    | InvalidMultipartContentTypeHeaderError
+    | RequestAbortedError
+    | BelowMinimumFileSizeError
+    | MaximumFileCountExceededError
+    | MaximumFileSizeExceededError
+    | MaximumTotalFileSizeExceededError
+    | MaximumFieldsCountExceededError
+    | MaximumFieldsSizeExceededError
+    | UnknownParseError
 
 export type MultipartFile = {
     size: number
+    /**
+     * Path of the file on disk; where exactly this is will depend on the
+     * `saveDirectory` parameter in the given
+     * {@link ParseMultipartRequestArguments parse arguments}.
+     */
     path: string
     mimetype: string
     dateModified: Date
@@ -373,37 +431,69 @@ export type ParseMultipartRequestArguments = {
     keepFileExtensions?: boolean
     /**
      * The minimum size of each individual file in the body; if any file is
-     * smaller in size, an {@link ParseMultipartRequestError error} is returned.
+     * smaller in size, a {@link BelowMinimumFileSizeError} is returned.
      * By default unlimited.
      */
     minimumFileSize?: number
     /**
-     * The maximum number of files in the body; if exceeded, an
-     * {@link ParseMultipartRequestError error} is returned.
+     * The maximum number of files in the body; if exceeded, a
+     * {@link MaximumFileCountExceededError} is returned.
      * By default unlimited.
      */
     maximumFileCount?: number
     /**
-     * The maximum size of each individual file in the body; if exceeded, an
-     * {@link ParseMultipartRequestError error} is returned.
+     * The maximum size of each individual file in the body; if exceeded, a
+     * {@link MaximumFileSizeExceededError} is returned.
      * By default unlimited.
      */
     maximumFileSize?: number
     /**
-     * The maximum number of fields in the body; if exceeded, an
-     * {@link ParseMultipartRequestError error} is returned.
+     * The maximum number of fields in the body; if exceeded, a
+     * {@link MaximumFieldsCountExceededError} is returned.
      * By default unlimited.
      */
     maximumFieldsCount?: number
     /**
-     * The maximum total size of fields in the body; if exceeded, an
-     * {@link ParseMultipartRequestError error} is returned.
+     * The maximum total size of fields in the body; if exceeded, a
+     * {@link MaximumFieldsSizeExceededError} is returned.
      * By default unlimited.
      */
     maximumFieldsSize?: number
 }
 
 // TODO: replace with async generator
+/**
+ * Parses a request's `multipart/form-data` body and returns a record of files 
+ * and fields. Files are saved to the disk. Various limits on file and field 
+ * sizes and counts can be configured; see 
+ * {@link ParseMultipartRequestArguments}.
+ * 
+ * Returns {@link InvalidMultipartContentTypeHeaderError} if the `Content-Type` 
+ * header of the request is not a valid `multipart/form-data` content type with
+ * boundary.  
+ * Returns {@link RequestAbortedError} if the request is aborted during parsing.  
+ * Returns {@link BelowMinimumFileSizeError} when any file is below the
+ * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize} 
+ * parameter in size.  
+ * Returns {@link MaximumFileCountExceededError} when the number of files 
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * parameter.  
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the 
+ * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
+ * parameter in size.  
+ * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined 
+ * exceed the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} and
+ * {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * parameters in size.  
+ * Returns {@link MaximumFieldsCountExceededError} when the number of fields
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFieldsCount maximumFieldsCount}
+ * parameter.  
+ * Returns {@link MaximumFieldsSizeExceededError} when all fields combined 
+ * exceed the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize} 
+ * parameter in size.  
+ * Returns {@link UnknownParseError} when an as of yet unknown error
+ * occurs during parsing.
+ */
 export function parseMultipartRequest(
     request: http.IncomingMessage,
     {
@@ -484,24 +574,94 @@ function getMultipartError(error: unknown): ParseMultipartRequestError {
 }
 
 
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the `method` is
+ * not `GET`.
+ */
+export type NonGETMethodError = { tag: 'NonGETMethod', method: string | undefined }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
+ * header is not present.
+ */
+export type MissingUpgradeHeaderError = { tag: 'MissingUpgradeHeader' }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
+ * header is not `websocket`.
+ */
+export type InvalidUpgradeHeaderError = { tag: 'InvalidUpgradeHeader', header: string }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the
+ * `Sec-WebSocket-Key` header is not present.
+ */
+export type MissingKeyHeaderError = { tag: 'MissingKeyHeader' }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the
+ * `Sec-WebSocket-Key` header is invalid.
+ */
+export type InvalidKeyHeaderError = { tag: 'InvalidKeyHeader', header: string }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the
+ * `Sec-WebSocket-Version` header is missing.
+ */
+export type MissingVersionHeaderError = { tag: 'MissingVersionHeader' }
+/**
+ * Returned from {@link WebSocketResponder.fromHeaders} when the
+ * `Sec-WebSocket-Version` header is not `8` or `13`.
+ */
+export type InvalidOrUnsupportedVersionHeaderError = {
+    tag: 'InvalidOrUnsupportedVersionHeader'
+    header: string
+}
 export type WebSocketResponderError =
-    | { tag: 'NonGETMethod', method: string | undefined }
-    | { tag: 'MissingUpgradeHeader' }
-    | { tag: 'InvalidUpgradeHeader', header: string }
-    | { tag: 'MissingKeyHeader' }
-    | { tag: 'InvalidKeyHeader', header: string }
-    | { tag: 'MissingVersionHeader' }
-    | { tag: 'InvalidOrUnsupportedVersionHeader', header: string }
+    | NonGETMethodError
+    | MissingUpgradeHeaderError
+    | InvalidUpgradeHeaderError
+    | MissingKeyHeaderError
+    | InvalidKeyHeaderError
+    | MissingVersionHeaderError
+    | InvalidOrUnsupportedVersionHeaderError
 
+/**
+ * A {@link types.WebSocketResponse WebSocketResponse} excluding the `protocol`
+ * and `accept` fields.
+ */
 export type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'accept'>
 
 
+/** A helper class for making WebSocket responses. */
 export class WebSocketResponder {
     private constructor(
+        /**
+         * The string to be passed as the value of the response's
+         * `Sec-WebSocket-Accept` header, created from the request's
+         * `Sec-WebSocket-Key` header.
+         */
         readonly accept: string,
+        /**
+         * The value of the request's `Sec-WebSocket-Protocol` header, to be
+         * passed as the value of the response header with the same name.
+         */
         readonly protocol: string | undefined
     ) {}
 
+    /**
+     * Creates a new {@link WebSocketResponder} from a request's headers and
+     * method.
+     *
+     * Returns {@link NonGETMethodError} if the method is not `GET`.  
+     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is 
+     * missing.  
+     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not 
+     * `websocket`.  
+     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header 
+     * is missing.  
+     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header 
+     * is invalid.  
+     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version` 
+     * header is missing.  
+     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the 
+     * `Sec-WebSocket-Version` header is not `8` or `13`.
+     */
     static fromHeaders(
         method: string | undefined,
         headers: types.WebSocketRequestHeaders
@@ -555,6 +715,11 @@ export class WebSocketResponder {
         return ok(responder)
     }
 
+    /**
+     * Creates a new
+     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
+     * using this instance's {@link protocol} and {@link accept}.
+     */
     response(
         options: WebSocketResponderOptions,
         cleanup?: types.Cleanup

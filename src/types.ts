@@ -45,17 +45,12 @@ export type AwaitableIterator<Yield, Return = void, Next = unknown> =
 export type WebSocketCloseInfo = {
     /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
     code: number
+    /** Will be an empty string if no close code was provided */
     reason?: string | Buffer
 }
 export type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>
 export type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator
 export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator
-/**
- * @param code
- * For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
- * @param reason
- * Will be an empty string if no close code was provided
- */
 export type WebSocketCloseCallback = (
     result: Result<WebSocketCloseInfo, Error>,
     socketUUID: string
@@ -80,8 +75,9 @@ export type StreamBody =
 export type RegularResponse = {
     /**
      * `Content-Length` and `Content-Type` headers may be set by default
-     * depending on the type of `body`; see that field for details. Manually
-     * specifying these headers will always override any defaults.
+     * depending on the type of {@link RegularResponse.body `body`}; see that
+     * field for details. Manually specifying these headers will always
+     * override any defaults.
      */
     headers?: Headers
     /** Defaults to `200` */
@@ -90,12 +86,12 @@ export type RegularResponse = {
      * The `Content-Type` and `Content-Length` headers may be set by default
      * depending on the type of this body:
      *
-     * | Body type    | `Content-Type`             | `Content-Length`        |
-     * |--------------|----------------------------|-------------------------|
-     * | `string`     | `text/html; charset=utf-8` | Value's length in bytes |
-     * | `Uint8Array` | `application/octet-stream` | Value's length in bytes |
-     * | `StreamBody` | `application/octet-stream` | Not set                 |
-     * | `undefined`  | Not set                    | `0`                     |
+     * | Body type                        | `Content-Type`             | `Content-Length`        |
+     * |----------------------------------|----------------------------|-------------------------|
+     * | `string`                         | `text/html; charset=utf-8` | Value's length in bytes |
+     * | `Uint8Array`                     | `application/octet-stream` | Value's length in bytes |
+     * | {@link StreamBody `StreamBody` } | `application/octet-stream` | Not set                 |
+     * | `undefined`                      | Not set                    | `0`                     |
      *
      * Setting these headers through the `headers` field will always override
      * any defaults.
@@ -131,17 +127,19 @@ export type WebSocketResponse = {
     protocol?: string
     /**
      * Incoming messages larger than this size will cause the socket to be
-     * closed with a 1009 close code, and an error passed to `onClose`.
+     * closed with a 1009 close code, and an error passed to
+     * {@link WebSocketResponse.onClose `onClose`}.
      *
-     * Outgoing messages larger than this size will be skipped and `onSendError`
-     * called.
+     * Outgoing messages larger than this size will be skipped and
+     * {@link WebSocketResponse.onSendError `onSendError`} called.
      *
      * Defaults to `WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE`; see `./constants.ts`
      */
     maximumMessageSize?: number
     /**
-     * The UUID used to identify the socket in the {@link SocketMap} and passed
-     * to the various callbacks. If not given, `crypto.randomUUID` is used.
+     * The UUID used to identify the socket in the {@link SocketMap `SocketMap`}
+     * and passed to the various callbacks. If not given, `crypto.randomUUID`
+     * is used.
      */
     uuid?: string
     onOpen?: WebSocketOpenCallback
