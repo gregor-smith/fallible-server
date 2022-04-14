@@ -25,6 +25,7 @@ import type {
     WebSocketResponse
 } from './types.js'
 import { WEBSOCKET_GUID } from './constants.js'
+import { ReadableStream } from 'node:stream/web'
 
 
 const testEncoder = new TextEncoder()
@@ -259,11 +260,11 @@ describe('createRequestListener', () => {
     })
 
     describe('no body', () => {
-        test('writes default status, content type, content length', async () => {
+        test.each([ undefined, null ])('writes default status, content type, content length', async body => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
-            const state: Response = {}
+            const state: Response = { body }
             const [ listener ] = createRequestListener(() => response(state, cleanup))
             const res = new MockResponse()
             await listener(res.req, res)
@@ -275,10 +276,12 @@ describe('createRequestListener', () => {
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test('writes custom status, headers', async () => {
+        test.each([ undefined, null ])('writes custom status, headers', async body => {
             expect.assertions(2)
 
-            const [ listener ] = createRequestListener(() => response(testResponse))
+            const [ listener ] = createRequestListener(() => 
+                response({ ...testResponse, body })
+            )
             const res = new MockResponse()
             await listener(res.req, res)
 
@@ -288,11 +291,11 @@ describe('createRequestListener', () => {
             )
         })
 
-        test('exceptionListener called when response errors', async () => {
+        test.each([ undefined, null ])('exceptionListener called when response errors', async body => {
             expect.assertions(3)
 
             const cleanup = jest.fn()
-            const state: Response = {}
+            const state: Response = { body }
             const exceptionListener = jest.fn()
             const [ listener ] = createRequestListener(
                 () => response(state, cleanup),
@@ -336,13 +339,20 @@ describe('createRequestListener', () => {
             toAsyncGenerator(uint8ArrayGenerator),
             toAsyncGenerator(bufferGenerator)
         ]
-        const bodies = [
-            ...generators,
-            ...generators.map(generator => generator()),
-            ...generators.map(generator => Readable.from(generator()))
-        ]
 
-        test.each(bodies)('writes default status, content length', async body => {
+        function getBodies() {
+            return [
+                ...generators,
+                ...generators.map(generator => generator()),
+                ...generators.map(generator => Readable.from(generator(), { objectMode: false })),
+                ...generators.map(generator => {
+                    const stream = Readable.from(generator(), { objectMode: false })
+                    return (Readable as any).toWeb(stream, { objectMode: false })
+                })
+            ]
+        }
+
+        test.each(getBodies())('writes default status, content length', async body => {
             expect.assertions(5)
 
             const cleanup = jest.fn()
@@ -360,7 +370,7 @@ describe('createRequestListener', () => {
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test.each(bodies)('writes custom status, headers', async body => {
+        test.each(getBodies())('writes custom status, headers', async body => {
             expect.assertions(2)
 
             const [ listener ] = createRequestListener(() =>
@@ -392,12 +402,19 @@ describe('createRequestListener', () => {
             toAsyncGenerator(errorUint8ArrayGenerator),
             toAsyncGenerator(errorBufferGenerator)
         ]
-        const errorBodies = [
-            ...errorGenerators,
-            ...errorGenerators.map(generator => generator()),
-            ...errorGenerators.map(generator => Readable.from(generator()))
-        ]
-        test.each(errorBodies)('exceptionListener called when stream errors', async body => {
+        function getErrorBodies() {
+            return [
+                ...errorGenerators,
+                ...errorGenerators.map(generator => generator()),
+                ...errorGenerators.map(generator => Readable.from(generator(), { objectMode: false })),
+                ...errorGenerators.map(generator => {
+                    const stream = Readable.from(generator(), { objectMode: false })
+                    return (Readable as any).toWeb(stream, { objectMode: false })
+                })
+            ]
+        }
+
+        test.each(getErrorBodies())('exceptionListener called when stream errors', async body => {
             expect.assertions(6)
 
             const cleanup = jest.fn()
