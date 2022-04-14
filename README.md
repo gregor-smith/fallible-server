@@ -124,6 +124,7 @@ The `Content-Type` and `Content-Length` headers may be set by default depending 
 | `undefined`  | Not set                    | `0`                     |
 
 Setting headers through the `headers` field of the response will always override any defaults. Additionally, setting the `status` field will always override the default of `200`.
+The `headers` field should be a web standard [`Headers`](https://developer.mozilla.org/en-US/docs/Web/API/Headers) object or a polyfill thereof. Validation of keys and sanitisation of values are left to the user (note that `Headers` does this automatically).
 
 ### WebSocket responses
 A WebSocket response is made up of various callbacks. Although none are technically required, typically you'll use all of them. These are:
@@ -141,8 +142,6 @@ When the socket closes, this callback is called with the code and reason. Can op
 Whenever sending a message fails for any reason, this callback is called with the data being sent and the error thrown. Can optionally return a `Promise`.
 
 All of these callbacks also receive a UUID generated for the socket, which as shown in the next section can be used to manipulate sockets outwith the context of a `MessageHandler`. If you really need to, you can override this UUID with the `uuid` field of the response.
-
-Additional headers can be set through the `headers` field, just like with regular responses. 
 
 WebSocket responses require an `accept` field, which is used for the `Sec-WebSocket-Accept` header. An optional `protocol` field is used for the `Sec-WebSocket-Protocol` header. A convenience `WebSocketResponder` class is provided to parse these fields from an `IncomingMessage`, returning a `Result` covering every potential error. Its `response` method can then be used to simplify creating a `WebSocketResponse`:
 
@@ -174,6 +173,8 @@ function exampleWebSocketHandler(message: IncomingMessage): MessageHandlerResult
     })
 }
 ```
+
+Additional headers can be set through the `headers` field, just like with regular responses. `Connection`, `Upgrade`, `Sec-WebSocket-Accept` and `Sec-WebSocket-Protocol` headers should not be set; doing so will print a warning.
 
 ## Managing connected WebSockets
 In addition to their request and state parameters, `MessageHandler` functions receive a third parameter, which is a readonly `Map` of all connected WebSockets identified by their UUIDs. This can be used to close or send messages through a WebSocket from a handler other than the one that created it.
