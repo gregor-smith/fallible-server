@@ -12,7 +12,7 @@ A Node Web framework with a focus on type safety and cleaner error handling.
 No NPM package for now, so just install from this repository. You'll probably want `fallible` too:
 
 ```sh
-yarn add https://github.com/gregor-smith/fallible-server.git#v0.2.1 https://github.com/gregor-smith/fallible.git#v1.0.0
+yarn add https://github.com/gregor-smith/fallible-server.git#v0.2.1-alpha https://github.com/gregor-smith/fallible.git#v1.0.0
 ```
 
 ## Message handlers
