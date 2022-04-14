@@ -55,13 +55,21 @@ export type WebSocketCloseCallback = (
 export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
 
 
+export interface Headers {
+    get(name: string): string | null
+    has(name: string): boolean
+    set(name: string, value: string): void
+    forEach(callback: (value: string, key: string) => void): void
+}
+
+
 /**
  * Any iterable—sync or async—yielding {@link Uint8Array Uint8Arrays}, or
  * a function returning such an iterable. Note that {@link Buffer Buffers} are
  * instances of {@link Uint8Array}, and Node streams implement
  * {@link AsyncIterable}
  */
-export type StreamBody =
+export type StreamBody = 
     | AwaitableIterable<Uint8Array>
     | (() => AwaitableIterable<Uint8Array>)
 
@@ -85,12 +93,12 @@ export type RegularResponse = {
      * | `string`                        | `text/html; charset=utf-8` | Value's length in bytes |
      * | `Uint8Array`                    | `application/octet-stream` | Value's length in bytes |
      * | {@link StreamBody `StreamBody`} | `application/octet-stream` | Not set                 |
-     * | `undefined`                     | Not set                    | `0`                     |
+     * | `null \| undefined`             | Not set                    | `0`                     |
      *
      * Setting these headers through the `headers` field will always override
      * any defaults.
      */
-    body?: string | Uint8Array | StreamBody
+    body?: null | string | Uint8Array | StreamBody
 }
 
 

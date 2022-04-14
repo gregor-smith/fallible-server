@@ -29,6 +29,12 @@ export declare type WebSocketOpenCallback = (socketUUID: string) => WebSocketIte
 export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator;
 export declare type WebSocketCloseCallback = (result: Result<WebSocketCloseInfo, Error>, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
+export interface Headers {
+    get(name: string): string | null;
+    has(name: string): boolean;
+    set(name: string, value: string): void;
+    forEach(callback: (value: string, key: string) => void): void;
+}
 /**
  * Any iterable—sync or async—yielding {@link Uint8Array Uint8Arrays}, or
  * a function returning such an iterable. Note that {@link Buffer Buffers} are
@@ -55,12 +61,12 @@ export declare type RegularResponse = {
      * | `string`                        | `text/html; charset=utf-8` | Value's length in bytes |
      * | `Uint8Array`                    | `application/octet-stream` | Value's length in bytes |
      * | {@link StreamBody `StreamBody`} | `application/octet-stream` | Not set                 |
-     * | `undefined`                     | Not set                    | `0`                     |
+     * | `null \| undefined`             | Not set                    | `0`                     |
      *
      * Setting these headers through the `headers` field will always override
      * any defaults.
      */
-    body?: string | Uint8Array | StreamBody;
+    body?: null | string | Uint8Array | StreamBody;
 };
 export declare type WebSocketResponse = {
     /**

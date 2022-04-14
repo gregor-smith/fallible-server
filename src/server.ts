@@ -1,6 +1,7 @@
 import type http from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import stream from 'node:stream'
+import { ReadableStream } from 'node:stream/web'
 import type { Socket } from 'node:net'
 
 import WebSocket from 'ws'
@@ -24,7 +25,7 @@ function warn(message: string): void {
 }
 
 
-function checkForReservedHeader(headers: globalThis.Headers, header: string): void {
+function checkForReservedHeader(headers: types.Headers, header: string): void {
     if (headers.has(header)) {
         warn(`Reserved header '${header}' should not be set`)
     }
@@ -43,7 +44,7 @@ function defaultOnWebsocketSendError(
 
 function setResponseHeaders(
     res: http.ServerResponse,
-    headers: globalThis.Headers | undefined
+    headers: types.Headers | undefined
 ): void {
     headers?.forEach((value, header) => res.setHeader(header, value))
 }
@@ -295,7 +296,7 @@ export function createRequestListener(
                     exceptionListener(exception, req, state)
                 }
             }
-            else if (body === undefined) {
+            else if (body == null) {
                 res.setHeader('Content-Length', 0)
                 setResponseHeaders(res, headers)
                 try {
@@ -314,9 +315,16 @@ export function createRequestListener(
                 res.setHeader('Content-Type', 'application/octet-stream')
                 setResponseHeaders(res, headers)
                 const iterable = typeof body === 'function' ? body() : body
-                const readable = iterable instanceof stream.Readable
-                    ? iterable
-                    : stream.Readable.from(iterable, { objectMode: false })
+                let readable: stream.Readable
+                if (iterable instanceof stream.Readable) {
+                    readable = iterable
+                }
+                else if (iterable instanceof ReadableStream) {
+                    readable = (stream.Readable as any).fromWeb(iterable, { objectMode: false })
+                }
+                else {
+                    readable = stream.Readable.from(iterable, { objectMode: false })
+                }
                 try {
                     await new Promise<void>((resolve, reject) => {
                         const errorHandler = (error: unknown): void => {

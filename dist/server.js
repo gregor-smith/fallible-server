@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import stream from 'node:stream';
+import { ReadableStream } from 'node:stream/web';
 import WebSocket from 'ws';
 import WebSocketConstants from 'ws/lib/constants.js';
 import { ok, error } from 'fallible';
@@ -208,7 +209,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                     exceptionListener(exception, req, state);
                 }
             }
-            else if (body === undefined) {
+            else if (body == null) {
                 res.setHeader('Content-Length', 0);
                 setResponseHeaders(res, headers);
                 try {
@@ -227,9 +228,16 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 res.setHeader('Content-Type', 'application/octet-stream');
                 setResponseHeaders(res, headers);
                 const iterable = typeof body === 'function' ? body() : body;
-                const readable = iterable instanceof stream.Readable
-                    ? iterable
-                    : stream.Readable.from(iterable, { objectMode: false });
+                let readable;
+                if (iterable instanceof stream.Readable) {
+                    readable = iterable;
+                }
+                else if (iterable instanceof ReadableStream) {
+                    readable = stream.Readable.fromWeb(iterable, { objectMode: false });
+                }
+                else {
+                    readable = stream.Readable.from(iterable, { objectMode: false });
+                }
                 try {
                     await new Promise((resolve, reject) => {
                         const errorHandler = (error) => {
