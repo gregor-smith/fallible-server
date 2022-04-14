@@ -11,7 +11,7 @@ import { Formidable, errors as FormidableErrors } from 'formidable'
 import { Headers } from 'headers-polyfill'
 
 import type * as types from './types.js'
-import { response, WebSocketReadyState } from './utils.js'
+import { WebSocketReadyState } from './utils.js'
 import {
     EMPTY_BUFFER,
     WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
@@ -258,14 +258,14 @@ export function createRequestListener(
             })
         }
         else {
-            const { 
-                headers, 
-                status = 200, 
-                body 
+            const {
+                headers,
+                status = 200,
+                body
             } = state
 
             res.statusCode = status
-            
+
             if (typeof body === 'string') {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8')
                 res.setHeader('Content-Length', Buffer.byteLength(body, 'utf-8'))
@@ -369,26 +369,26 @@ export type InvalidMultipartContentTypeHeaderError = { tag: 'InvalidMultipartCon
 export type RequestAbortedError = { tag: 'RequestAborted' }
 /**
  * Returned from {@link parseMultipartRequest} when any file is below the
- * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize} 
+ * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize}
  * parameter in size.
  */
 export type BelowMinimumFileSizeError = { tag: 'BelowMinimumFileSize' }
 /**
  * Returned from {@link parseMultipartRequest} when the number of files exceeds
- * the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameter.
  */
 export type MaximumFileCountExceededError = { tag: 'MaximumFileCountExceeded' }
 /**
  * Returned from {@link parseMultipartRequest} when any file exceeds the
- * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
+ * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
  * parameter in size.
  */
 export type MaximumFileSizeExceededError = { tag: 'MaximumFileSizeExceeded' }
 /**
  * Returned from {@link parseMultipartRequest} when all files' combined exceed
- * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
- * and {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
+ * and {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameters in size.
  */
 export type MaximumTotalFileSizeExceededError = { tag: 'MaximumTotalFileSizeExceeded' }
@@ -400,7 +400,7 @@ export type MaximumTotalFileSizeExceededError = { tag: 'MaximumTotalFileSizeExce
 export type MaximumFieldsCountExceededError = { tag: 'MaximumFieldsCountExceeded' }
 /**
  * Returned from {@link parseMultipartRequest} when all fields combined exceed
- * the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize} 
+ * the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize}
  * parameter in size.
  */
 export type MaximumFieldsSizeExceededError = { tag: 'MaximumFieldsSizeExceeded' }
@@ -478,33 +478,33 @@ export type ParseMultipartRequestArguments = {
 
 // TODO: replace with async generator
 /**
- * Parses a request's `multipart/form-data` body and returns a record of files 
- * and fields. Files are saved to the disk. Various limits on file and field 
- * sizes and counts can be configured; see 
+ * Parses a request's `multipart/form-data` body and returns a record of files
+ * and fields. Files are saved to the disk. Various limits on file and field
+ * sizes and counts can be configured; see
  * {@link ParseMultipartRequestArguments}.
- * 
- * Returns {@link InvalidMultipartContentTypeHeaderError} if the `Content-Type` 
+ *
+ * Returns {@link InvalidMultipartContentTypeHeaderError} if the `Content-Type`
  * header of the request is not a valid `multipart/form-data` content type with
  * boundary.  
  * Returns {@link RequestAbortedError} if the request is aborted during parsing.  
  * Returns {@link BelowMinimumFileSizeError} when any file is below the
- * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize} 
+ * {@link ParseMultipartRequestArguments.minimumFileSize minimumFileSize}
  * parameter in size.  
- * Returns {@link MaximumFileCountExceededError} when the number of files 
- * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * Returns {@link MaximumFileCountExceededError} when the number of files
+ * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameter.  
- * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the 
- * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} 
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the
+ * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
  * parameter in size.  
- * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined 
+ * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined
  * exceed the {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize} and
- * {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount} 
+ * {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameters in size.  
  * Returns {@link MaximumFieldsCountExceededError} when the number of fields
  * exceeds the {@link ParseMultipartRequestArguments.maximumFieldsCount maximumFieldsCount}
  * parameter.  
- * Returns {@link MaximumFieldsSizeExceededError} when all fields combined 
- * exceed the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize} 
+ * Returns {@link MaximumFieldsSizeExceededError} when all fields combined
+ * exceed the {@link ParseMultipartRequestArguments.maximumFieldsSize maximumFieldsSize}
  * parameter in size.  
  * Returns {@link UnknownParseError} when an as of yet unknown error
  * occurs during parsing.
@@ -589,46 +589,61 @@ function getMultipartError(error: unknown): ParseMultipartRequestError {
 }
 
 
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `method` is
- * not `GET`.
- */
-export type NonGETMethodError = { tag: 'NonGETMethod', method: string | undefined }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
- * header is not present.
+export type WebSocketHeaders = {
+    upgrade?: string
+    'sec-websocket-key'?: string
+    'sec-websocket-version'?: string
+    'sec-websocket-protocol'?: string
+}
+
+export type ParsedWebSocketHeaders = {
+    /**
+     * The string to be passed as the value of the response's
+     * `Sec-WebSocket-Accept` header, created from the request's
+     * `Sec-WebSocket-Key` header.
+     */
+    accept: string
+    /**
+     * The value of the request's `Sec-WebSocket-Protocol` header, to be
+     * passed as the value of the response header with the same name.
+     */
+    protocol?: string
+}
+
+/** 
+ * Returned by {@link parseWebSocketHeaders} when  the `Upgrade` header is 
+ * missing. 
  */
 export type MissingUpgradeHeaderError = { tag: 'MissingUpgradeHeader' }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
- * header is not `websocket`.
+/** 
+ * Returned by {@link parseWebSocketHeaders} when the `Upgrade` header is not 
+ * `websocket`. 
  */
 export type InvalidUpgradeHeaderError = { tag: 'InvalidUpgradeHeader', header: string }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Key` header is not present.
+/** 
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Key` 
+ * header is not present. 
  */
 export type MissingKeyHeaderError = { tag: 'MissingKeyHeader' }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Key` header is invalid.
+/** 
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Key` 
+ * header is invalid. 
  */
 export type InvalidKeyHeaderError = { tag: 'InvalidKeyHeader', header: string }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Version` header is missing.
+/** 
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Version` 
+ * header is missing. 
  */
 export type MissingVersionHeaderError = { tag: 'MissingVersionHeader' }
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Version` header is not `8` or `13`.
+/** 
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Version` 
+ * header is not `8` or `13`. 
  */
 export type InvalidOrUnsupportedVersionHeaderError = {
     tag: 'InvalidOrUnsupportedVersionHeader'
     header: string
 }
-export type WebSocketResponderError =
-    | NonGETMethodError
+export type ParseWebSocketHeadersError =
     | MissingUpgradeHeaderError
     | InvalidUpgradeHeaderError
     | MissingKeyHeaderError
@@ -637,120 +652,63 @@ export type WebSocketResponderError =
     | InvalidOrUnsupportedVersionHeaderError
 
 /**
- * A {@link types.WebSocketResponse WebSocketResponse} excluding the `protocol`
- * and `accept` fields.
+ * Parses the {@link ParsedWebSocketHeaders `accept` and `protocol` fields}
+ * required for a {@link WebSocketResponse} from a request's headers.
+ * 
+ * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
+ * missing.  
+ * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
+ * `websocket`.  
+ * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is missing.  
+ * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is invalid.  
+ * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
+ * header is missing.  
+ * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
+ * `Sec-WebSocket-Version` header is not `8` or `13`.
  */
-export type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'accept'>
-
-
-/** A helper class for making WebSocket responses. */
-export class WebSocketResponder {
-    private constructor(
-        /**
-         * The string to be passed as the value of the response's
-         * `Sec-WebSocket-Accept` header, created from the request's
-         * `Sec-WebSocket-Key` header.
-         */
-        readonly accept: string,
-        /**
-         * The value of the request's `Sec-WebSocket-Protocol` header, to be
-         * passed as the value of the response header with the same name.
-         */
-        readonly protocol: string | undefined
-    ) {}
-
-    /**
-     * Creates a new {@link WebSocketResponder} from a request's headers and
-     * method.
-     *
-     * Returns {@link NonGETMethodError} if the method is not `GET`.  
-     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is 
-     * missing.  
-     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not 
-     * `websocket`.  
-     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header 
-     * is missing.  
-     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header 
-     * is invalid.  
-     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version` 
-     * header is missing.  
-     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the 
-     * `Sec-WebSocket-Version` header is not `8` or `13`.
-     */
-    static fromHeaders(
-        method: string | undefined,
-        headers: {
-            upgrade?: string
-            'sec-websocket-key'?: string
-            'sec-websocket-version'?: string
-            'sec-websocket-protocol'?: string
-        }
-    ): Result<WebSocketResponder, WebSocketResponderError> {
-        if (method !== 'GET') {
-            return error<WebSocketResponderError>({
-                tag: 'NonGETMethod',
-                method
-            })
-        }
-
-        if (headers.upgrade === undefined) {
-            return error<WebSocketResponderError>({ tag: 'MissingUpgradeHeader' })
-        }
-        if (headers.upgrade.toLowerCase() !== 'websocket') {
-            return error<WebSocketResponderError>({
-                tag: 'InvalidUpgradeHeader',
-                header: headers.upgrade
-            })
-        }
-
-        const key = headers['sec-websocket-key']
-        if (key === undefined) {
-            return error<WebSocketResponderError>({ tag: 'MissingKeyHeader' })
-        }
-        if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
-            return error<WebSocketResponderError>({
-                tag: 'InvalidKeyHeader',
-                header: key
-            })
-        }
-
-        if (headers['sec-websocket-version'] === undefined) {
-            return error<WebSocketResponderError>({ tag: 'MissingVersionHeader' })
-        }
-        // ws only supports 8 and 13
-        if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
-            return error<WebSocketResponderError>({
-                tag: 'InvalidOrUnsupportedVersionHeader',
-                header: headers['sec-websocket-version']
-            })
-        }
-
-        const accept = createHash('sha1')
-            .update(key + WEBSOCKET_GUID)
-            .digest('base64')
-        const protocol = headers['sec-websocket-protocol']
-            ?.match(/^(.+?)(?:,|$)/)
-            ?.[1]
-        const responder = new WebSocketResponder(accept, protocol)
-        return ok(responder)
+export function parseWebSocketHeaders(
+    headers: WebSocketHeaders
+): Result<ParsedWebSocketHeaders, ParseWebSocketHeadersError> {
+    if (headers.upgrade === undefined) {
+        return error<ParseWebSocketHeadersError>({ tag: 'MissingUpgradeHeader' })
+    }
+    if (headers.upgrade.toLowerCase() !== 'websocket') {
+        return error<ParseWebSocketHeadersError>({
+            tag: 'InvalidUpgradeHeader',
+            header: headers.upgrade
+        })
     }
 
-    /**
-     * Creates a new
-     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
-     * using this instance's {@link protocol} and {@link accept}.
-     */
-    response(
-        options: WebSocketResponderOptions,
-        cleanup?: types.Cleanup
-    ): types.MessageHandlerResult<types.WebSocketResponse> {
-        return response(
-            {
-                ...options,
-                protocol: this.protocol,
-                accept: this.accept
-            },
-            cleanup
-        )
+    const key = headers['sec-websocket-key']
+    if (key === undefined) {
+        return error<ParseWebSocketHeadersError>({ tag: 'MissingKeyHeader' })
     }
+    if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
+        return error<ParseWebSocketHeadersError>({
+            tag: 'InvalidKeyHeader',
+            header: key
+        })
+    }
+
+    if (headers['sec-websocket-version'] === undefined) {
+        return error<ParseWebSocketHeadersError>({ tag: 'MissingVersionHeader' })
+    }
+    // ws only supports 8 and 13
+    if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
+        return error<ParseWebSocketHeadersError>({
+            tag: 'InvalidOrUnsupportedVersionHeader',
+            header: headers['sec-websocket-version']
+        })
+    }
+
+    const accept = createHash('sha1')
+        .update(key + WEBSOCKET_GUID)
+        .digest('base64')
+    const protocol = headers['sec-websocket-protocol']
+        ?.match(/^(.+?)(?:,|$)/)
+        ?.[1]
+
+    return ok({ accept, protocol })
 }

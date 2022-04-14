@@ -13,8 +13,8 @@ import { Headers } from 'headers-polyfill'
 import { response } from './utils.js'
 import {
     createRequestListener,
-    WebSocketResponder,
-    WebSocketResponderError
+    parseWebSocketHeaders,
+    ParseWebSocketHeadersError
 } from './server.js'
 import type {
     Message,
@@ -25,7 +25,6 @@ import type {
     WebSocketResponse
 } from './types.js'
 import { WEBSOCKET_GUID } from './constants.js'
-import { ReadableStream } from 'node:stream/web'
 
 
 const testEncoder = new TextEncoder()
@@ -913,27 +912,12 @@ describe('parseMultipartRequest', () => {
 })
 
 
-describe('WebSocketResponder', () => {
+describe('parseWebSocketHeaders', () => {
     describe('fromHeaders', () => {
-        test.each([
-            undefined,
-            'get',
-            'test',
-            'POST',
-            'PUT',
-            'DELETE',
-            'PATCH',
-        ])('returns NonGETMethod when method parameter not GET', method => {
-            const result = WebSocketResponder.fromHeaders(method, {})
-            expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'NonGETMethod', method })
-            )
-        })
-
         test('returns MissingUpgradeHeader when upgrade header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', {})
+            const result = parseWebSocketHeaders({})
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingUpgradeHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingUpgradeHeader' })
             )
         })
 
@@ -942,9 +926,9 @@ describe('WebSocketResponder', () => {
             'websocket ',
             'test'
         ])('returns InvalidUpgradeHeader when upgrade header not websocket', header => {
-            const result = WebSocketResponder.fromHeaders('GET', { upgrade: header })
+            const result = parseWebSocketHeaders({ upgrade: header })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidUpgradeHeader',
                     header
                 })
@@ -952,9 +936,9 @@ describe('WebSocketResponder', () => {
         })
 
         test('returns MissingKeyHeader when sec-websocket-key header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', { upgrade: 'websocket' })
+            const result = parseWebSocketHeaders({ upgrade: 'websocket' })
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingKeyHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingKeyHeader' })
             )
         })
 
@@ -966,12 +950,12 @@ describe('WebSocketResponder', () => {
             '='.repeat(24),
             ' '.repeat(22) + '==',
         ])('returns InvalidKeyHeader when sec-websocket-key header invalid', header => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': header
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidKeyHeader',
                     header
                 })
@@ -979,12 +963,12 @@ describe('WebSocketResponder', () => {
         })
 
         test('returns MissingVersionHeader when sec-websocket-version header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': 'a'.repeat(22) + '=='
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingVersionHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingVersionHeader' })
             )
         })
 
@@ -995,23 +979,23 @@ describe('WebSocketResponder', () => {
             '14',
             'test'
         ])('returns InvalidOrUnsupportedVersionHeader when sec-websocket-version header not 8 or 13', header => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': 'a'.repeat(22) + '==',
                 'sec-websocket-version': header
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidOrUnsupportedVersionHeader',
                     header
                 })
             )
         })
 
-        test('returns responder with correct accept and protocol', () => {
+        test('returns correct accept and protocol', () => {
             const key = 'a'.repeat(22) + '=='
             const protocol = 'test protocol'
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': key,
                 'sec-websocket-protocol': protocol,
@@ -1019,56 +1003,9 @@ describe('WebSocketResponder', () => {
             })
 
             expect(result.ok).toBeTrue()
-            expect((result.value as WebSocketResponder).accept).toBe(webSocketAccept(key))
-            expect((result.value as WebSocketResponder).protocol).toBe(protocol)
-        })
-    })
-
-    describe('response', () => {
-        test('returns response with given options, base headers and protocol', () => {
-            const key = 'a'.repeat(22) + '=='
-            const protocol = 'test protocol'
-            const result = WebSocketResponder.fromHeaders('GET', {
-                upgrade: 'websocket',
-                'sec-websocket-key': key,
-                'sec-websocket-protocol': protocol,
-                'sec-websocket-version': '13'
-            })
-            const responder = result.value as WebSocketResponder
-
-            const onOpen = jest.fn()
-            const onMessage = jest.fn()
-            const onClose = jest.fn()
-            const onSendError = jest.fn()
-            const maximumMessageSize = 1234
-            const uuid = randomUUID()
-            const cleanup = jest.fn()
-            const response = responder.response(
-                {
-                    onOpen,
-                    onMessage,
-                    onClose,
-                    onSendError,
-                    maximumMessageSize,
-                    uuid,
-                    headers: testResponse.headers
-                },
-                cleanup
-            )
-
-            expect(response).toEqual<typeof response>({
-                state: {
-                    onOpen,
-                    onMessage,
-                    onClose,
-                    onSendError,
-                    maximumMessageSize,
-                    uuid,
-                    headers: testResponse.headers,
-                    accept: webSocketAccept(key),
-                    protocol
-                },
-                cleanup
+            expect(result.value).toEqual({
+                protocol,
+                accept: webSocketAccept(key)
             })
         })
     })

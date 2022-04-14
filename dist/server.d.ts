@@ -165,7 +165,7 @@ export declare type ParseMultipartRequestArguments = {
  * Returns {@link MaximumFileCountExceededError} when the number of files
  * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameter.
- * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the
  * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
  * parameter in size.
  * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined
@@ -182,107 +182,86 @@ export declare type ParseMultipartRequestArguments = {
  * occurs during parsing.
  */
 export declare function parseMultipartRequest(request: http.IncomingMessage, { encoding, saveDirectory, keepFileExtensions, minimumFileSize, maximumFileCount, maximumFileSize, maximumFieldsCount, maximumFieldsSize }?: ParseMultipartRequestArguments): Promise<Result<ParsedMultipart, ParseMultipartRequestError>>;
-/**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `method` is
- * not `GET`.
- */
-export declare type NonGETMethodError = {
-    tag: 'NonGETMethod';
-    method: string | undefined;
+export declare type WebSocketHeaders = {
+    upgrade?: string;
+    'sec-websocket-key'?: string;
+    'sec-websocket-version'?: string;
+    'sec-websocket-protocol'?: string;
+};
+export declare type ParsedWebSocketHeaders = {
+    /**
+     * The string to be passed as the value of the response's
+     * `Sec-WebSocket-Accept` header, created from the request's
+     * `Sec-WebSocket-Key` header.
+     */
+    accept: string;
+    /**
+     * The value of the request's `Sec-WebSocket-Protocol` header, to be
+     * passed as the value of the response header with the same name.
+     */
+    protocol?: string;
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
- * header is not present.
+ * Returned by {@link parseWebSocketHeaders} when  the `Upgrade` header is
+ * missing.
  */
 export declare type MissingUpgradeHeaderError = {
     tag: 'MissingUpgradeHeader';
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the `Upgrade`
- * header is not `websocket`.
+ * Returned by {@link parseWebSocketHeaders} when the `Upgrade` header is not
+ * `websocket`.
  */
 export declare type InvalidUpgradeHeaderError = {
     tag: 'InvalidUpgradeHeader';
     header: string;
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Key` header is not present.
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Key`
+ * header is not present.
  */
 export declare type MissingKeyHeaderError = {
     tag: 'MissingKeyHeader';
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Key` header is invalid.
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Key`
+ * header is invalid.
  */
 export declare type InvalidKeyHeaderError = {
     tag: 'InvalidKeyHeader';
     header: string;
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Version` header is missing.
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Version`
+ * header is missing.
  */
 export declare type MissingVersionHeaderError = {
     tag: 'MissingVersionHeader';
 };
 /**
- * Returned from {@link WebSocketResponder.fromHeaders} when the
- * `Sec-WebSocket-Version` header is not `8` or `13`.
+ * Returned by {@link parseWebSocketHeaders} when the `Sec-WebSocket-Version`
+ * header is not `8` or `13`.
  */
 export declare type InvalidOrUnsupportedVersionHeaderError = {
     tag: 'InvalidOrUnsupportedVersionHeader';
     header: string;
 };
-export declare type WebSocketResponderError = NonGETMethodError | MissingUpgradeHeaderError | InvalidUpgradeHeaderError | MissingKeyHeaderError | InvalidKeyHeaderError | MissingVersionHeaderError | InvalidOrUnsupportedVersionHeaderError;
+export declare type ParseWebSocketHeadersError = MissingUpgradeHeaderError | InvalidUpgradeHeaderError | MissingKeyHeaderError | InvalidKeyHeaderError | MissingVersionHeaderError | InvalidOrUnsupportedVersionHeaderError;
 /**
- * A {@link types.WebSocketResponse WebSocketResponse} excluding the `protocol`
- * and `accept` fields.
+ * Parses the {@link ParsedWebSocketHeaders `accept` and `protocol` fields}
+ * required for a {@link WebSocketResponse} from a request's headers.
+ *
+ * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
+ * missing.
+ * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
+ * `websocket`.
+ * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is missing.
+ * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is invalid.
+ * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
+ * header is missing.
+ * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
+ * `Sec-WebSocket-Version` header is not `8` or `13`.
  */
-export declare type WebSocketResponderOptions = Omit<types.WebSocketResponse, 'protocol' | 'accept'>;
-/** A helper class for making WebSocket responses. */
-export declare class WebSocketResponder {
-    /**
-     * The string to be passed as the value of the response's
-     * `Sec-WebSocket-Accept` header, created from the request's
-     * `Sec-WebSocket-Key` header.
-     */
-    readonly accept: string;
-    /**
-     * The value of the request's `Sec-WebSocket-Protocol` header, to be
-     * passed as the value of the response header with the same name.
-     */
-    readonly protocol: string | undefined;
-    private constructor();
-    /**
-     * Creates a new {@link WebSocketResponder} from a request's headers and
-     * method.
-     *
-     * Returns {@link NonGETMethodError} if the method is not `GET`.
-     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
-     * missing.
-     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
-     * `websocket`.
-     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is missing.
-     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is invalid.
-     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
-     * header is missing.
-     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
-     * `Sec-WebSocket-Version` header is not `8` or `13`.
-     */
-    static fromHeaders(method: string | undefined, headers: {
-        upgrade?: string;
-        'sec-websocket-key'?: string;
-        'sec-websocket-version'?: string;
-        'sec-websocket-protocol'?: string;
-    }): Result<WebSocketResponder, WebSocketResponderError>;
-    /**
-     * Creates a new
-     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
-     * using this instance's {@link protocol} and {@link accept}.
-     */
-    response(options: WebSocketResponderOptions, cleanup?: types.Cleanup): types.MessageHandlerResult<types.WebSocketResponse>;
-}
+export declare function parseWebSocketHeaders(headers: WebSocketHeaders): Result<ParsedWebSocketHeaders, ParseWebSocketHeadersError>;

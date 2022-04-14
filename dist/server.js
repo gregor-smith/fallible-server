@@ -6,7 +6,7 @@ import WebSocketConstants from 'ws/lib/constants.js';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
 import { Headers } from 'headers-polyfill';
-import { response } from './utils.js';
+import './utils.js';
 import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
@@ -281,7 +281,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
  * Returns {@link MaximumFileCountExceededError} when the number of files
  * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameter.
- * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the
  * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
  * parameter in size.
  * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined
@@ -356,98 +356,58 @@ function getMultipartError(error) {
             return { tag: 'UnknownError', error };
     }
 }
-/** A helper class for making WebSocket responses. */
-export class WebSocketResponder {
-    accept;
-    protocol;
-    constructor(
-    /**
-     * The string to be passed as the value of the response's
-     * `Sec-WebSocket-Accept` header, created from the request's
-     * `Sec-WebSocket-Key` header.
-     */
-    accept, 
-    /**
-     * The value of the request's `Sec-WebSocket-Protocol` header, to be
-     * passed as the value of the response header with the same name.
-     */
-    protocol) {
-        this.accept = accept;
-        this.protocol = protocol;
+/**
+ * Parses the {@link ParsedWebSocketHeaders `accept` and `protocol` fields}
+ * required for a {@link WebSocketResponse} from a request's headers.
+ *
+ * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
+ * missing.
+ * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
+ * `websocket`.
+ * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is missing.
+ * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is invalid.
+ * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
+ * header is missing.
+ * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
+ * `Sec-WebSocket-Version` header is not `8` or `13`.
+ */
+export function parseWebSocketHeaders(headers) {
+    if (headers.upgrade === undefined) {
+        return error({ tag: 'MissingUpgradeHeader' });
     }
-    /**
-     * Creates a new {@link WebSocketResponder} from a request's headers and
-     * method.
-     *
-     * Returns {@link NonGETMethodError} if the method is not `GET`.
-     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
-     * missing.
-     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
-     * `websocket`.
-     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is missing.
-     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is invalid.
-     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
-     * header is missing.
-     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
-     * `Sec-WebSocket-Version` header is not `8` or `13`.
-     */
-    static fromHeaders(method, headers) {
-        if (method !== 'GET') {
-            return error({
-                tag: 'NonGETMethod',
-                method
-            });
-        }
-        if (headers.upgrade === undefined) {
-            return error({ tag: 'MissingUpgradeHeader' });
-        }
-        if (headers.upgrade.toLowerCase() !== 'websocket') {
-            return error({
-                tag: 'InvalidUpgradeHeader',
-                header: headers.upgrade
-            });
-        }
-        const key = headers['sec-websocket-key'];
-        if (key === undefined) {
-            return error({ tag: 'MissingKeyHeader' });
-        }
-        if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
-            return error({
-                tag: 'InvalidKeyHeader',
-                header: key
-            });
-        }
-        if (headers['sec-websocket-version'] === undefined) {
-            return error({ tag: 'MissingVersionHeader' });
-        }
-        // ws only supports 8 and 13
-        if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
-            return error({
-                tag: 'InvalidOrUnsupportedVersionHeader',
-                header: headers['sec-websocket-version']
-            });
-        }
-        const accept = createHash('sha1')
-            .update(key + WEBSOCKET_GUID)
-            .digest('base64');
-        const protocol = headers['sec-websocket-protocol']
-            ?.match(/^(.+?)(?:,|$)/)?.[1];
-        const responder = new WebSocketResponder(accept, protocol);
-        return ok(responder);
+    if (headers.upgrade.toLowerCase() !== 'websocket') {
+        return error({
+            tag: 'InvalidUpgradeHeader',
+            header: headers.upgrade
+        });
     }
-    /**
-     * Creates a new
-     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
-     * using this instance's {@link protocol} and {@link accept}.
-     */
-    response(options, cleanup) {
-        return response({
-            ...options,
-            protocol: this.protocol,
-            accept: this.accept
-        }, cleanup);
+    const key = headers['sec-websocket-key'];
+    if (key === undefined) {
+        return error({ tag: 'MissingKeyHeader' });
     }
+    if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
+        return error({
+            tag: 'InvalidKeyHeader',
+            header: key
+        });
+    }
+    if (headers['sec-websocket-version'] === undefined) {
+        return error({ tag: 'MissingVersionHeader' });
+    }
+    // ws only supports 8 and 13
+    if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
+        return error({
+            tag: 'InvalidOrUnsupportedVersionHeader',
+            header: headers['sec-websocket-version']
+        });
+    }
+    const accept = createHash('sha1')
+        .update(key + WEBSOCKET_GUID)
+        .digest('base64');
+    const protocol = headers['sec-websocket-protocol']
+        ?.match(/^(.+?)(?:,|$)/)?.[1];
+    return ok({ accept, protocol });
 }
 //# sourceMappingURL=server.js.map
