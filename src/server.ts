@@ -7,18 +7,27 @@ import WebSocket from 'ws'
 import WebSocketConstants from 'ws/lib/constants.js'
 import { Result, ok, error } from 'fallible'
 import { Formidable, errors as FormidableErrors } from 'formidable'
+import { Headers } from 'headers-polyfill'
 
 import type * as types from './types.js'
 import { response, WebSocketReadyState } from './utils.js'
 import {
     EMPTY_BUFFER,
     WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
-    WEBSOCKET_GUID
+    WEBSOCKET_GUID,
+    WEBSOCKET_RAW_RESPONSE_BASE
 } from './constants.js'
 
 
 function warn(message: string): void {
     console.warn(`fallible-server: ${message}`)
+}
+
+
+function checkForReservedHeader(headers: globalThis.Headers, header: string): void {
+    if (headers.has(header)) {
+        warn(`Reserved header '${header}' should not be set`)
+    }
 }
 
 
@@ -34,14 +43,9 @@ function defaultOnWebsocketSendError(
 
 function setResponseHeaders(
     res: http.ServerResponse,
-    headers: Record<string, types.Header> | undefined
+    headers: globalThis.Headers | undefined
 ): void {
-    if (headers !== undefined) {
-        for (const [ name, value ] of Object.entries(headers)) {
-            const header = Array.isArray(value) ? value.map(String) : String(value)
-            res.setHeader(name, header)
-        }
-    }
+    headers?.forEach((value, header) => res.setHeader(header, value))
 }
 
 
@@ -174,39 +178,36 @@ export function createRequestListener(
                 onMessage,
                 onSendError = defaultOnWebsocketSendError,
                 onClose,
-                headers,
                 accept,
                 protocol,
                 maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
                 uuid = randomUUID()
             } = state
+            let { headers } = state
+
+            if (headers === undefined) {
+                headers = new Headers()
+            }
+            else {
+                checkForReservedHeader(headers, 'Upgrade')
+                checkForReservedHeader(headers, 'Connection')
+                checkForReservedHeader(headers, 'Sec-WebSocket-Accept')
+                checkForReservedHeader(headers, 'Sec-WebSocket-Protocol')
+            }
+            headers.set('Sec-WebSocket-Accept', accept)
 
             const ws = new WebSocket(null) as InternalWebSocket
-
-            const lines = [
-                'HTTP/1.1 101 Switching Protocols',
-                'Upgrade: websocket',
-                'Connection: Upgrade',
-                `Sec-WebSocket-Accept: ${accept}`  // TODO: sanitise
-            ]
             if (protocol !== undefined) {
-                lines.push(`Sec-WebSocket-Protocol: ${protocol}`)  // TODO: sanitise
+                headers.set('Sec-WebSocket-Protocol', protocol)
                 ws._protocol = protocol
             }
-            if (headers !== undefined) {
-                for (let [ header, value ] of Object.entries(headers)) {
-                    if (Array.isArray(value)) {
-                        value = value.join(', ')
-                    }
-                    // TODO: sanitise
-                    // TODO: forbid duplicates
-                    lines.push(`${header}: ${value}`)
-                }
-            }
-            lines.push('\r\n')
-            const httpResponse = lines.join('\r\n')
-
             const wrapper = new WebSocketWrapper(ws, onSendError, uuid)
+
+            let response = WEBSOCKET_RAW_RESPONSE_BASE
+            headers.forEach((value, header) => {
+                response = `${response}${header}: ${value}\r\n`
+            })
+            response = `${response}\r\n`
 
             await new Promise<void>(resolve => {
                 const closeListener = (code: number, reason: Buffer): void => {
@@ -241,7 +242,7 @@ export function createRequestListener(
                     }
                 })
                 ws.once('error', errorListener)
-                ws.on('close', closeListener)
+                ws.once('close', closeListener)
                 if (onMessage !== undefined) {
                     ws.on('message', data => {
                         sendWebSocketMessages(
@@ -252,17 +253,22 @@ export function createRequestListener(
                 }
 
                 ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize)
-                req.socket.write(httpResponse)
+                req.socket.write(response)
             })
         }
         else {
-            res.statusCode = state.status ?? 200
-            const body = state.body
+            const { 
+                headers, 
+                status = 200, 
+                body 
+            } = state
 
+            res.statusCode = status
+            
             if (typeof body === 'string') {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8')
                 res.setHeader('Content-Length', Buffer.byteLength(body, 'utf-8'))
-                setResponseHeaders(res, state.headers)
+                setResponseHeaders(res, headers)
                 try {
                     await new Promise<void>((resolve, reject) => {
                         res.on('close', resolve)
@@ -277,7 +283,7 @@ export function createRequestListener(
             else if (body instanceof Uint8Array) {
                 res.setHeader('Content-Type', 'application/octet-stream')
                 res.setHeader('Content-Length', body.byteLength)
-                setResponseHeaders(res, state.headers)
+                setResponseHeaders(res, headers)
                 try {
                     await new Promise<void>((resolve, reject) => {
                         res.on('close', resolve)
@@ -291,7 +297,7 @@ export function createRequestListener(
             }
             else if (body === undefined) {
                 res.setHeader('Content-Length', 0)
-                setResponseHeaders(res, state.headers)
+                setResponseHeaders(res, headers)
                 try {
                     await new Promise<void>((resolve, reject) => {
                         res.on('close', resolve)
@@ -306,7 +312,7 @@ export function createRequestListener(
             // stream
             else {
                 res.setHeader('Content-Type', 'application/octet-stream')
-                setResponseHeaders(res, state.headers)
+                setResponseHeaders(res, headers)
                 const iterable = typeof body === 'function' ? body() : body
                 const readable = iterable instanceof stream.Readable
                     ? iterable
@@ -320,6 +326,7 @@ export function createRequestListener(
                             res.end()
                             reject(error)
                         }
+
                         res.on('close', resolve)
                         res.once('error', errorHandler)
                         readable.once('error', errorHandler)
@@ -664,7 +671,12 @@ export class WebSocketResponder {
      */
     static fromHeaders(
         method: string | undefined,
-        headers: types.WebSocketRequestHeaders
+        headers: {
+            upgrade?: string
+            'sec-websocket-key'?: string
+            'sec-websocket-version'?: string
+            'sec-websocket-protocol'?: string
+        }
     ): Result<WebSocketResponder, WebSocketResponderError> {
         if (method !== 'GET') {
             return error<WebSocketResponderError>({

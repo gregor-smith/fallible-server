@@ -24,9 +24,9 @@ This function takes a `MessageHandler`, which is a function taking a Node `Incom
 const [ requestListener ] = createRequestListener(message =>
     response({
         body: `${message.method} ${message.url}`,
-        headers: {
+        headers: new Headers({
             'Content-Type': 'text/plain; charset=utf-8'
-        }
+        })
     })
 )
 

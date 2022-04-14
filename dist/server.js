@@ -4,10 +4,16 @@ import WebSocket from 'ws';
 import WebSocketConstants from 'ws/lib/constants.js';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
+import { Headers } from 'headers-polyfill';
 import { response } from './utils.js';
-import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID } from './constants.js';
+import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
+}
+function checkForReservedHeader(headers, header) {
+    if (headers.has(header)) {
+        warn(`Reserved header '${header}' should not be set`);
+    }
 }
 function defaultOnWebsocketSendError(_data, { name, message }) {
     warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response");
@@ -15,12 +21,7 @@ function defaultOnWebsocketSendError(_data, { name, message }) {
     warn(message);
 }
 function setResponseHeaders(res, headers) {
-    if (headers !== undefined) {
-        for (const [name, value] of Object.entries(headers)) {
-            const header = Array.isArray(value) ? value.map(String) : String(value);
-            res.setHeader(name, header);
-        }
-    }
+    headers?.forEach((value, header) => res.setHeader(header, value));
 }
 async function sendWebSocketMessages(socket, messages) {
     const promises = [];
@@ -113,31 +114,29 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // websocket
         if ('accept' in state) {
-            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, headers, accept, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, accept, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            let { headers } = state;
+            if (headers === undefined) {
+                headers = new Headers();
+            }
+            else {
+                checkForReservedHeader(headers, 'Upgrade');
+                checkForReservedHeader(headers, 'Connection');
+                checkForReservedHeader(headers, 'Sec-WebSocket-Accept');
+                checkForReservedHeader(headers, 'Sec-WebSocket-Protocol');
+            }
+            headers.set('Sec-WebSocket-Accept', accept);
             const ws = new WebSocket(null);
-            const lines = [
-                'HTTP/1.1 101 Switching Protocols',
-                'Upgrade: websocket',
-                'Connection: Upgrade',
-                `Sec-WebSocket-Accept: ${accept}` // TODO: sanitise
-            ];
             if (protocol !== undefined) {
-                lines.push(`Sec-WebSocket-Protocol: ${protocol}`); // TODO: sanitise
+                headers.set('Sec-WebSocket-Protocol', protocol);
                 ws._protocol = protocol;
             }
-            if (headers !== undefined) {
-                for (let [header, value] of Object.entries(headers)) {
-                    if (Array.isArray(value)) {
-                        value = value.join(', ');
-                    }
-                    // TODO: sanitise
-                    // TODO: forbid duplicates
-                    lines.push(`${header}: ${value}`);
-                }
-            }
-            lines.push('\r\n');
-            const httpResponse = lines.join('\r\n');
             const wrapper = new WebSocketWrapper(ws, onSendError, uuid);
+            let response = WEBSOCKET_RAW_RESPONSE_BASE;
+            headers.forEach((value, header) => {
+                response = `${response}${header}: ${value}\r\n`;
+            });
+            response = `${response}\r\n`;
             await new Promise(resolve => {
                 const closeListener = (code, reason) => {
                     sockets.delete(uuid);
@@ -166,23 +165,23 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                     }
                 });
                 ws.once('error', errorListener);
-                ws.on('close', closeListener);
+                ws.once('close', closeListener);
                 if (onMessage !== undefined) {
                     ws.on('message', data => {
                         sendWebSocketMessages(wrapper, onMessage(data, uuid));
                     });
                 }
                 ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize);
-                req.socket.write(httpResponse);
+                req.socket.write(response);
             });
         }
         else {
-            res.statusCode = state.status ?? 200;
-            const body = state.body;
+            const { headers, status = 200, body } = state;
+            res.statusCode = status;
             if (typeof body === 'string') {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 res.setHeader('Content-Length', Buffer.byteLength(body, 'utf-8'));
-                setResponseHeaders(res, state.headers);
+                setResponseHeaders(res, headers);
                 try {
                     await new Promise((resolve, reject) => {
                         res.on('close', resolve);
@@ -197,7 +196,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             else if (body instanceof Uint8Array) {
                 res.setHeader('Content-Type', 'application/octet-stream');
                 res.setHeader('Content-Length', body.byteLength);
-                setResponseHeaders(res, state.headers);
+                setResponseHeaders(res, headers);
                 try {
                     await new Promise((resolve, reject) => {
                         res.on('close', resolve);
@@ -211,7 +210,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             }
             else if (body === undefined) {
                 res.setHeader('Content-Length', 0);
-                setResponseHeaders(res, state.headers);
+                setResponseHeaders(res, headers);
                 try {
                     await new Promise((resolve, reject) => {
                         res.on('close', resolve);
@@ -226,7 +225,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
             // stream
             else {
                 res.setHeader('Content-Type', 'application/octet-stream');
-                setResponseHeaders(res, state.headers);
+                setResponseHeaders(res, headers);
                 const iterable = typeof body === 'function' ? body() : body;
                 const readable = iterable instanceof stream.Readable
                     ? iterable
