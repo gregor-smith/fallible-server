@@ -273,7 +273,12 @@ export declare class WebSocketResponder {
      * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
      * `Sec-WebSocket-Version` header is not `8` or `13`.
      */
-    static fromHeaders(method: string | undefined, headers: types.WebSocketRequestHeaders): Result<WebSocketResponder, WebSocketResponderError>;
+    static fromHeaders(method: string | undefined, headers: {
+        upgrade?: string;
+        'sec-websocket-key'?: string;
+        'sec-websocket-version'?: string;
+        'sec-websocket-protocol'?: string;
+    }): Result<WebSocketResponder, WebSocketResponderError>;
     /**
      * Creates a new
      * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}

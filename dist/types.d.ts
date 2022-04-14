@@ -10,8 +10,6 @@ import type { WebSocketReadyState } from './utils.js';
 export declare type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>;
 /** Data that can be sent in a WebSocket message */
 export declare type WebSocketData = WebSocket.Data;
-/** Value that can be formatted into a string as-is */
-export declare type Formattable = string | number | boolean | bigint | null;
 /**
  * A {@link http.RequestListener RequestListener} that can optionally return a
  * {@link PromiseLike}
@@ -31,8 +29,6 @@ export declare type WebSocketOpenCallback = (socketUUID: string) => WebSocketIte
 export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator;
 export declare type WebSocketCloseCallback = (result: Result<WebSocketCloseInfo, Error>, socketUUID: string) => Awaitable<void>;
 export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
-export declare type Header = Formattable | ReadonlyArray<Formattable>;
-export declare type Headers = Record<string, Header>;
 /**
  * Any iterable—sync or async—yielding {@link Uint8Array Uint8Arrays}, or
  * a function returning such an iterable. Note that {@link Buffer Buffers} are
@@ -66,8 +62,6 @@ export declare type RegularResponse = {
      */
     body?: string | Uint8Array | StreamBody;
 };
-/** The HTTP headers used when upgrading a WebSocket request */
-export declare type WebSocketRequestHeaders = Pick<http.IncomingHttpHeaders, 'upgrade' | 'sec-websocket-key' | 'sec-websocket-version' | 'sec-websocket-protocol'>;
 export declare type WebSocketResponse = {
     /**
      * Used as the Sec-WebSocket-Accept header's value. Is typically the base64

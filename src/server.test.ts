@@ -8,6 +8,7 @@ import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
 import { error, ok, Result } from 'fallible'
 import WebSocket from 'ws'
+import { Headers } from 'headers-polyfill'
 
 import { response } from './utils.js'
 import {
@@ -29,10 +30,10 @@ import { WEBSOCKET_GUID } from './constants.js'
 const testEncoder = new TextEncoder()
 const testResponse = {
     status: 418,
-    headers: {
+    headers: new Headers({
         'test-header': 'test header value',
         'test-header-2': 'test header value 2'
-    }
+    })
 } as const
 
 
@@ -164,7 +165,7 @@ describe('createRequestListener', () => {
 
             expect(res.statusCode).toBe(testResponse.status)
             expect(res._internal.headers).toContainEntries(
-                Object.entries(testResponse.headers)
+                [ ...testResponse.headers.entries() ]
             )
         })
 
@@ -229,7 +230,7 @@ describe('createRequestListener', () => {
 
             expect(res.statusCode).toBe(testResponse.status)
             expect(res._internal.headers).toContainEntries(
-                Object.entries(testResponse.headers)
+                [ ...testResponse.headers.entries() ]
             )
         })
 
@@ -283,7 +284,7 @@ describe('createRequestListener', () => {
 
             expect(res.statusCode).toBe(testResponse.status)
             expect(res._internal.headers).toContainEntries(
-                Object.entries(testResponse.headers)
+                [ ...testResponse.headers.entries() ]
             )
         })
 
@@ -370,7 +371,7 @@ describe('createRequestListener', () => {
 
             expect(res.statusCode).toBe(testResponse.status)
             expect(res._internal.headers).toContainEntries(
-                Object.entries(testResponse.headers)
+                [ ...testResponse.headers.entries() ]
             )
         })
 
@@ -820,11 +821,6 @@ describe('createRequestListener', () => {
         test('writes custom headers', () => {
             expect.assertions(1)
 
-            const testHeaders = {
-                'X-Test-Header': 'test',
-                'X-Test-Header-2': 'test 2'
-            }
-
             return new Promise<void>(resolve => {
                 const [ listener ] = createRequestListener(message =>
                     response({
@@ -832,7 +828,7 @@ describe('createRequestListener', () => {
                         onOpen: function * () {
                             return { code: 1000 }
                         },
-                        headers: testHeaders
+                        headers: testResponse.headers
                     })
                 )
                 server.on('request', listener)
@@ -840,8 +836,7 @@ describe('createRequestListener', () => {
                 const client = connectWebSocket()
                 client.on('upgrade', message => {
                     expect(message.headers).toContainEntries(
-                        Object.entries(testHeaders)
-                            .map(([ key, value ]) => [ key.toLowerCase(), value ])
+                        [ ...testResponse.headers.entries() ]
                     )
                 })
                 client.on('close', resolve)
@@ -1030,7 +1025,6 @@ describe('WebSocketResponder', () => {
             const onSendError = jest.fn()
             const maximumMessageSize = 1234
             const uuid = randomUUID()
-            const headers = { 'X-Test-Header': 'test' }
             const cleanup = jest.fn()
             const response = responder.response(
                 {
@@ -1040,7 +1034,7 @@ describe('WebSocketResponder', () => {
                     onSendError,
                     maximumMessageSize,
                     uuid,
-                    headers
+                    headers: testResponse.headers
                 },
                 cleanup
             )
@@ -1053,7 +1047,7 @@ describe('WebSocketResponder', () => {
                     onSendError,
                     maximumMessageSize,
                     uuid,
-                    headers,
+                    headers: testResponse.headers,
                     accept: webSocketAccept(key),
                     protocol
                 },

@@ -16,9 +16,6 @@ export type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & 
 /** Data that can be sent in a WebSocket message */
 export type WebSocketData = WebSocket.Data
 
-/** Value that can be formatted into a string as-is */
-export type Formattable = string | number | boolean | bigint | null
-
 
 /**
  * A {@link http.RequestListener RequestListener} that can optionally return a
@@ -56,9 +53,6 @@ export type WebSocketCloseCallback = (
     socketUUID: string
 ) => Awaitable<void>
 export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
-
-export type Header = Formattable | ReadonlyArray<Formattable>
-export type Headers = Record<string, Header>
 
 
 /**
@@ -98,16 +92,6 @@ export type RegularResponse = {
      */
     body?: string | Uint8Array | StreamBody
 }
-
-
-/** The HTTP headers used when upgrading a WebSocket request */
-export type WebSocketRequestHeaders = Pick<
-    http.IncomingHttpHeaders,
-    | 'upgrade'
-    | 'sec-websocket-key'
-    | 'sec-websocket-version'
-    | 'sec-websocket-protocol'
->
 
 
 export type WebSocketResponse = {
