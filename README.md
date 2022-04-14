@@ -111,17 +111,17 @@ Various types of body can be returned as part of regular non-WebSocket responses
 
 * `Uint8Array`s. Note that `Buffer` is a subtype.
 * `string`s, which are always treated as `utf-8`. If you require another encoding, return a `Buffer` instead.
-* `StreamBody`. This is anything implementing `Iterable<Uint8Array>` or `AsyncIterable<Uint8Array>`, or a function returning such an object. Node that this includes Node streams, such as those returned by `fs.createReadStream`.
-* `undefined`, for a bodiless response.
+* `StreamBody`. This is anything implementing `Iterable<Uint8Array>` or `AsyncIterable<Uint8Array>`, or a function returning such an object. Node that this includes Node streams, such as those returned by `fs.createReadStream`, as well as Node's implementation of web standard `ReadableStream`s. In fact, a web standard `Response` is interface-compatible with `RegularResponse`.
+* `null` or `undefined`, for a bodiless response.
 
 The `Content-Type` and `Content-Length` headers may be set by default depending on the type of this body:
 
-| Body type    | `Content-Type`             | `Content-Length`        |
-|--------------|----------------------------|-------------------------|
-| `string`     | `text/html; charset=utf-8` | Value's length in bytes |
-| `Uint8Array` | `application/octet-stream` | Value's length in bytes |
-| `StreamBody` | `application/octet-stream` | Not set                 |
-| `undefined`  | Not set                    | `0`                     |
+| Body type            | `Content-Type`             | `Content-Length`        |
+|----------------------|----------------------------|-------------------------|
+| `string`             | `text/html; charset=utf-8` | Value's length in bytes |
+| `Uint8Array`         | `application/octet-stream` | Value's length in bytes |
+| `StreamBody`         | `application/octet-stream` | Not set                 |
+| `null \| undefined`  | Not set                    | `0`                     |
 
 Setting headers through the `headers` field of the response will always override any defaults. Additionally, setting the `status` field will always override the default of `200`.
 The `headers` field should be a web standard [`Headers`](https://developer.mozilla.org/en-US/docs/Web/API/Headers) object or a polyfill thereof. Validation of keys and sanitisation of values are left to the user (note that `Headers` does this automatically).
