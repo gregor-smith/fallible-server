@@ -80,12 +80,12 @@ export type RegularResponse = {
      * The `Content-Type` and `Content-Length` headers may be set by default
      * depending on the type of this body:
      *
-     * | Body type                        | `Content-Type`             | `Content-Length`        |
-     * |----------------------------------|----------------------------|-------------------------|
-     * | `string`                         | `text/html; charset=utf-8` | Value's length in bytes |
-     * | `Uint8Array`                     | `application/octet-stream` | Value's length in bytes |
-     * | {@link StreamBody `StreamBody` } | `application/octet-stream` | Not set                 |
-     * | `undefined`                      | Not set                    | `0`                     |
+     * | Body type                       | `Content-Type`             | `Content-Length`        |
+     * |---------------------------------|----------------------------|-------------------------|
+     * | `string`                        | `text/html; charset=utf-8` | Value's length in bytes |
+     * | `Uint8Array`                    | `application/octet-stream` | Value's length in bytes |
+     * | {@link StreamBody `StreamBody`} | `application/octet-stream` | Not set                 |
+     * | `undefined`                     | Not set                    | `0`                     |
      *
      * Setting these headers through the `headers` field will always override
      * any defaults.
@@ -131,11 +131,9 @@ export type WebSocketResponse = {
     onClose?: WebSocketCloseCallback
     onSendError?: WebSocketSendErrorCallback
     /**
-     * Additional headers. Note that currently neither header nor its value is
-     * sanitised; this will change in the future. Also take care not to specify
-     * `Upgrade`, `Connection`, `Sec-WebSocket-Accept` or
-     * `Sec-WebSocket-Protocol` headers; in the future, doing so will likely
-     * result in a runtime error.
+     * Additional headers. `Upgrade`, `Connection`, `Sec-WebSocket-Accept` and
+     * `Sec-WebSocket-Protocol` headers should not be specified; doing so will
+     * print a warning and their values will be ignored.
      */
     headers?: Headers
 }
