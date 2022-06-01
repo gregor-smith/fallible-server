@@ -6,7 +6,8 @@
     ".": "./dist/fallible-server.js",
     "./utils": "./dist/utils.js",
     "./server": "./dist/server.js",
-    "./types": "./dist/types.js"
+    "./types": "./dist/types.js",
+    "./constants": "./dist/constants.js"
   },
   "sideEffects": false,
   "repository": {
