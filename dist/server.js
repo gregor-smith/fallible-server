@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
 import { Headers } from 'headers-polyfill';
-import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
+import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -55,7 +55,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // websocket
         if ('accept' in state) {
-            const { callback, accept, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            const { callback, accept, protocol, maximumIncomingMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE, uuid = randomUUID() } = state;
             let { headers } = state;
             if (headers === undefined) {
                 headers = new Headers();
@@ -85,7 +85,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                     sockets.delete(uuid);
                     resolve(callbackPromise);
                 });
-                socket.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize);
+                socket.setSocket(req.socket, EMPTY_BUFFER, maximumIncomingMessageSize);
                 req.socket.write(response);
                 const callbackPromise = callback?.(uuid, socket);
             });

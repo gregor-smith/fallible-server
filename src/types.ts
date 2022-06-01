@@ -4,12 +4,14 @@ import type WebSocket from 'ws'
 import type { Awaitable } from 'fallible'
 
 
+export type { WebSocket } from 'ws'
+
+
 /**
  * A Node {@link http.IncomingMessage IncomingMessage} that is correctly typed
  * to yield {@link Buffer Buffers} on iteration
  */
 export type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>
-
 
 /** Data that can be sent in a WebSocket message */
 export type WebSocketData = WebSocket.Data
@@ -112,7 +114,7 @@ export type WebSocketResponse = {
      *
      * Defaults to `WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE`; see `./constants.ts`
      */
-    maximumMessageSize?: number
+    maximumIncomingMessageSize?: number
     /**
      * The UUID used to identify the socket in the {@link SocketMap `SocketMap`}
      * and passed to the various callbacks. If not given, `crypto.randomUUID`

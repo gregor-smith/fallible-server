@@ -12,7 +12,7 @@ import { Headers } from 'headers-polyfill'
 import type * as types from './types.js'
 import {
     EMPTY_BUFFER,
-    WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
+    WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE,
     WEBSOCKET_GUID,
     WEBSOCKET_RAW_RESPONSE_BASE
 } from './constants.js'
@@ -49,6 +49,7 @@ interface InternalWebSocket extends WebSocket {
 
     setSocket(socket: Socket, head: Buffer, maximumMessageSize: number): void
 }
+
 
 
 /**
@@ -94,7 +95,7 @@ export function createRequestListener(
                 callback,
                 accept,
                 protocol,
-                maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
+                maximumIncomingMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE,
                 uuid = randomUUID()
             } = state
             let { headers } = state
@@ -130,7 +131,7 @@ export function createRequestListener(
                     sockets.delete(uuid)
                     resolve(callbackPromise)
                 })
-                socket.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize)
+                socket.setSocket(req.socket, EMPTY_BUFFER, maximumIncomingMessageSize)
                 req.socket.write(response)
                 const callbackPromise = callback?.(uuid, socket)
             })
