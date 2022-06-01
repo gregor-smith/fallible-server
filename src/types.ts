@@ -1,9 +1,7 @@
 import type http from 'node:http'
 
 import type WebSocket from 'ws'
-import type { Awaitable, Result } from 'fallible'
-
-import type { WebSocketReadyState } from './utils.js'
+import type { Awaitable } from 'fallible'
 
 
 /**
@@ -39,20 +37,7 @@ export type AwaitableIterator<Yield, Return = void, Next = unknown> =
     | AsyncIterator<Yield, Return, Next>
 
 
-export type WebSocketCloseInfo = {
-    /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
-    code: number
-    /** Will be an empty string if no close code was provided */
-    reason?: string | Buffer
-}
-export type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>
-export type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator
-export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator
-export type WebSocketCloseCallback = (
-    result: Result<WebSocketCloseInfo, Error>,
-    socketUUID: string
-) => Awaitable<void>
-export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
+export type WebSocketCallback = (uuid: string, socket: WebSocket) => Awaitable<void>
 
 
 export interface Headers {
@@ -134,10 +119,7 @@ export type WebSocketResponse = {
      * is used.
      */
     uuid?: string
-    onOpen?: WebSocketOpenCallback
-    onMessage?: WebSocketMessageCallback
-    onClose?: WebSocketCloseCallback
-    onSendError?: WebSocketSendErrorCallback
+    callback?: WebSocketCallback
     /**
      * Additional headers. `Upgrade`, `Connection`, `Sec-WebSocket-Accept` and
      * `Sec-WebSocket-Protocol` headers should not be specified; doing so will
@@ -172,17 +154,4 @@ export type ExceptionListener = (
 ) => void
 
 
-export interface IdentifiedWebSocket {
-    readonly uuid: string
-    readonly readyState: WebSocketReadyState
-
-    /**
-     * Sends `data` and handles any errors that may occur using the
-     * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
-     * the response was created.
-     */
-    send(data: WebSocketData): Promise<void>
-    close(code: number, reason?: string | Buffer): Promise<void>
-}
-
-export type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>
+export type SocketMap = ReadonlyMap<string, WebSocket>

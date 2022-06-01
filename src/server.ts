@@ -5,13 +5,11 @@ import { ReadableStream } from 'node:stream/web'
 import type { Socket } from 'node:net'
 
 import WebSocket from 'ws'
-import WebSocketConstants from 'ws/lib/constants.js'
 import { Result, ok, error } from 'fallible'
 import { Formidable, errors as FormidableErrors } from 'formidable'
 import { Headers } from 'headers-polyfill'
 
 import type * as types from './types.js'
-import { WebSocketReadyState } from './utils.js'
 import {
     EMPTY_BUFFER,
     WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
@@ -32,16 +30,6 @@ function checkForReservedHeader(headers: types.Headers, header: string): void {
 }
 
 
-function defaultOnWebsocketSendError(
-    _data: types.WebSocketData,
-    { name, message }: Error
-): void {
-    warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response")
-    warn(name)
-    warn(message)
-}
-
-
 function setResponseHeaders(
     res: http.ServerResponse,
     headers: types.Headers | undefined
@@ -50,81 +38,9 @@ function setResponseHeaders(
 }
 
 
-async function sendWebSocketMessages(
-    socket: WebSocketWrapper,
-    messages: types.WebSocketIterator
-): Promise<void> {
-    const promises: Promise<void>[] = []
-
-    while (true) {
-        const result = await messages.next()
-
-        if (socket.readyState !== WebSocketReadyState.Open) {
-            await Promise.all(promises)
-            return
-        }
-
-        if (result.done) {
-            await Promise.all(promises)
-            if (result.value === undefined) {
-                return
-            }
-            return socket.close(result.value.code, result.value.reason)
-        }
-
-        const promise = socket.send(result.value)
-        promises.push(promise)
-    }
-}
-
-
 function getDefaultExceptionListener(): types.ExceptionListener {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option")
     return console.error
-}
-
-
-class WebSocketWrapper implements types.IdentifiedWebSocket {
-    #underlying: WebSocket
-    #onSendError: types.WebSocketSendErrorCallback
-
-    constructor(
-        underlying: WebSocket,
-        onSendError: types.WebSocketSendErrorCallback,
-        readonly uuid: string
-    ) {
-        this.#underlying = underlying
-        this.#onSendError = onSendError
-    }
-
-    get readyState(): WebSocketReadyState {
-        return this.#underlying.readyState as WebSocketReadyState
-    }
-
-    async send(data: types.WebSocketData): Promise<void> {
-        let error: Error | undefined
-        try {
-            error = await new Promise<Error | undefined>(resolve =>
-                this.#underlying.send(data, resolve)
-            )
-        }
-        catch (e) {
-            if (!(e instanceof Error)) {
-                throw e
-            }
-            error = e
-        }
-        if (error !== undefined) {
-            await this.#onSendError(data, error, this.uuid)
-        }
-    }
-
-    close(code?: number, reason?: string | Buffer): Promise<void> {
-        return new Promise(resolve => {
-            this.#underlying.on('close', resolve)
-            this.#underlying.close(code, reason)
-        })
-    }
 }
 
 
@@ -159,7 +75,7 @@ export function createRequestListener(
     messageHandler: types.MessageHandler,
     exceptionListener = getDefaultExceptionListener()
 ): [ types.AwaitableRequestListener, types.SocketMap ] {
-    const sockets = new Map<string, WebSocketWrapper>()
+    const sockets = new Map<string, WebSocket>()
 
     const listener: types.AwaitableRequestListener = async (req, res) => {
         let state: types.Response
@@ -175,10 +91,7 @@ export function createRequestListener(
         // websocket
         if ('accept' in state) {
             const {
-                onOpen,
-                onMessage,
-                onSendError = defaultOnWebsocketSendError,
-                onClose,
+                callback,
                 accept,
                 protocol,
                 maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE,
@@ -197,12 +110,11 @@ export function createRequestListener(
             }
             headers.set('Sec-WebSocket-Accept', accept)
 
-            const ws = new WebSocket(null) as InternalWebSocket
+            const socket = new WebSocket(null) as InternalWebSocket
             if (protocol !== undefined) {
                 headers.set('Sec-WebSocket-Protocol', protocol)
-                ws._protocol = protocol
+                socket._protocol = protocol
             }
-            const wrapper = new WebSocketWrapper(ws, onSendError, uuid)
 
             let response = WEBSOCKET_RAW_RESPONSE_BASE
             headers.forEach((value, header) => {
@@ -211,50 +123,16 @@ export function createRequestListener(
             response = `${response}\r\n`
 
             await new Promise<void>(resolve => {
-                const closeListener = (code: number, reason: Buffer): void => {
-                    sockets.delete(uuid)
-                    ws.off('error', errorListener)
-                    const result = ok({ code, reason })
-                    const promise = onClose?.(result, uuid)
-                    resolve(promise)
-                }
-
-                const errorListener = (exception: Error): void => {
-                    sockets.delete(uuid)
-                    ws.off('close', closeListener)
-                    if (ws.readyState < WebSocketReadyState.Closing) {
-                        const code: number | undefined = (exception as any)[WebSocketConstants.kStatusCode]
-                        ws.close(code)
-                    }
-                    exceptionListener(exception, req, state)
-                    // TODO: type possible error codes
-                    const result = error(exception)
-                    const promise = onClose?.(result, uuid)
-                    resolve(promise)
-                }
-
-                ws.on('open', () => {
-                    sockets.set(uuid, wrapper)
-                    if (onOpen !== undefined) {
-                        sendWebSocketMessages(
-                            wrapper,
-                            onOpen(uuid)
-                        )
-                    }
+                socket.on('open', () => {
+                    sockets.set(uuid, socket)
                 })
-                ws.once('error', errorListener)
-                ws.once('close', closeListener)
-                if (onMessage !== undefined) {
-                    ws.on('message', data => {
-                        sendWebSocketMessages(
-                            wrapper,
-                            onMessage(data, uuid)
-                        )
-                    })
-                }
-
-                ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize)
+                socket.on('close', () => {
+                    sockets.delete(uuid)
+                    resolve(callbackPromise)
+                })
+                socket.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize)
                 req.socket.write(response)
+                const callbackPromise = callback?.(uuid, socket)
             })
         }
         else {

@@ -1,8 +1,7 @@
 /// <reference types="node" />
 import type http from 'node:http';
 import type WebSocket from 'ws';
-import type { Awaitable, Result } from 'fallible';
-import type { WebSocketReadyState } from './utils.js';
+import type { Awaitable } from 'fallible';
 /**
  * A Node {@link http.IncomingMessage IncomingMessage} that is correctly typed
  * to yield {@link Buffer Buffers} on iteration
@@ -18,17 +17,7 @@ export declare type AwaitableRequestListener = (message: http.IncomingMessage, r
 /** Any value iterable using `for await`  */
 export declare type AwaitableIterable<T> = Iterable<T> | AsyncIterable<T>;
 export declare type AwaitableIterator<Yield, Return = void, Next = unknown> = Iterator<Yield, Return, Next> | AsyncIterator<Yield, Return, Next>;
-export declare type WebSocketCloseInfo = {
-    /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
-    code: number;
-    /** Will be an empty string if no close code was provided */
-    reason?: string | Buffer;
-};
-export declare type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>;
-export declare type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator;
-export declare type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator;
-export declare type WebSocketCloseCallback = (result: Result<WebSocketCloseInfo, Error>, socketUUID: string) => Awaitable<void>;
-export declare type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>;
+export declare type WebSocketCallback = (uuid: string, socket: WebSocket) => Awaitable<void>;
 export interface Headers {
     get(name: string): string | null;
     has(name: string): boolean;
@@ -100,10 +89,7 @@ export declare type WebSocketResponse = {
      * is used.
      */
     uuid?: string;
-    onOpen?: WebSocketOpenCallback;
-    onMessage?: WebSocketMessageCallback;
-    onClose?: WebSocketCloseCallback;
-    onSendError?: WebSocketSendErrorCallback;
+    callback?: WebSocketCallback;
     /**
      * Additional headers. `Upgrade`, `Connection`, `Sec-WebSocket-Accept` and
      * `Sec-WebSocket-Protocol` headers should not be specified; doing so will
@@ -119,15 +105,4 @@ export declare type MessageHandlerResult<State = Response> = {
 };
 export declare type MessageHandler<ExistingState = void, NewState = Response> = (message: Message, state: Readonly<ExistingState>, sockets: SocketMap) => Awaitable<MessageHandlerResult<NewState>>;
 export declare type ExceptionListener = (exception: unknown, message: Message, state?: Readonly<Response>) => void;
-export interface IdentifiedWebSocket {
-    readonly uuid: string;
-    readonly readyState: WebSocketReadyState;
-    /**
-     * Sends `data` and handles any errors that may occur using the
-     * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
-     * the response was created.
-     */
-    send(data: WebSocketData): Promise<void>;
-    close(code: number, reason?: string | Buffer): Promise<void>;
-}
-export declare type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>;
+export declare type SocketMap = ReadonlyMap<string, WebSocket>;
