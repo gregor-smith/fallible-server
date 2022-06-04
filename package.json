@@ -1,12 +1,13 @@
 {
   "name": "fallible-server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "exports": {
     ".": "./dist/fallible-server.js",
     "./utils": "./dist/utils.js",
     "./server": "./dist/server.js",
-    "./types": "./dist/types.js"
+    "./types": "./dist/types.js",
+    "./constants": "./dist/constants.js"
   },
   "sideEffects": false,
   "repository": {

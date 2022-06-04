@@ -1,31 +1,31 @@
 import { TextEncoder } from 'node:util'
 import { Readable } from 'node:stream'
 import { createServer, IncomingMessage } from 'node:http'
-import { createHash, randomUUID } from 'node:crypto'
-import { setTimeout } from 'node:timers/promises'
+import { createHash } from 'node:crypto'
 
 import 'jest-extended'
 import { Response as MockResponse } from 'mock-http'
-import { error, ok, Result } from 'fallible'
+import { error } from 'fallible'
 import WebSocket from 'ws'
 import { Headers } from 'headers-polyfill'
 
 import { response } from './utils.js'
 import {
     createRequestListener,
-    WebSocketResponder,
-    WebSocketResponderError
+    parseWebSocketHeaders,
+    ParseWebSocketHeadersError
 } from './server.js'
 import type {
     Message,
     Response,
-    WebSocketCloseInfo,
+    WebSocketCallback,
     WebSocketData,
-    WebSocketIterator,
     WebSocketResponse
 } from './types.js'
 import { WEBSOCKET_GUID } from './constants.js'
-import { ReadableStream } from 'node:stream/web'
+
+
+jest.setTimeout(1000)
 
 
 const testEncoder = new TextEncoder()
@@ -36,7 +36,7 @@ const testResponse = {
         'test-header-2': 'test header value 2'
     })
 } as const
-
+ 
 
 function webSocketAccept(key: string): string {
     return createHash('sha1')
@@ -485,24 +485,10 @@ describe('createRequestListener', () => {
             }
         }
 
-        test('onOpen/onMessage/onClose called, messages sent and received', async () => {
-            expect.assertions(9)
+        test('callback called, messages sent and received', async () => {
+            expect.assertions(7)
 
-            const messages: WebSocketData[] = []
-            let uuid: string | undefined
             let state: WebSocketResponse | undefined
-
-            const onOpen = jest.fn<WebSocketIterator, [ string ]>(function * (u) {
-                uuid = u
-                yield 'server open'
-                yield 'server open 2'
-            })
-            const onClose = jest.fn<void, [ Result<WebSocketCloseInfo, Error>, string ]>()
-            const onMessage = jest.fn<WebSocketIterator, [ WebSocketData, string ]>(function * (message) {
-                yield 'server message'
-                yield `server echo: ${message}`
-            })
-
             const cleanup = jest.fn()
 
             await new Promise<void>(resolve => {
@@ -515,17 +501,35 @@ describe('createRequestListener', () => {
                 const [ listener ] = createRequestListener(message => {
                     state = {
                         accept: webSocketAcceptFromMessage(message),
-                        onOpen,
-                        onMessage,
-                        onClose
+                        callback: (_uuid, socket) => {
+                            expect(socket.readyState).toBe(WebSocket.OPEN)
+                            return new Promise((resolve, reject) => {
+                                const messages: WebSocketData[] = []
+                                socket.on('message', message => {
+                                    messages.push(message)
+                                    socket.send('server message')
+                                    socket.send(`server echo: ${message}`)
+                                })
+                                socket.on('close', (code, reason) => {
+                                    expect(code).toBe(4321)
+                                    expect(reason).toBe('client close')
+                                    expect(messages).toEqual([ 'client open' ])
+                                    resolve()
+                                })
+                                socket.on('error', reject)
+                                socket.send('server open')
+                                socket.send('server open 2')
+                            })
+                        }
                     }
                     return response(
                         state,
                         cleanup.mockImplementationOnce(waitForBothServerAndClient)
                     )
-                })
+                }) 
                 server.on('request', listener)
 
+                const messages: WebSocketData[] = []
                 const client = connectWebSocket()
                 client.on('open', () => client.send('client open'))
                 client.on('message', message => {
@@ -534,206 +538,37 @@ describe('createRequestListener', () => {
                         client.close(4321, 'client close')
                     }
                 })
-                client.on('close', waitForBothServerAndClient)
+                client.on('close', () => {
+                    expect(messages).toEqual([
+                        'server open',
+                        'server open 2',
+                        'server message',
+                        'server echo: client open'
+                    ])
+                    waitForBothServerAndClient()
+                })
             })
 
-            expect(uuid).not.toBeUndefined()
             expect(state).not.toBeUndefined()
-            expect(onOpen).toHaveBeenCalledOnce()
-            expect(onOpen).toHaveBeenCalledBefore(onMessage)
-            expect(onMessage.mock.calls).toEqual([ [ 'client open', uuid ] ])
-            expect(messages).toEqual([
-                'server open',
-                'server open 2',
-                'server message',
-                'server echo: client open'
-            ])
-            expect(onClose).toHaveBeenCalledAfter(onMessage)
-            expect(onClose.mock.calls).toEqual([
-                [ ok({ code: 4321, reason: 'client close' }), uuid ]
-            ])
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test.each<WebSocketCloseInfo>([
-            { code: 4321 },
-            { code: 4321, reason: 'server close' }
-        ])('returning close info from onOpen closes socket', closeInfo => {
-            expect.assertions(2)
+        test.each<WebSocketCallback>([
+            () => { throw 'test' },
+            () => Promise.reject('test')
+        ])('socked closed and exceptionListener called when callback throws or returns rejecting promise', callback => {
+            expect.assertions(4)
 
             return new Promise<void>(resolve => {
                 const waitForBothServerAndClient = createMultiResolver(resolve)
+                const exceptionListener = jest.fn()
 
-                const [ listener ] = createRequestListener(message =>
-                    response(
-                        {
-                            accept: webSocketAcceptFromMessage(message),
-                            onOpen: function * () {
-                                return closeInfo
-                            }
-                        },
-                        waitForBothServerAndClient
-                    )
-                )
-                server.on('request', listener)
-
-                const client = connectWebSocket()
-                client.on('close', (code, reason) => {
-                    expect(code).toBe(closeInfo.code)
-                    expect(reason).toBe(closeInfo.reason ?? '')
-                    waitForBothServerAndClient()
-                })
-            })
-        })
-
-        test.each<WebSocketCloseInfo>([
-            { code: 4321 },
-            { code: 4321, reason: 'server close' }
-        ])('returning close info from onMessage closes socket', async closeInfo => {
-            expect.assertions(3)
-
-            const messages: WebSocketData[] = []
-
-            await new Promise<void>(resolve => {
-                const waitForBothServerAndClient = createMultiResolver(resolve)
-
-                const [ listener ] = createRequestListener(message =>
-                    response(
-                        {
-                            accept: webSocketAcceptFromMessage(message),
-                            onMessage: function * (message) {
-                                messages.push(message)
-                                return closeInfo
-                            }
-                        },
-                        waitForBothServerAndClient
-                    )
-                )
-                server.on('request', listener)
-
-                const client = connectWebSocket()
-                client.on('open', () => client.send('client open'))
-                client.on('close', (code, reason) => {
-                    expect(code).toBe(closeInfo.code)
-                    expect(reason).toBe(closeInfo.reason ?? '')
-                    waitForBothServerAndClient()
-                })
-            })
-
-            expect(messages).toEqual([ 'client open' ])
-        })
-
-        test('stops sending messages if socket closes during generator', async () => {
-            expect.assertions(2)
-
-            const messages: WebSocketData[] = []
-            const onClose = jest.fn<void, [ Result<WebSocketCloseInfo, Error>, string ]>()
-
-            await new Promise<void>(resolve => {
-                const waitForBothServerAndClient = createMultiResolver(resolve)
-
-                const [ listener ] = createRequestListener(message =>
-                    response(
-                        {
-                            accept: webSocketAcceptFromMessage(message),
-                            onOpen: async function * () {
-                                yield 'server open'
-                                await setTimeout(5)
-                                yield 'should be unreachable'
-                            },
-                            onClose
-                        },
-                        waitForBothServerAndClient
-                    )
-                )
-                server.on('request', listener)
-
-                const client = connectWebSocket()
-                client.on('message', message => {
-                    messages.push(message)
-                    client.close(4321, 'client close')
-                })
-                client.on('close', waitForBothServerAndClient)
-            })
-
-            expect(messages).toEqual([ 'server open' ])
-            expect(onClose.mock.calls).toEqual([
-                [ ok({ code: 4321, reason: 'client close' }), expect.any(String) ]
-            ])
-        })
-
-        test('onSendError called on unknown send error', async () => {
-            expect.assertions(4)
-
-            const onSendError = jest.fn<void, [ WebSocketData, Error, string ]>(() => {})
-            const onMessage = jest.fn<void, [ string ]>()
-            const exception = new Error('test')
-            // The wrong overload is inferred so the second
-            // parameter must be typed as any
-            sendSpy.mockImplementation((_, callback: any) => callback(exception))
-
-            let uuid: string | undefined
-
-            await new Promise<void>(resolve => {
-                const waitForBothServerAndClient = createMultiResolver(resolve)
-
-                const [ listener ] = createRequestListener(message =>
-                    response(
-                        {
-                            accept: webSocketAcceptFromMessage(message),
-                            onOpen: async function * (u) {
-                                uuid = u
-                                yield 'a'
-                                yield 'b'
-                                yield 'c'
-                                return { code: 1000 }
-                            },
-                            onSendError
-                        },
-                        waitForBothServerAndClient
-                    )
-                )
-                server.on('request', listener)
-
-                const client = connectWebSocket()
-                client.on('message', onMessage)
-                client.on('close', waitForBothServerAndClient)
-            })
-
-            expect(uuid).not.toBeUndefined()
-            expect(onMessage).not.toHaveBeenCalled()
-            expect(sendSpy.mock.calls).toEqual([
-                [ 'a', expect.any(Function) ],
-                [ 'b', expect.any(Function) ],
-                [ 'c', expect.any(Function) ],
-            ])
-            expect(onSendError.mock.calls).toEqual([
-                [ 'a', exception, uuid ],
-                [ 'b', exception, uuid ],
-                [ 'c', exception, uuid ]
-            ])
-        })
-
-        test('incoming message larger than maximumMessageSize calls exception listener and closes socket', async () => {
-            expect.assertions(7)
-
-            const onClose = jest.fn()
-            const onMessage = jest.fn()
-            const exceptionListener = jest.fn()
-
-            const maximumMessageSize = 10
-            let state: WebSocketResponse | undefined
-
-            await new Promise<void>(resolve => {
-                const waitForBothServerAndClient = createMultiResolver(resolve)
-
+                let state: WebSocketResponse | undefined
                 const [ listener ] = createRequestListener(
                     message => {
                         state = {
                             accept: webSocketAcceptFromMessage(message),
-                            onClose,
-                            onMessage,
-                            maximumMessageSize
+                            callback
                         }
                         return response(
                             state,
@@ -745,52 +580,47 @@ describe('createRequestListener', () => {
                 server.on('request', listener)
 
                 const client = connectWebSocket()
-                client.on('open', () => {
-                    const largeMessage = 'a'.repeat(maximumMessageSize + 1)
-                    client.send(largeMessage)
-                })
                 client.on('close', (code, reason) => {
-                    expect(code).toBe(1009)
+                    expect(code).toBe(1011)
                     expect(reason).toBe('')
+                    expect(state).not.toBeUndefined()
+                    expect(exceptionListener.mock.calls).toEqual([
+                        [ 'test', expect.any(IncomingMessage), state ]
+                    ])
                     waitForBothServerAndClient()
                 })
             })
-
-            expect(state).not.toBeUndefined()
-            expect(onMessage).not.toHaveBeenCalled()
-            expect(exceptionListener.mock.calls).toEqual([
-                [ expect.any(RangeError), expect.any(IncomingMessage), state ]
-            ])
-            expect(exceptionListener).toHaveBeenCalledBefore(onClose)
-            expect(onClose.mock.calls).toEqual([
-                [ error(expect.any(RangeError)), expect.any(String) ]
-            ])
         })
 
-        test('outgoing message larger than maximumMessageSize calls onSendError', async () => {
-            expect.assertions(2)
+        // TODO fix - see https://github.com/gregor-smith/fallible-server/issues/11
+        test.skip('incoming message larger than maximumIncomingMessageSize fires error event and closes socket', () => {
+            expect.assertions(6)
 
-            const onSendError = jest.fn()
-
-            const maximumMessageSize = 10
-            const largeMessage = 'b'.repeat(maximumMessageSize + 1)
-            const messages: WebSocketData[] = []
-
-            await new Promise<void>(resolve => {
+            return new Promise<void>(resolve => {
                 const waitForBothServerAndClient = createMultiResolver(resolve)
 
+                const maximumIncomingMessageSize = 10
                 const [ listener ] = createRequestListener(message =>
-                    response(
+                    response<WebSocketResponse>(
                         {
                             accept: webSocketAcceptFromMessage(message),
-                            onOpen: function * () {
-                                yield 'a'
-                                yield largeMessage
-                                yield 'c'
-                                return { code: 1000 }
-                            },
-                            onSendError,
-                            maximumMessageSize
+                            callback: (_uuid, socket) =>
+                                new Promise<void>(resolve => {
+                                    const messages: WebSocketData[] = []
+                                    socket.on('message', message => {
+                                        messages.push(message)
+                                    })
+                                    socket.on('close', (code, reason) => {
+                                        expect(code).toBe(1009)
+                                        expect(reason).toBe('')
+                                        expect(messages).toEqual([ 'a' ])
+                                        resolve()
+                                    })
+                                    socket.on('error', error => {
+                                        expect(error).toBeInstanceOf(RangeError)
+                                    })
+                                }),
+                            maximumIncomingMessageSize
                         },
                         waitForBothServerAndClient
                     )
@@ -798,28 +628,33 @@ describe('createRequestListener', () => {
                 server.on('request', listener)
 
                 const client = connectWebSocket()
-                client.on('message', message => messages.push(message))
-                client.on('close', waitForBothServerAndClient)
+                client.on('open', () => {
+                    client.send('a')
+                    client.send('b'.repeat(maximumIncomingMessageSize + 1))
+                    client.send('c')
+                })
+                client.on('close', (code, reason) => {
+                    expect(code).toBe(1009)
+                    expect(reason).toBe('')
+                    waitForBothServerAndClient()
+                })
             })
-
-            expect(messages).toEqual([ 'a', 'c' ])
-            expect(onSendError.mock.calls).toEqual([
-                [ largeMessage, expect.any(RangeError), expect.any(String) ]
-            ])
         })
 
         test('subprotocol sets Sec-WebSocket-Protocol header', () => {
             expect.assertions(1)
 
-            const protocol = 'test-protocol'
-
             return new Promise<void>(resolve => {
+                const protocol = 'test-protocol'
+
                 const [ listener ] = createRequestListener(message =>
-                    response({
+                    response<WebSocketResponse>({
                         accept: webSocketAcceptFromMessage(message),
-                        onOpen: function * () {
-                            return { code: 1000 }
-                        },
+                        callback: (_uuid, socket) =>
+                            new Promise<void>(resolve => {
+                                socket.on('close', () => resolve())
+                                socket.close()
+                            }),
                         protocol
                     })
                 )
@@ -840,11 +675,13 @@ describe('createRequestListener', () => {
 
             return new Promise<void>(resolve => {
                 const [ listener ] = createRequestListener(message =>
-                    response({
+                    response<WebSocketResponse>({
                         accept: webSocketAcceptFromMessage(message),
-                        onOpen: function * () {
-                            return { code: 1000 }
-                        },
+                        callback: (_uuid, socket) =>
+                            new Promise<void>(resolve => {
+                                socket.on('close', () => resolve())
+                                socket.close()
+                            }),
                         headers: testResponse.headers
                     })
                 )
@@ -863,15 +700,18 @@ describe('createRequestListener', () => {
         test('custom uuid is passed to callbacks', () => {
             expect.assertions(1)
 
-            const testUUID = 'test uuid'
-
             return new Promise<void>(resolve => {
+                const testUUID = 'test uuid'
+
                 const [ listener ] = createRequestListener(message =>
-                    response({
+                    response<WebSocketResponse>({
                         accept: webSocketAcceptFromMessage(message),
-                        onOpen: function * (uuid) {
+                        callback: (uuid, socket) => {
                             expect(uuid).toBe(testUUID)
-                            return { code: 1000 }
+                            return new Promise<void>(resolve => {
+                                socket.on('close', () => resolve())
+                                socket.close()
+                            })
                         },
                         uuid: testUUID
                     })
@@ -913,27 +753,12 @@ describe('parseMultipartRequest', () => {
 })
 
 
-describe('WebSocketResponder', () => {
+describe('parseWebSocketHeaders', () => {
     describe('fromHeaders', () => {
-        test.each([
-            undefined,
-            'get',
-            'test',
-            'POST',
-            'PUT',
-            'DELETE',
-            'PATCH',
-        ])('returns NonGETMethod when method parameter not GET', method => {
-            const result = WebSocketResponder.fromHeaders(method, {})
-            expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'NonGETMethod', method })
-            )
-        })
-
         test('returns MissingUpgradeHeader when upgrade header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', {})
+            const result = parseWebSocketHeaders({})
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingUpgradeHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingUpgradeHeader' })
             )
         })
 
@@ -942,9 +767,9 @@ describe('WebSocketResponder', () => {
             'websocket ',
             'test'
         ])('returns InvalidUpgradeHeader when upgrade header not websocket', header => {
-            const result = WebSocketResponder.fromHeaders('GET', { upgrade: header })
+            const result = parseWebSocketHeaders({ upgrade: header })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidUpgradeHeader',
                     header
                 })
@@ -952,9 +777,9 @@ describe('WebSocketResponder', () => {
         })
 
         test('returns MissingKeyHeader when sec-websocket-key header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', { upgrade: 'websocket' })
+            const result = parseWebSocketHeaders({ upgrade: 'websocket' })
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingKeyHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingKeyHeader' })
             )
         })
 
@@ -966,12 +791,12 @@ describe('WebSocketResponder', () => {
             '='.repeat(24),
             ' '.repeat(22) + '==',
         ])('returns InvalidKeyHeader when sec-websocket-key header invalid', header => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': header
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidKeyHeader',
                     header
                 })
@@ -979,12 +804,12 @@ describe('WebSocketResponder', () => {
         })
 
         test('returns MissingVersionHeader when sec-websocket-version header missing', () => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': 'a'.repeat(22) + '=='
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({ tag: 'MissingVersionHeader' })
+                error<ParseWebSocketHeadersError>({ tag: 'MissingVersionHeader' })
             )
         })
 
@@ -995,23 +820,23 @@ describe('WebSocketResponder', () => {
             '14',
             'test'
         ])('returns InvalidOrUnsupportedVersionHeader when sec-websocket-version header not 8 or 13', header => {
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': 'a'.repeat(22) + '==',
                 'sec-websocket-version': header
             })
             expect(result).toEqual(
-                error<WebSocketResponderError>({
+                error<ParseWebSocketHeadersError>({
                     tag: 'InvalidOrUnsupportedVersionHeader',
                     header
                 })
             )
         })
 
-        test('returns responder with correct accept and protocol', () => {
+        test('returns correct accept and protocol', () => {
             const key = 'a'.repeat(22) + '=='
             const protocol = 'test protocol'
-            const result = WebSocketResponder.fromHeaders('GET', {
+            const result = parseWebSocketHeaders({
                 upgrade: 'websocket',
                 'sec-websocket-key': key,
                 'sec-websocket-protocol': protocol,
@@ -1019,56 +844,9 @@ describe('WebSocketResponder', () => {
             })
 
             expect(result.ok).toBeTrue()
-            expect((result.value as WebSocketResponder).accept).toBe(webSocketAccept(key))
-            expect((result.value as WebSocketResponder).protocol).toBe(protocol)
-        })
-    })
-
-    describe('response', () => {
-        test('returns response with given options, base headers and protocol', () => {
-            const key = 'a'.repeat(22) + '=='
-            const protocol = 'test protocol'
-            const result = WebSocketResponder.fromHeaders('GET', {
-                upgrade: 'websocket',
-                'sec-websocket-key': key,
-                'sec-websocket-protocol': protocol,
-                'sec-websocket-version': '13'
-            })
-            const responder = result.value as WebSocketResponder
-
-            const onOpen = jest.fn()
-            const onMessage = jest.fn()
-            const onClose = jest.fn()
-            const onSendError = jest.fn()
-            const maximumMessageSize = 1234
-            const uuid = randomUUID()
-            const cleanup = jest.fn()
-            const response = responder.response(
-                {
-                    onOpen,
-                    onMessage,
-                    onClose,
-                    onSendError,
-                    maximumMessageSize,
-                    uuid,
-                    headers: testResponse.headers
-                },
-                cleanup
-            )
-
-            expect(response).toEqual<typeof response>({
-                state: {
-                    onOpen,
-                    onMessage,
-                    onClose,
-                    onSendError,
-                    maximumMessageSize,
-                    uuid,
-                    headers: testResponse.headers,
-                    accept: webSocketAccept(key),
-                    protocol
-                },
-                cleanup
+            expect(result.value).toEqual({
+                protocol,
+                accept: webSocketAccept(key)
             })
         })
     })

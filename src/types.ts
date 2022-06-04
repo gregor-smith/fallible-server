@@ -1,9 +1,10 @@
 import type http from 'node:http'
 
 import type WebSocket from 'ws'
-import type { Awaitable, Result } from 'fallible'
+import type { Awaitable } from 'fallible'
 
-import type { WebSocketReadyState } from './utils.js'
+
+export type { WebSocket } from 'ws'
 
 
 /**
@@ -11,7 +12,6 @@ import type { WebSocketReadyState } from './utils.js'
  * to yield {@link Buffer Buffers} on iteration
  */
 export type Message = Omit<http.IncomingMessage, typeof Symbol.asyncIterator> & AsyncIterable<Buffer>
-
 
 /** Data that can be sent in a WebSocket message */
 export type WebSocketData = WebSocket.Data
@@ -34,25 +34,8 @@ export type AwaitableIterable<T> =
     | Iterable<T>
     | AsyncIterable<T>
 
-export type AwaitableIterator<Yield, Return = void, Next = unknown> =
-    | Iterator<Yield, Return, Next>
-    | AsyncIterator<Yield, Return, Next>
 
-
-export type WebSocketCloseInfo = {
-    /** For common close codes see https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1 */
-    code: number
-    /** Will be an empty string if no close code was provided */
-    reason?: string | Buffer
-}
-export type WebSocketIterator = AwaitableIterator<WebSocketData, WebSocketCloseInfo | void>
-export type WebSocketOpenCallback = (socketUUID: string) => WebSocketIterator
-export type WebSocketMessageCallback = (data: WebSocketData, socketUUID: string) => WebSocketIterator
-export type WebSocketCloseCallback = (
-    result: Result<WebSocketCloseInfo, Error>,
-    socketUUID: string
-) => Awaitable<void>
-export type WebSocketSendErrorCallback = (data: WebSocketData, error: Error, socketUUID: string) => Awaitable<void>
+export type WebSocketCallback = (uuid: string, socket: WebSocket) => Awaitable<void>
 
 
 export interface Headers {
@@ -127,17 +110,22 @@ export type WebSocketResponse = {
      *
      * Defaults to `WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE`; see `./constants.ts`
      */
-    maximumMessageSize?: number
+    maximumIncomingMessageSize?: number
     /**
      * The UUID used to identify the socket in the {@link SocketMap `SocketMap`}
      * and passed to the various callbacks. If not given, `crypto.randomUUID`
      * is used.
      */
     uuid?: string
-    onOpen?: WebSocketOpenCallback
-    onMessage?: WebSocketMessageCallback
-    onClose?: WebSocketCloseCallback
-    onSendError?: WebSocketSendErrorCallback
+    /**
+     * A function called with the 
+     * [WebSocket](https://github.com/websockets/ws/) instance and its UUID.
+     * Can optionally return a {@link PromiseLike}; doing so allows ensures any
+     * {@link Cleanup} associated with the response waits until this function
+     * completes. By the time this function is called, the socket's `open` 
+     * event has already fired; do not listen for it.
+     */
+    callback: WebSocketCallback
     /**
      * Additional headers. `Upgrade`, `Connection`, `Sec-WebSocket-Accept` and
      * `Sec-WebSocket-Protocol` headers should not be specified; doing so will
@@ -172,17 +160,4 @@ export type ExceptionListener = (
 ) => void
 
 
-export interface IdentifiedWebSocket {
-    readonly uuid: string
-    readonly readyState: WebSocketReadyState
-
-    /**
-     * Sends `data` and handles any errors that may occur using the
-     * {@link WebSocketSendErrorCallback `onSendError`} callback provided when
-     * the response was created.
-     */
-    send(data: WebSocketData): Promise<void>
-    close(code: number, reason?: string | Buffer): Promise<void>
-}
-
-export type SocketMap = ReadonlyMap<string, IdentifiedWebSocket>
+export type SocketMap = ReadonlyMap<string, WebSocket>

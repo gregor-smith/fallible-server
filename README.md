@@ -12,7 +12,7 @@ A Node Web framework with a focus on type safety and cleaner error handling.
 No NPM package for now, so just install from this repository. You'll probably want `fallible` too:
 
 ```sh
-yarn add https://github.com/gregor-smith/fallible-server.git#v0.2.1-alpha https://github.com/gregor-smith/fallible.git#v1.0.0
+yarn add https://github.com/gregor-smith/fallible-server.git#v0.3.0-alpha https://github.com/gregor-smith/fallible.git#v1.0.0
 ```
 
 ## Message handlers
@@ -124,37 +124,26 @@ The `Content-Type` and `Content-Length` headers may be set by default depending 
 | `null \| undefined`  | Not set                    | `0`                     |
 
 Setting headers through the `headers` field of the response will always override any defaults. Additionally, setting the `status` field will always override the default of `200`.
-The `headers` field should be a web standard [`Headers`](https://developer.mozilla.org/en-US/docs/Web/API/Headers) object or a polyfill thereof. Validation of keys and sanitisation of values are left to the user (note that `Headers` does this automatically).
+The `headers` field should be an object with the same interface as the web standard [`Headers`](https://developer.mozilla.org/en-US/docs/Web/API/Headers) class. Validation of keys and sanitisation of values are left to the user (note that the web standard `Headers` class does this automatically).
 
 ### WebSocket responses
-A WebSocket response is made up of various callbacks. Although none are technically required, typically you'll use all of them. These are:
+A WebSocket response takes a callback to which a [`ws`](https://github.com/websockets/ws/) `WebSocket` instance is passed. See that package for details on its usage.
 
-#### `onOpen`
-Called when the socket connects. Should return an awaitable iterator yielding `string`s or `Buffer`s to be sent as messages, and optionally returning a `WebSocketCloseInfo` object which is used to close the WebSocket if required.
+The callback also receives a UUID generated for the socket, which as shown in the next section can be used to manipulate sockets outwith the context of a `MessageHandler`. If you really need to, you can override this UUID with the `uuid` field of the response.
 
-#### `onMessage`
-Called with the data of each message the socket receives. Returns the same kind of iterator as `onOpen`.
-
-#### `onClose`
-When the socket closes, this callback is called with the code and reason. Can optionally return a `Promise`.
-
-#### `onSendError`
-Whenever sending a message fails for any reason, this callback is called with the data being sent and the error thrown. Can optionally return a `Promise`.
-
-All of these callbacks also receive a UUID generated for the socket, which as shown in the next section can be used to manipulate sockets outwith the context of a `MessageHandler`. If you really need to, you can override this UUID with the `uuid` field of the response.
-
-WebSocket responses require an `accept` field, which is used for the `Sec-WebSocket-Accept` header. An optional `protocol` field is used for the `Sec-WebSocket-Protocol` header. A convenience `WebSocketResponder` class is provided to parse these fields from an `IncomingMessage`, returning a `Result` covering every potential error. Its `response` method can then be used to simplify creating a `WebSocketResponse`:
+WebSocket responses require an `accept` field, which is used for the `Sec-WebSocket-Accept` header. An optional `protocol` field is used for the `Sec-WebSocket-Protocol` header. A convenience `parseWebSocketHeaders` function is provided to parse these fields from an `IncomingMessage`, returning a `Result` covering every potential error. It can then be used to simplify creating a `WebSocketResponse`:
 
 ```typescript
 function exampleWebSocketHandler(message: IncomingMessage): MessageHandlerResult {
-    const result = WebSocketResponder.fromHeaders(message.method, message.headers)
+    if (message.method !== 'GET') {
+        /* Obviously in a real application your responses 
+           should ideally be a little more detailed! */
+        return response({ status: 405 })
+    }
+    const result = parseWebSocketHeaders(message.headers)
     if (!result.ok) {
         const error = result.value
         switch (error.tag) {
-            /* Obviously in a real application your responses 
-               should ideally be a little more detailed! */
-            case 'NonGETMethod':
-                return response({ status: 405 })
             case 'MissingUpgradeHeader':
                 return response({ status: 426 })
             case 'InvalidUpgradeHeader':
@@ -165,11 +154,11 @@ function exampleWebSocketHandler(message: IncomingMessage): MessageHandlerResult
                 return response({ status: 400 })
         }
     }
-    const webSocketResponder = result.value
-    return webSocketResponder.response({ 
-        * onOpen() {
-            yield 'Hello!'
-        }
+    const webSocketFields = result.value
+    return response({
+        ...webSocketFields,
+        callback: (uuid, socket) =>
+            socket.send(`Hello, this is socket ${uuid}!`)
     })
 }
 ```
@@ -182,19 +171,20 @@ In addition to their request and state parameters, `MessageHandler` functions re
 This same map is the second item in the tuple returned by `createRequestListener`, allowing sockets to be manipulated entirely outwith the context of a request.
 
 ```typescript
-const [ requestListener, sockets ] = createRequestListener((_message, _state, sockets) =>
-    webSocketResponse({
-        * onOpen(socketUUID) {
+const [ requestListener, sockets ] = createRequestListener((_message, _state, sockets) => {
+    ...
+    return response({
+        ...webSocketFields,  // See the previous example
+        callback: socketUUID => {
             for (const [ uuid, socket ] of sockets.entries()) {
-                if (uuid === socketUUID || socket.readyState !== WebSocketReadyState.Open) {
+                if (uuid === socketUUID || socket.readyState !== WebSocket.OPEN) {
                     continue
                 }
-                // This returns a Promise, but in most cases you won't want to await it
                 socket.send(`Hello ${uuid}, from ${socketUUID}`)
             }
         }
     })
-)
+})
 
 http.createServer(requestListener)
     .listen(5000, 'localhost')
@@ -202,7 +192,7 @@ http.createServer(requestListener)
 setInterval(
     () => {
         for (const [ uuid, socket ] of sockets.entries()) {
-            if (socket.readyState !== WebSocketReadyState.Open) {
+            if (socket.readyState !== WebSocket.OPEN) {
                 continue
             }
             socket.send(`Hello ${uuid}, glad you're still connected`)
@@ -215,7 +205,7 @@ setInterval(
 In the future the socket map may be extended to emit events when sockets connect and close and such.
 
 ## Exception handling
-My motivation behind this project was a desire for a Node web server with cleaner, more type-safe error handling, hence the integration with `fallible` and derivative name. As such, `MessageHandler`s should **never** throw, nor their `Cleanup` functions, nor any of the `WebSocketBody` callbacks, nor anything else. Anything that you suspect may throw should be wrapped to return a `Result` instead using the utilities `fallible` provides.
+The motivation behind this project was a desire for a Node web server with cleaner, more type-safe error handling, hence the integration with `fallible` and derivative name. As such, `MessageHandler`s should **never** throw, nor their `Cleanup` functions, nor the `WebSocketResponse` callback, nor anything else. Anything that you suspect may throw should be wrapped to return a `Result` instead using the utilities `fallible` provides.
 
 That said, this is ultimately still Node, and Node is never truly exception-free. For this reason, `createRequestListener` has a second `exceptionListener` parameter which is called if the `messageHandler` parameter throws or if an `error` event is fired while the response is being written. This parameter should always be set; not doing so will print a warning and fall back to `console.error`.
 
@@ -260,4 +250,4 @@ A number of utility functions to help with common web application problems are i
 * `parseJSONStream`, which parses a request's JSON body with an optional size limit
 * `parseMultipartRequest`, which parses a request's `multipart/form-data` body. Many optional limits on field and file sizes; see the function signature. Currently backed by `formidable`, which will likely change in future versions.
 
-If you wish to use any of these utilities in the browser for whatever reason, import directly from `fallible-server/utils` rather than `fallible-server`. The only function that explicitly requires a Node environment is `parseMultipartRequest`, which is why it is found under `fallible-server/server`.
+If you wish to use any of these utilities in the browser for whatever reason, import directly from `fallible-server/utils` rather than `fallible-server`. The few functions that explicitly require a Node environment are found under `fallible-server/server`.

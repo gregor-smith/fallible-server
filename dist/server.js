@@ -2,12 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import stream from 'node:stream';
 import { ReadableStream } from 'node:stream/web';
 import WebSocket from 'ws';
-import WebSocketConstants from 'ws/lib/constants.js';
 import { ok, error } from 'fallible';
 import { Formidable, errors as FormidableErrors } from 'formidable';
 import { Headers } from 'headers-polyfill';
-import { response } from './utils.js';
-import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
+import { EMPTY_BUFFER, WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE, WEBSOCKET_GUID, WEBSOCKET_RAW_RESPONSE_BASE } from './constants.js';
 function warn(message) {
     console.warn(`fallible-server: ${message}`);
 }
@@ -16,70 +14,12 @@ function checkForReservedHeader(headers, header) {
         warn(`Reserved header '${header}' should not be set`);
     }
 }
-function defaultOnWebsocketSendError(_data, { name, message }) {
-    warn("Unknown error sending Websocket message. Consider adding an 'onSendError' callback to your response");
-    warn(name);
-    warn(message);
-}
 function setResponseHeaders(res, headers) {
     headers?.forEach((value, header) => res.setHeader(header, value));
-}
-async function sendWebSocketMessages(socket, messages) {
-    const promises = [];
-    while (true) {
-        const result = await messages.next();
-        if (socket.readyState !== 1 /* Open */) {
-            await Promise.all(promises);
-            return;
-        }
-        if (result.done) {
-            await Promise.all(promises);
-            if (result.value === undefined) {
-                return;
-            }
-            return socket.close(result.value.code, result.value.reason);
-        }
-        const promise = socket.send(result.value);
-        promises.push(promise);
-    }
 }
 function getDefaultExceptionListener() {
     warn("default exception listener will be used. Consider overriding via the 'exceptionListener' option");
     return console.error;
-}
-class WebSocketWrapper {
-    uuid;
-    #underlying;
-    #onSendError;
-    constructor(underlying, onSendError, uuid) {
-        this.uuid = uuid;
-        this.#underlying = underlying;
-        this.#onSendError = onSendError;
-    }
-    get readyState() {
-        return this.#underlying.readyState;
-    }
-    async send(data) {
-        let error;
-        try {
-            error = await new Promise(resolve => this.#underlying.send(data, resolve));
-        }
-        catch (e) {
-            if (!(e instanceof Error)) {
-                throw e;
-            }
-            error = e;
-        }
-        if (error !== undefined) {
-            await this.#onSendError(data, error, this.uuid);
-        }
-    }
-    close(code, reason) {
-        return new Promise(resolve => {
-            this.#underlying.on('close', resolve);
-            this.#underlying.close(code, reason);
-        });
-    }
 }
 /**
  * Creates a callback intended to be added as a listener to the `request` event
@@ -115,7 +55,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
         }
         // websocket
         if ('accept' in state) {
-            const { onOpen, onMessage, onSendError = defaultOnWebsocketSendError, onClose, accept, protocol, maximumMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_MESSAGE_SIZE, uuid = randomUUID() } = state;
+            const { callback, accept, protocol, maximumIncomingMessageSize = WEBSOCKET_DEFAULT_MAXIMUM_INCOMING_MESSAGE_SIZE, uuid = randomUUID() } = state;
             let { headers } = state;
             if (headers === undefined) {
                 headers = new Headers();
@@ -127,53 +67,42 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 checkForReservedHeader(headers, 'Sec-WebSocket-Protocol');
             }
             headers.set('Sec-WebSocket-Accept', accept);
-            const ws = new WebSocket(null);
+            const socket = new WebSocket(null);
             if (protocol !== undefined) {
                 headers.set('Sec-WebSocket-Protocol', protocol);
-                ws._protocol = protocol;
+                socket._protocol = protocol;
             }
-            const wrapper = new WebSocketWrapper(ws, onSendError, uuid);
             let response = WEBSOCKET_RAW_RESPONSE_BASE;
             headers.forEach((value, header) => {
                 response = `${response}${header}: ${value}\r\n`;
             });
             response = `${response}\r\n`;
             await new Promise(resolve => {
-                const closeListener = (code, reason) => {
-                    sockets.delete(uuid);
-                    ws.off('error', errorListener);
-                    const result = ok({ code, reason });
-                    const promise = onClose?.(result, uuid);
-                    resolve(promise);
-                };
-                const errorListener = (exception) => {
-                    sockets.delete(uuid);
-                    ws.off('close', closeListener);
-                    if (ws.readyState < 2 /* Closing */) {
-                        const code = exception[WebSocketConstants.kStatusCode];
-                        ws.close(code);
-                    }
-                    exceptionListener(exception, req, state);
-                    // TODO: type possible error codes
-                    const result = error(exception);
-                    const promise = onClose?.(result, uuid);
-                    resolve(promise);
-                };
-                ws.on('open', () => {
-                    sockets.set(uuid, wrapper);
-                    if (onOpen !== undefined) {
-                        sendWebSocketMessages(wrapper, onOpen(uuid));
-                    }
+                socket.on('open', () => {
+                    sockets.set(uuid, socket);
                 });
-                ws.once('error', errorListener);
-                ws.once('close', closeListener);
-                if (onMessage !== undefined) {
-                    ws.on('message', data => {
-                        sendWebSocketMessages(wrapper, onMessage(data, uuid));
-                    });
-                }
-                ws.setSocket(req.socket, EMPTY_BUFFER, maximumMessageSize);
+                socket.on('close', () => {
+                    sockets.delete(uuid);
+                    resolve(promise);
+                });
+                socket.setSocket(req.socket, EMPTY_BUFFER, maximumIncomingMessageSize);
                 req.socket.write(response);
+                let promise;
+                try {
+                    promise = (async () => {
+                        try {
+                            await callback(uuid, socket);
+                        }
+                        catch (exception) {
+                            exceptionListener(exception, req, state);
+                            socket.close(1011);
+                        }
+                    })();
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                    socket.close(1011);
+                }
             });
         }
         else {
@@ -281,7 +210,7 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
  * Returns {@link MaximumFileCountExceededError} when the number of files
  * exceeds the {@link ParseMultipartRequestArguments.maximumFileCount maximumFileCount}
  * parameter.
- * Returns {@link MaximumFileSizeExceededError} when any file exceeds the the
+ * Returns {@link MaximumFileSizeExceededError} when any file exceeds the
  * {@link ParseMultipartRequestArguments.maximumFileSize maximumFileSize}
  * parameter in size.
  * Returns {@link MaximumTotalFileSizeExceededError} when all files' combined
@@ -356,98 +285,58 @@ function getMultipartError(error) {
             return { tag: 'UnknownError', error };
     }
 }
-/** A helper class for making WebSocket responses. */
-export class WebSocketResponder {
-    accept;
-    protocol;
-    constructor(
-    /**
-     * The string to be passed as the value of the response's
-     * `Sec-WebSocket-Accept` header, created from the request's
-     * `Sec-WebSocket-Key` header.
-     */
-    accept, 
-    /**
-     * The value of the request's `Sec-WebSocket-Protocol` header, to be
-     * passed as the value of the response header with the same name.
-     */
-    protocol) {
-        this.accept = accept;
-        this.protocol = protocol;
+/**
+ * Parses the {@link ParsedWebSocketHeaders `accept` and `protocol` fields}
+ * required for a {@link WebSocketResponse} from a request's headers.
+ *
+ * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
+ * missing.
+ * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
+ * `websocket`.
+ * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is missing.
+ * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
+ * is invalid.
+ * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
+ * header is missing.
+ * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
+ * `Sec-WebSocket-Version` header is not `8` or `13`.
+ */
+export function parseWebSocketHeaders(headers) {
+    if (headers.upgrade === undefined) {
+        return error({ tag: 'MissingUpgradeHeader' });
     }
-    /**
-     * Creates a new {@link WebSocketResponder} from a request's headers and
-     * method.
-     *
-     * Returns {@link NonGETMethodError} if the method is not `GET`.
-     * Returns {@link MissingUpgradeHeaderError} if the `Upgrade` header is
-     * missing.
-     * Returns {@link InvalidUpgradeHeaderError} if the `Upgrade` header is not
-     * `websocket`.
-     * Returns {@link MissingKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is missing.
-     * Returns {@link InvalidKeyHeaderError} if the `Sec-WebSocket-Key` header
-     * is invalid.
-     * Returns {@link MissingVersionHeaderError} if the `Sec-WebSocket-Version`
-     * header is missing.
-     * Returns {@link InvalidOrUnsupportedVersionHeaderError} if the
-     * `Sec-WebSocket-Version` header is not `8` or `13`.
-     */
-    static fromHeaders(method, headers) {
-        if (method !== 'GET') {
-            return error({
-                tag: 'NonGETMethod',
-                method
-            });
-        }
-        if (headers.upgrade === undefined) {
-            return error({ tag: 'MissingUpgradeHeader' });
-        }
-        if (headers.upgrade.toLowerCase() !== 'websocket') {
-            return error({
-                tag: 'InvalidUpgradeHeader',
-                header: headers.upgrade
-            });
-        }
-        const key = headers['sec-websocket-key'];
-        if (key === undefined) {
-            return error({ tag: 'MissingKeyHeader' });
-        }
-        if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
-            return error({
-                tag: 'InvalidKeyHeader',
-                header: key
-            });
-        }
-        if (headers['sec-websocket-version'] === undefined) {
-            return error({ tag: 'MissingVersionHeader' });
-        }
-        // ws only supports 8 and 13
-        if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
-            return error({
-                tag: 'InvalidOrUnsupportedVersionHeader',
-                header: headers['sec-websocket-version']
-            });
-        }
-        const accept = createHash('sha1')
-            .update(key + WEBSOCKET_GUID)
-            .digest('base64');
-        const protocol = headers['sec-websocket-protocol']
-            ?.match(/^(.+?)(?:,|$)/)?.[1];
-        const responder = new WebSocketResponder(accept, protocol);
-        return ok(responder);
+    if (headers.upgrade.toLowerCase() !== 'websocket') {
+        return error({
+            tag: 'InvalidUpgradeHeader',
+            header: headers.upgrade
+        });
     }
-    /**
-     * Creates a new
-     * {@link types.MessageHandlerResult MessageHandlerResult\<WebSocketResponse>}
-     * using this instance's {@link protocol} and {@link accept}.
-     */
-    response(options, cleanup) {
-        return response({
-            ...options,
-            protocol: this.protocol,
-            accept: this.accept
-        }, cleanup);
+    const key = headers['sec-websocket-key'];
+    if (key === undefined) {
+        return error({ tag: 'MissingKeyHeader' });
     }
+    if (!/^[+/0-9a-z]{22}==$/i.test(key)) {
+        return error({
+            tag: 'InvalidKeyHeader',
+            header: key
+        });
+    }
+    if (headers['sec-websocket-version'] === undefined) {
+        return error({ tag: 'MissingVersionHeader' });
+    }
+    // ws only supports 8 and 13
+    if (!/^(?:8|13)$/.test(headers['sec-websocket-version'])) {
+        return error({
+            tag: 'InvalidOrUnsupportedVersionHeader',
+            header: headers['sec-websocket-version']
+        });
+    }
+    const accept = createHash('sha1')
+        .update(key + WEBSOCKET_GUID)
+        .digest('base64');
+    const protocol = headers['sec-websocket-protocol']
+        ?.match(/^(.+?)(?:,|$)/)?.[1];
+    return ok({ accept, protocol });
 }
 //# sourceMappingURL=server.js.map
