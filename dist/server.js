@@ -83,11 +83,26 @@ export function createRequestListener(messageHandler, exceptionListener = getDef
                 });
                 socket.on('close', () => {
                     sockets.delete(uuid);
-                    resolve(callbackPromise);
+                    resolve(promise);
                 });
                 socket.setSocket(req.socket, EMPTY_BUFFER, maximumIncomingMessageSize);
                 req.socket.write(response);
-                const callbackPromise = callback?.(uuid, socket);
+                let promise;
+                try {
+                    promise = (async () => {
+                        try {
+                            await callback(uuid, socket);
+                        }
+                        catch (exception) {
+                            exceptionListener(exception, req, state);
+                            socket.close(1011);
+                        }
+                    })();
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state);
+                    socket.close(1011);
+                }
             });
         }
         else {

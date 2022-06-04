@@ -34,10 +34,6 @@ export type AwaitableIterable<T> =
     | Iterable<T>
     | AsyncIterable<T>
 
-export type AwaitableIterator<Yield, Return = void, Next = unknown> =
-    | Iterator<Yield, Return, Next>
-    | AsyncIterator<Yield, Return, Next>
-
 
 export type WebSocketCallback = (uuid: string, socket: WebSocket) => Awaitable<void>
 
@@ -121,7 +117,15 @@ export type WebSocketResponse = {
      * is used.
      */
     uuid?: string
-    callback?: WebSocketCallback
+    /**
+     * A function called with the 
+     * [WebSocket](https://github.com/websockets/ws/) instance and its UUID.
+     * Can optionally return a {@link PromiseLike}; doing so allows ensures any
+     * {@link Cleanup} associated with the response waits until this function
+     * completes. By the time this function is called, the socket's `open` 
+     * event has already fired; do not listen for it.
+     */
+    callback: WebSocketCallback
     /**
      * Additional headers. `Upgrade`, `Connection`, `Sec-WebSocket-Accept` and
      * `Sec-WebSocket-Protocol` headers should not be specified; doing so will

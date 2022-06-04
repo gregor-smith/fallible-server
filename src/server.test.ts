@@ -1,6 +1,6 @@
 import { TextEncoder } from 'node:util'
 import { Readable } from 'node:stream'
-import { createServer } from 'node:http'
+import { createServer, IncomingMessage } from 'node:http'
 import { createHash } from 'node:crypto'
 
 import 'jest-extended'
@@ -18,6 +18,7 @@ import {
 import type {
     Message,
     Response,
+    WebSocketCallback,
     WebSocketData,
     WebSocketResponse
 } from './types.js'
@@ -502,7 +503,7 @@ describe('createRequestListener', () => {
                         accept: webSocketAcceptFromMessage(message),
                         callback: (_uuid, socket) => {
                             expect(socket.readyState).toBe(WebSocket.OPEN)
-                            return new Promise<void>((resolve, reject) => {
+                            return new Promise((resolve, reject) => {
                                 const messages: WebSocketData[] = []
                                 socket.on('message', message => {
                                     messages.push(message)
@@ -552,7 +553,47 @@ describe('createRequestListener', () => {
             expect(cleanup.mock.calls).toEqual([ [ state ] ])
         })
 
-        test('incoming message larger than maximumIncomingMessageSize fires error event and closes socket', () => {
+        test.each<WebSocketCallback>([
+            () => { throw 'test' },
+            () => Promise.reject('test')
+        ])('socked closed and exceptionListener called when callback throws or returns rejecting promise', callback => {
+            expect.assertions(4)
+
+            return new Promise<void>(resolve => {
+                const waitForBothServerAndClient = createMultiResolver(resolve)
+                const exceptionListener = jest.fn()
+
+                let state: WebSocketResponse | undefined
+                const [ listener ] = createRequestListener(
+                    message => {
+                        state = {
+                            accept: webSocketAcceptFromMessage(message),
+                            callback
+                        }
+                        return response(
+                            state,
+                            waitForBothServerAndClient
+                        )
+                    },
+                    exceptionListener
+                )
+                server.on('request', listener)
+
+                const client = connectWebSocket()
+                client.on('close', (code, reason) => {
+                    expect(code).toBe(1011)
+                    expect(reason).toBe('')
+                    expect(state).not.toBeUndefined()
+                    expect(exceptionListener.mock.calls).toEqual([
+                        [ 'test', expect.any(IncomingMessage), state ]
+                    ])
+                    waitForBothServerAndClient()
+                })
+            })
+        })
+
+        // TODO fix - see https://github.com/gregor-smith/fallible-server/issues/11
+        test.skip('incoming message larger than maximumIncomingMessageSize fires error event and closes socket', () => {
             expect.assertions(6)
 
             return new Promise<void>(resolve => {

@@ -51,7 +51,6 @@ interface InternalWebSocket extends WebSocket {
 }
 
 
-
 /**
  * Creates a callback intended to be added as a listener to the `request` event
  * of an {@link http.Server}.
@@ -129,11 +128,26 @@ export function createRequestListener(
                 })
                 socket.on('close', () => {
                     sockets.delete(uuid)
-                    resolve(callbackPromise)
+                    resolve(promise)
                 })
                 socket.setSocket(req.socket, EMPTY_BUFFER, maximumIncomingMessageSize)
                 req.socket.write(response)
-                const callbackPromise = callback?.(uuid, socket)
+                let promise: Promise<void>
+                try {
+                    promise = (async () => {
+                        try {
+                            await callback(uuid, socket)
+                        }
+                        catch (exception) {
+                            exceptionListener(exception, req, state)
+                            socket.close(1011)
+                        }
+                    })()
+                }
+                catch (exception) {
+                    exceptionListener(exception, req, state)
+                    socket.close(1011)
+                }
             })
         }
         else {
